@@ -18,30 +18,39 @@ interface UseFileProcessingProps {
  */
 export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessingProps) => {
   const [files, setFiles] = useState<FileItem[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isProcessing, setIsProcessingState] = useState(false);
+  const isProcessingRef = useRef(false);
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
   const [importError, setImportError] = useState<string | null>(null);
   const cancelImportRef = useRef(false);
+  const activeReaderRef = useRef<FileReader | null>(null);
 
-  const isIgnored = useCallback((path: string, isRoot: boolean = false) => {
+  const setIsProcessing = useCallback((processing: boolean) => {
+    isProcessingRef.current = processing;
+    setIsProcessingState(processing);
+  }, []);
+
+  const cancelProcessing = useCallback(() => {
+    cancelImportRef.current = true;
+    if (activeReaderRef.current) {
+      activeReaderRef.current.abort();
+    }
+  }, []);
+
+  const isIgnored = useCallback((path: string) => {
     if (!path) return false;
     const normalizedPath = path.replace(/\\/g, '/');
-    const segments = normalizedPath.toLowerCase().split('/').filter(Boolean);
+    const segments = normalizedPath.split('/').filter(Boolean);
     
     if (segments.length === 0) return false;
 
     return compiledIgnores.some(ignore => {
       if (ignore instanceof RegExp) {
-        if (segments.length > 1) {
-          const pathWithoutRoot = segments.slice(1).join('/');
-          return ignore.test(pathWithoutRoot);
-        }
-        if (isRoot && segments.length === 1) return false;
         return ignore.test(normalizedPath);
       }
       
-      const segmentsToCheck = segments.length > 1 ? segments.slice(1) : segments;
-      return segmentsToCheck.some(segment => segment === ignore);
+      const ignoreStr = typeof ignore === 'string' ? ignore.replace(/\/$/, '') : ignore;
+      return segments.some(segment => segment === ignoreStr);
     });
   }, [compiledIgnores]);
 
@@ -59,15 +68,47 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
         const zip = new JSZip();
         let foundInThisFile = false;
         const content = fileItem.content as string;
-        const regex = new RegExp(`${START_DELIMITER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(.*?)${END_DELIMITER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\r?\\n([\\s\\S]*?)\\r?\\n${FILE_END_DELIMITER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g');
         
-        let match;
-        while ((match = regex.exec(content)) !== null) {
-          const path = match[1];
-          const fileContent = match[2];
-          zip.file(path, fileContent);
-          foundInThisFile = true;
-          foundAnyTotal = true;
+        let searchIndex = 0;
+        
+        while (true) {
+          const startIndex = content.indexOf(START_DELIMITER, searchIndex);
+          if (startIndex === -1) break;
+          
+          const pathStart = startIndex + START_DELIMITER.length;
+          const pathEnd = content.indexOf(END_DELIMITER, pathStart);
+          if (pathEnd === -1) break;
+          
+          const nextStartDelimiter = content.indexOf(START_DELIMITER, pathStart);
+
+          const contentStartRaw = pathEnd + END_DELIMITER.length;
+          let fileEndIndex = content.indexOf(FILE_END_DELIMITER, contentStartRaw);
+          
+          if (fileEndIndex === -1 || (nextStartDelimiter !== -1 && nextStartDelimiter < fileEndIndex)) {
+            searchIndex = nextStartDelimiter !== -1 ? nextStartDelimiter : content.length;
+            continue;
+          }
+
+          let path = content.substring(pathStart, pathEnd).trim();
+          
+          let sanitizedPath = path.replace(/^[/\\]+/, '');
+          while (/^(?:\.\.[/\\])+/.test(sanitizedPath)) {
+            sanitizedPath = sanitizedPath.replace(/^(?:\.\.[/\\])+/, '');
+          }
+          if (sanitizedPath.startsWith('..')) {
+            sanitizedPath = sanitizedPath.replace(/^\.\.+/, '');
+          }
+
+          let fileContent = content.substring(contentStartRaw, fileEndIndex);
+          fileContent = fileContent.replace(/^[\r\n]+|[\r\n]+$/g, '');
+
+          if (sanitizedPath) {
+            zip.file(sanitizedPath, fileContent);
+            foundInThisFile = true;
+            foundAnyTotal = true;
+          }
+          
+          searchIndex = fileEndIndex + FILE_END_DELIMITER.length;
         }
 
         if (foundInThisFile) {
@@ -94,16 +135,18 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
     } finally {
       setIsProcessing(false);
     }
-  }, [files]);
+  }, [files, setIsProcessing]);
 
   const processUploadedFiles = useCallback(async (uploadedFiles: File[]) => {
     setIsProcessing(true);
     cancelImportRef.current = false;
+    activeReaderRef.current = null;
     setImportProgress({ current: 0, total: uploadedFiles.length });
     
     await new Promise(resolve => setTimeout(resolve, 50));
     
     const newFiles: FileItem[] = [];
+    let lastRenderTime = Date.now();
 
     for (let i = 0; i < uploadedFiles.length; i++) {
       if (cancelImportRef.current) break;
@@ -111,18 +154,26 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
       const file = uploadedFiles[i];
       const path = (file as any).webkitRelativePath || file.name;
       
-      const content = await new Promise<string | ArrayBuffer>((resolve, reject) => {
+      const content = await new Promise<string | ArrayBuffer | null>((resolve, reject) => {
         const reader = new FileReader();
+        activeReaderRef.current = reader;
         reader.onload = () => resolve(reader.result as string);
         reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`));
+        reader.onabort = () => resolve(null); // Resolve to null on abort for silent cleanup
         reader.readAsText(file);
       }).catch(err => {
         console.error(err);
         return null;
       });
+      
+      activeReaderRef.current = null;
 
-      if (content === null) {
-        setImportProgress(prev => ({ ...prev, current: i + 1 }));
+      if (content === null || cancelImportRef.current) {
+        const now = Date.now();
+        if (now - lastRenderTime > 50 || i === uploadedFiles.length - 1) {
+          setImportProgress(prev => ({ ...prev, current: i + 1 }));
+          lastRenderTime = now;
+        }
         continue;
       }
 
@@ -146,7 +197,11 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
         }
       }
 
-      setImportProgress(prev => ({ ...prev, current: i + 1 }));
+      const now = Date.now();
+      if (now - lastRenderTime > 50 || i === uploadedFiles.length - 1) {
+        setImportProgress(prev => ({ ...prev, current: i + 1 }));
+        lastRenderTime = now;
+      }
       
       if (i % 10 === 0) {
         await new Promise(resolve => setTimeout(resolve, 0));
@@ -158,9 +213,16 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
         await handleDeconcatenate(newFiles);
       } else {
         setFiles(prev => {
-          const combined = [...prev, ...newFiles];
-          const unique = Array.from(new Map(combined.map(f => [f.path, f])).values());
-          return unique;
+          // Optimized Deduplication preventing Array [...spread] max call stack and Map loop limits
+          const newPaths = new Set(newFiles.map(f => f.path));
+          const filteredPrev = prev.filter(f => !newPaths.has(f.path));
+          
+          const uniqueNewFilesMap = new Map();
+          for (const nf of newFiles) {
+            uniqueNewFilesMap.set(nf.path, nf);
+          }
+          
+          return filteredPrev.concat(Array.from(uniqueNewFilesMap.values()));
         });
       }
     }
@@ -168,11 +230,18 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
     setIsProcessing(false);
     setImportProgress({ current: 0, total: 0 });
     cancelImportRef.current = false;
-  }, [appMode, handleDeconcatenate]);
+    activeReaderRef.current = null;
+  }, [appMode, handleDeconcatenate, setIsProcessing]);
 
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (isProcessingRef.current) {
+      e.preventDefault();
+      return;
+    }
+    
     const uploadedFiles = e.target.files;
     if (!uploadedFiles) return;
+    
     cancelImportRef.current = false;
     
     const filesToProcess = Array.from(uploadedFiles as FileList).filter((file: File) => {
@@ -183,7 +252,7 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
     if (filesToProcess.length > 0) {
       await processUploadedFiles(filesToProcess);
     } else {
-      setImportError("No files were imported. This might be because all files matched your ignore list or the folder was empty.");
+      setImportError("No files were imported. This might be because all files matched your ignore list (check if any Regex is overly broad) or the folder was empty.");
     }
     
     e.target.value = '';
@@ -193,6 +262,8 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
     e.preventDefault();
     e.stopPropagation();
     
+    if (isProcessingRef.current) return;
+
     const items = e.dataTransfer.items;
     if (!items) return;
 
@@ -218,22 +289,22 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
     const traverseEntry = async (entry: any, path: string = '', isRoot: boolean = false) => {
       if (cancelImportRef.current) return;
       
-      const name = entry.name.toLowerCase();
       const isEntryIgnored = compiledIgnores.some(ignore => {
         if (ignore instanceof RegExp) {
           return ignore.test(entry.name);
         }
-        return name === ignore;
+        const ignoreStr = typeof ignore === 'string' ? ignore.replace(/\/$/, '') : ignore;
+        return entry.name === ignoreStr;
       });
 
-      if (isEntryIgnored && !isRoot) {
+      if (isEntryIgnored) {
         return;
       }
       
       const fullPath = path + entry.name;
 
       if (entry.isFile) {
-        if (isIgnored(fullPath, isRoot)) return;
+        if (isIgnored(fullPath)) return;
 
         setImportProgress(prev => ({ ...prev, total: prev.total + 1 }));
         const file = await new Promise<File>((resolve, reject) => {
@@ -285,14 +356,20 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
     } else {
       setIsProcessing(false);
       if (!cancelImportRef.current) {
-        setImportError("No files were imported. This might be because all files matched your ignore list or the folder was empty.");
+        setImportError("No files were imported. This might be because all files matched your ignore list (check if any Regex is overly broad) or the folder was empty.");
       }
     }
-  }, [compiledIgnores, isIgnored, processUploadedFiles]);
+  }, [compiledIgnores, isIgnored, processUploadedFiles, setIsProcessing]);
 
   const handleConcatenate = useCallback((filteredFiles: FileItem[]) => {
     if (filteredFiles.length === 0) return;
     
+    const maxFilesLimit = 10000;
+    if (filteredFiles.length > maxFilesLimit) {
+      setImportError(`Warning: You are attempting to concatenate over ${maxFilesLimit} files. This exceeds safe UI thread memory parameters. Please split your architecture into smaller batch folders.`);
+      return; 
+    }
+
     setIsProcessing(true);
     const now = new Date();
     const timestamp = now.toLocaleString();
@@ -324,7 +401,7 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
     URL.revokeObjectURL(url);
     
     setIsProcessing(false);
-  }, []);
+  }, [setIsProcessing]);
 
   return {
     files,
@@ -333,7 +410,7 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
     importProgress,
     importError,
     setImportError,
-    cancelImportRef,
+    cancelProcessing,
     isIgnored,
     handleFileUpload,
     handleDrop,

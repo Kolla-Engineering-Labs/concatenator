@@ -14,7 +14,7 @@ interface UploadZoneProps {
   isDropzoneMinimized: boolean;
   setIsDropzoneMinimized: (minimized: boolean) => void;
   importProgress: { current: number; total: number };
-  cancelImportRef: React.MutableRefObject<boolean>;
+  cancelProcessing: () => void;
   importError: string | null;
   setImportError: (error: string | null) => void;
   appMode: AppMode;
@@ -30,7 +30,7 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
   isDropzoneMinimized,
   setIsDropzoneMinimized,
   importProgress,
-  cancelImportRef,
+  cancelProcessing,
   importError,
   setImportError,
   appMode,
@@ -79,7 +79,7 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
               </div>
               {isDropzoneMinimized && (
                 <button
-                  onClick={() => cancelImportRef.current = true}
+                  onClick={cancelProcessing}
                   className="flex items-center gap-1.5 px-2 py-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors whitespace-nowrap"
                   title="Cancel Import"
                 >
@@ -91,7 +91,7 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
             {!isDropzoneMinimized && (
               <div className="flex justify-center">
                 <button
-                  onClick={() => cancelImportRef.current = true}
+                  onClick={cancelProcessing}
                   className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors flex items-center gap-2"
                 >
                   <X className="w-4 h-4" />

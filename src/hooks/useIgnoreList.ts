@@ -37,6 +37,8 @@ export const useIgnoreList = () => {
             setIgnoreList(parsed.sort((a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base' })));
           }
         } catch (e) {
+          console.error("Local storage 'concatenate-ignore' JSON is corrupted. Restoring default ignore list and overwriting old data.");
+          window.alert("Your custom ignore list was corrupted and has been reset to defaults.");
           setIgnoreList([...DEFAULT_IGNORE_LIST].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })));
         }
       } else {
@@ -70,14 +72,19 @@ export const useIgnoreList = () => {
 
   const compiledIgnores = useMemo(() => {
     return ignoreList.map(pattern => {
-      if (pattern.startsWith('/') && pattern.endsWith('/') && pattern.length > 2) {
-        try {
-          return new RegExp(pattern.slice(1, -1), 'i');
-        } catch (e) {
-          return pattern.toLowerCase();
+      if (pattern.startsWith('/')) {
+        const lastSlash = pattern.lastIndexOf('/');
+        if (lastSlash > 0) {
+          const body = pattern.slice(1, lastSlash);
+          const flags = pattern.slice(lastSlash + 1);
+          try {
+            return new RegExp(body, flags);
+          } catch (e) {
+            return pattern; // Fall back to literal match without lowercasing
+          }
         }
       }
-      return pattern.toLowerCase();
+      return pattern; // String matches are exact and case-sensitive now
     });
   }, [ignoreList]);
 

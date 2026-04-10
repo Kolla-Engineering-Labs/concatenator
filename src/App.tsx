@@ -62,7 +62,7 @@ export default function App() {
     importProgress,
     importError,
     setImportError,
-    cancelImportRef,
+    cancelProcessing,
     isIgnored,
     handleFileUpload,
     handleDrop,
@@ -144,7 +144,7 @@ export default function App() {
           isDropzoneMinimized={isDropzoneMinimized}
           setIsDropzoneMinimized={setIsDropzoneMinimized}
           importProgress={importProgress}
-          cancelImportRef={cancelImportRef}
+          cancelProcessing={cancelProcessing}
           importError={importError}
           setImportError={setImportError}
           appMode={appMode}
