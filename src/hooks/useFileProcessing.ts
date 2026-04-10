@@ -319,7 +319,13 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
         });
         droppedFiles.push(file);
       } else if (entry.isDirectory) {
-        const reader = entry.createReader();
+        let reader;
+        try {
+          reader = entry.createReader();
+        } catch (err) {
+          console.warn('Failed to create directory reader:', err);
+          return;
+        }
         const entriesBatch = await new Promise<any[]>((resolve) => {
           const allEntries: any[] = [];
           const readBatch = () => {
