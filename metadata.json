@@ -1,0 +1,5 @@
+{
+  "name": "File Concatenator",
+  "description": "A minimalist tool to concatenate multiple files into one and de-concatenate them back into a directory structure.",
+  "requestFramePermissions": []
+}

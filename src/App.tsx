@@ -1,0 +1,210 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useMemo, useEffect } from 'react';
+import { Header } from './components/Header';
+import { Footer } from './components/Footer';
+import { ModeToggle } from './components/ModeToggle';
+import { UploadZone } from './components/UploadZone';
+import { IgnoreList } from './components/IgnoreList';
+import { FileView } from './components/FileView';
+import { SettingsModal } from './components/SettingsModal';
+import { useIgnoreList } from './hooks/useIgnoreList';
+import { useFileProcessing } from './hooks/useFileProcessing';
+import { useFileTree } from './hooks/useFileTree';
+import { ViewMode, AppMode } from './types';
+
+/**
+ * The main application component that orchestrates the file concatenation and de-concatenation workflow.
+ */
+export default function App() {
+  // --- UI State ---
+  const [appMode, setAppMode] = useState<AppMode>('concatenate');
+  const [viewMode, setViewMode] = useState<ViewMode>(() => {
+    const saved = localStorage.getItem('concatenate-view-mode');
+    return (saved as ViewMode) || 'list';
+  });
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = localStorage.getItem('concatenate-dark-mode');
+    return saved === 'true';
+  });
+  const [isDropzoneMinimized, setIsDropzoneMinimized] = useState(() => {
+    const saved = localStorage.getItem('concatenate-dropzone-minimized');
+    return saved === 'true';
+  });
+  const [isIgnoreListMinimized, setIsIgnoreListMinimized] = useState(() => {
+    const saved = localStorage.getItem('concatenate-ignore-minimized');
+    return saved === 'true';
+  });
+  const [showSettings, setShowSettings] = useState(false);
+  const [newIgnoreItem, setNewIgnoreItem] = useState('');
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set(['/', 'root']));
+
+  // --- API Key State ---
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('google-ai-api-key') || process.env.GEMINI_API_KEY || '');
+  const [openaiKey, setOpenaiKey] = useState(() => localStorage.getItem('openai-api-key') || process.env.OPENAI_API_KEY || '');
+  const [anthropicKey, setAnthropicKey] = useState(() => localStorage.getItem('anthropic-api-key') || process.env.ANTHROPIC_API_KEY || '');
+
+  // --- Custom Hooks ---
+  const { 
+    ignoreList, 
+    compiledIgnores, 
+    addIgnoreItem, 
+    removeIgnoreItem 
+  } = useIgnoreList();
+
+  const {
+    files,
+    setFiles,
+    isProcessing,
+    importProgress,
+    importError,
+    setImportError,
+    cancelImportRef,
+    isIgnored,
+    handleFileUpload,
+    handleDrop,
+    handleConcatenate,
+  } = useFileProcessing({ appMode, compiledIgnores });
+
+  // --- Derived State ---
+  const filteredFiles = useMemo(() => {
+    return files.filter(file => !isIgnored(file.path)).sort((a, b) => {
+      if (a.kind === 'directory' && b.kind === 'file') return -1;
+      if (a.kind === 'file' && b.kind === 'directory') return 1;
+      return a.path.localeCompare(b.path);
+    });
+  }, [files, isIgnored]);
+
+  const fileTree = useFileTree(filteredFiles);
+
+  // --- Effects ---
+  useEffect(() => {
+    localStorage.setItem('concatenate-view-mode', viewMode);
+  }, [viewMode]);
+
+  useEffect(() => {
+    localStorage.setItem('concatenate-dark-mode', isDarkMode.toString());
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDarkMode]);
+
+  useEffect(() => {
+    localStorage.setItem('concatenate-dropzone-minimized', isDropzoneMinimized.toString());
+  }, [isDropzoneMinimized]);
+
+  useEffect(() => {
+    localStorage.setItem('concatenate-ignore-minimized', isIgnoreListMinimized.toString());
+  }, [isIgnoreListMinimized]);
+
+  useEffect(() => {
+    if (fileTree.path) {
+      setExpandedPaths(prev => {
+        if (prev.has(fileTree.path)) return prev;
+        const next = new Set(prev);
+        next.add(fileTree.path);
+        return next;
+      });
+    }
+  }, [fileTree.path]);
+
+  // --- Handlers ---
+  const handleSaveSettings = () => {
+    localStorage.setItem('google-ai-api-key', apiKey);
+    localStorage.setItem('openai-api-key', openaiKey);
+    localStorage.setItem('anthropic-api-key', anthropicKey);
+    setShowSettings(false);
+  };
+
+  return (
+    <div className="min-h-screen font-sans transition-colors duration-300 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+      <Header 
+        isDarkMode={isDarkMode} 
+        setIsDarkMode={setIsDarkMode} 
+        setShowSettings={setShowSettings} 
+      />
+
+      <main className="max-w-4xl mx-auto px-6 py-8 space-y-8">
+        <ModeToggle 
+          appMode={appMode} 
+          setAppMode={setAppMode} 
+          onModeChange={() => {
+            setFiles([]);
+            setImportError(null);
+          }} 
+        />
+
+        <UploadZone 
+          isProcessing={isProcessing}
+          isDropzoneMinimized={isDropzoneMinimized}
+          setIsDropzoneMinimized={setIsDropzoneMinimized}
+          importProgress={importProgress}
+          cancelImportRef={cancelImportRef}
+          importError={importError}
+          setImportError={setImportError}
+          appMode={appMode}
+          handleDrop={handleDrop}
+          handleFileUpload={handleFileUpload}
+        />
+
+        {appMode === 'concatenate' && (
+          <>
+            <IgnoreList 
+              ignoreList={ignoreList}
+              isIgnoreListMinimized={isIgnoreListMinimized}
+              setIsIgnoreListMinimized={setIsIgnoreListMinimized}
+              newIgnoreItem={newIgnoreItem}
+              setNewIgnoreItem={setNewIgnoreItem}
+              addIgnoreItem={() => {
+                addIgnoreItem(newIgnoreItem);
+                setNewIgnoreItem('');
+              }}
+              removeIgnoreItem={removeIgnoreItem}
+            />
+
+            <FileView 
+              files={files}
+              filteredFiles={filteredFiles}
+              viewMode={viewMode}
+              setViewMode={setViewMode}
+              fileTree={fileTree}
+              expandedPaths={expandedPaths}
+              setExpandedPaths={setExpandedPaths}
+              isProcessing={isProcessing}
+              onConcatenate={() => handleConcatenate(filteredFiles)}
+              onClearAll={() => setFiles([])}
+              onIgnoreFile={addIgnoreItem}
+              onRemoveFile={(file) => {
+                if (file.kind === 'directory') {
+                  const prefix = file.path + '/';
+                  setFiles(prev => prev.filter(f => f.path !== file.path && !f.path.startsWith(prefix)));
+                } else {
+                  setFiles(prev => prev.filter(f => f.path !== file.path));
+                }
+              }}
+            />
+          </>
+        )}
+      </main>
+
+      <SettingsModal 
+        show={showSettings}
+        onClose={() => setShowSettings(false)}
+        apiKey={apiKey}
+        setApiKey={setApiKey}
+        openaiKey={openaiKey}
+        setOpenaiKey={setOpenaiKey}
+        anthropicKey={anthropicKey}
+        setAnthropicKey={setAnthropicKey}
+        onSave={handleSaveSettings}
+      />
+
+      <Footer />
+    </div>
+  );
+}
