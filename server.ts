@@ -3,6 +3,7 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import fs from "fs/promises";
 import { fileURLToPath } from "url";
+import rateLimit from "express-rate-limit";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,8 +14,16 @@ async function startServer() {
 
   app.use(express.json());
 
+  const ignoreListLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
   // API Routes
   const IGNORE_FILE_PATH = path.join(process.cwd(), ".concatenate-ignore");
+  app.use("/api/ignore-list", ignoreListLimiter);
 
   app.get("/api/ignore-list", async (req, res) => {
     try {
