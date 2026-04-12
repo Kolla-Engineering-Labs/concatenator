@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { ModeToggle } from './components/ModeToggle';
@@ -14,7 +14,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { useIgnoreList } from './hooks/useIgnoreList';
 import { useFileProcessing } from './hooks/useFileProcessing';
 import { useFileTree } from './hooks/useFileTree';
-import { ViewMode, AppMode } from './types';
+import { ViewMode, AppMode, FileItem, TreeItem } from './types';
 
 /**
  * The main application component that orchestrates the file concatenation and de-concatenation workflow.
@@ -103,15 +103,18 @@ export default function App() {
   }, [isIgnoreListMinimized]);
 
   useEffect(() => {
-    if (fileTree.path) {
-      setExpandedPaths(prev => {
-        if (prev.has(fileTree.path)) return prev;
-        const next = new Set(prev);
-        next.add(fileTree.path);
-        return next;
-      });
-    }
-  }, [fileTree.path]);
+    setExpandedPaths(prev => {
+      const next = new Set(prev);
+      const addDirectoryPaths = (node: TreeItem) => {
+        if (node.kind === 'directory') {
+          next.add(node.path);
+          node.children?.forEach(addDirectoryPaths);
+        }
+      };
+      addDirectoryPaths(fileTree);
+      return next;
+    });
+  }, [fileTree]);
 
   // --- Handlers ---
   const handleSaveSettings = () => {
@@ -121,15 +124,34 @@ export default function App() {
     setShowSettings(false);
   };
 
+  const handleRemoveFile = useCallback((file: FileItem) => {
+    if (file.kind === 'directory') {
+      const prefix = file.path + '/';
+      setFiles(prev => prev.filter(f => f.path !== file.path && !f.path.startsWith(prefix)));
+    } else {
+      setFiles(prev => prev.filter(f => f.path !== file.path));
+    }
+  }, []);
+
+  const handleClearAll = useCallback(() => {
+    setFiles([]);
+  }, []);
+
   return (
     <div className="min-h-screen font-sans transition-colors duration-300 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-brand-600 focus:text-white focus:rounded-lg"
+      >
+        Skip to main content
+      </a>
       <Header 
         isDarkMode={isDarkMode} 
         setIsDarkMode={setIsDarkMode} 
         setShowSettings={setShowSettings} 
       />
 
-      <main className="max-w-4xl mx-auto px-6 py-8 space-y-8">
+      <main id="main-content" className="max-w-4xl mx-auto px-6 py-8 space-y-8">
         <ModeToggle 
           appMode={appMode} 
           setAppMode={setAppMode} 
@@ -167,7 +189,7 @@ export default function App() {
               removeIgnoreItem={removeIgnoreItem}
             />
 
-            <FileView 
+            <FileView
               files={files}
               filteredFiles={filteredFiles}
               viewMode={viewMode}
@@ -177,16 +199,9 @@ export default function App() {
               setExpandedPaths={setExpandedPaths}
               isProcessing={isProcessing}
               onConcatenate={() => handleConcatenate(filteredFiles)}
-              onClearAll={() => setFiles([])}
+              onClearAll={handleClearAll}
               onIgnoreFile={addIgnoreItem}
-              onRemoveFile={(file) => {
-                if (file.kind === 'directory') {
-                  const prefix = file.path + '/';
-                  setFiles(prev => prev.filter(f => f.path !== file.path && !f.path.startsWith(prefix)));
-                } else {
-                  setFiles(prev => prev.filter(f => f.path !== file.path));
-                }
-              }}
+              onRemoveFile={handleRemoveFile}
             />
           </>
         )}

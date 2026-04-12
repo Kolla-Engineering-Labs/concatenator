@@ -442,6 +442,20 @@ describe('useFileProcessing', () => {
       // The trailing slash in the ignore pattern is handled so "build" directory resolves to true.
       expect(result.current.isIgnored('build/main.js')).toBe(true);
     });
+
+    it('matches *.tmp pattern against temp.tmp filename', () => {
+      const compiledIgnores = ['*.tmp'];
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores }));
+
+      // Should match temp.tmp
+      expect(result.current.isIgnored('temp.tmp')).toBe(true);
+      expect(result.current.isIgnored('data.tmp')).toBe(true);
+      expect(result.current.isIgnored('backup.TMP')).toBe(false); // case sensitive
+      
+      // Should not match non-tmp files
+      expect(result.current.isIgnored('script.js')).toBe(false);
+      expect(result.current.isIgnored('file.txt')).toBe(false);
+    });
   });
 
   describe('File Upload/Reading Edge Cases', () => {

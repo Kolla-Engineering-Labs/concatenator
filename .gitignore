@@ -6,3 +6,13 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Test artifacts
+playwright-report/
+test-results/
+blob-report/
+test-output/
+
+# Windows null device file (generated when running tests/scripts in Bash/MSYS2,
+# where 'nul' is treated as a filename rather than the null device)
+nul

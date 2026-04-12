@@ -3,6 +3,7 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import fs from "fs/promises";
 import { fileURLToPath } from "url";
+import rateLimit from "express-rate-limit";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -13,24 +14,30 @@ async function startServer() {
 
   app.use(express.json());
 
+  const ignoreListLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
   // API Routes
   const IGNORE_FILE_PATH = path.join(process.cwd(), ".concatenate-ignore");
+  app.use("/api/ignore-list", ignoreListLimiter);
 
   app.get("/api/ignore-list", async (req, res) => {
     try {
-      try {
-        await fs.access(IGNORE_FILE_PATH);
-      } catch {
-        // If file doesn't exist, return default list
-        return res.json(['node_modules', '.git', '.DS_Store', 'dist', '.next']);
-      }
       const content = await fs.readFile(IGNORE_FILE_PATH, "utf-8");
       const list = content
         .split("\n")
         .map((line) => line.trim())
         .filter((line) => line !== "");
       res.json(list);
-    } catch (error) {
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        // If file doesn't exist, return default list
+        return res.json(['node_modules', '.git', '.DS_Store', 'dist', '.next']);
+      }
       console.error("Error reading ignore file:", error);
       res.status(500).json({ error: "Failed to read ignore list" });
     }
@@ -44,13 +51,25 @@ async function startServer() {
       }
       const content = list.join("\n");
       await fs.writeFile(IGNORE_FILE_PATH, content, "utf-8");
-      console.log(`Successfully updated .concatenate-ignore with ${list.length} items`);
       res.json({ success: true });
     } catch (error) {
       console.error("Error writing ignore file:", error);
       res.status(500).json({ error: "Failed to update ignore list" });
     }
   });
+
+  // Test-only endpoint to reset ignore list to defaults
+  if (process.env.NODE_ENV !== "production") {
+    app.delete("/api/ignore-list", async (req, res) => {
+      try {
+        await fs.unlink(IGNORE_FILE_PATH).catch(() => {});
+        res.json({ success: true });
+      } catch (error) {
+        console.error("Error resetting ignore file:", error);
+        res.status(500).json({ error: "Failed to reset ignore list" });
+      }
+    });
+  }
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
