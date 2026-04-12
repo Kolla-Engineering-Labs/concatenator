@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { DEFAULT_IGNORE_LIST } from '../constants';
 
 /**
@@ -11,6 +11,7 @@ import { DEFAULT_IGNORE_LIST } from '../constants';
  */
 export const useIgnoreList = () => {
   const [ignoreList, setIgnoreList] = useState<string[]>([]);
+  const isUserModified = useRef(false);
 
   // Fetch ignore list from server on mount
   useEffect(() => {
@@ -20,7 +21,10 @@ export const useIgnoreList = () => {
         if (response.ok) {
           const list = await response.json();
           if (Array.isArray(list)) {
-            setIgnoreList(list.sort((a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base' })));
+            // Don't overwrite if user has already modified the list
+            if (!isUserModified.current) {
+              setIgnoreList(list.sort((a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base' })));
+            }
             return;
           }
         }
@@ -34,7 +38,10 @@ export const useIgnoreList = () => {
         try {
           const parsed = JSON.parse(saved);
           if (Array.isArray(parsed)) {
-            setIgnoreList(parsed.sort((a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base' })));
+            // Don't overwrite if user has already modified the list
+            if (!isUserModified.current) {
+              setIgnoreList(parsed.sort((a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base' })));
+            }
           }
         } catch (e) {
           console.error("Local storage 'concatenate-ignore' JSON is corrupted. Restoring default ignore list and overwriting old data.");
@@ -42,7 +49,10 @@ export const useIgnoreList = () => {
           setIgnoreList([...DEFAULT_IGNORE_LIST].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })));
         }
       } else {
-        setIgnoreList([...DEFAULT_IGNORE_LIST].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })));
+        // Only set defaults if user hasn't modified and no saved data exists
+        if (!isUserModified.current) {
+          setIgnoreList([...DEFAULT_IGNORE_LIST].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })));
+        }
       }
     };
 
@@ -52,6 +62,7 @@ export const useIgnoreList = () => {
   // Save ignore list to server and localStorage when it changes
   useEffect(() => {
     if (ignoreList.length === 0) return;
+    if (!isUserModified.current) return;
 
     localStorage.setItem('concatenate-ignore', JSON.stringify(ignoreList));
     
@@ -88,15 +99,22 @@ export const useIgnoreList = () => {
     });
   }, [ignoreList]);
 
-  const addIgnoreItem = (item: string) => {
+  const addIgnoreItem = useCallback((item: string) => {
     const trimmed = item.trim();
-    if (trimmed && !ignoreList.includes(trimmed)) {
-      const next = [...ignoreList, trimmed].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-      setIgnoreList(next);
-    }
-  };
+    if (!trimmed) return;
+    
+    isUserModified.current = true;
+    setIgnoreList(prev => {
+      if (prev.includes(trimmed)) {
+        return prev;
+      }
+      const next = [...prev, trimmed].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+      return next;
+    });
+  }, []);
 
   const removeIgnoreItem = (item: string) => {
+    isUserModified.current = true;
     setIgnoreList(prev => prev.filter(i => i !== item));
   };
 
