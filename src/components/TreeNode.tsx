@@ -71,9 +71,9 @@ export const TreeNode: React.FC<TreeNodeProps> = ({
             exit={{ height: 0, opacity: 0 }}
             className="overflow-hidden"
           >
-            {node.children?.map(child => (
-              <TreeNode 
-                key={child.path} 
+            {node.children?.map((child, index) => (
+              <TreeNode
+                key={`${depth + 1}-${child.path}-${index}`} 
                 node={child} 
                 depth={depth + 1} 
                 expandedPaths={expandedPaths}
