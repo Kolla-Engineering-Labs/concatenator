@@ -7,7 +7,6 @@ import { test, expect } from '@playwright/test';
 import { FileUploadHelper } from './helpers/file-upload';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import JSZip from 'jszip';
 
 /**
