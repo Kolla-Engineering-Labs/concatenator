@@ -4,7 +4,7 @@
  */
 
 import { test, expect, Locator } from '@playwright/test';
-import { FileUploadHelper, createTestDirectory } from './helpers/file-upload';
+import { FileUploadHelper } from './helpers/file-upload';
 
 /**
  * Helper function to click an element using JavaScript for better Firefox compatibility
