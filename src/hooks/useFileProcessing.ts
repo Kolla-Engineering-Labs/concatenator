@@ -24,7 +24,6 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
   const [importError, setImportError] = useState<string | null>(null);
   const cancelImportRef = useRef(false);
   const activeReaderRef = useRef<FileReader | null>(null);
-
   const setIsProcessing = useCallback((processing: boolean) => {
     isProcessingRef.current = processing;
     setIsProcessingState(processing);
@@ -41,17 +40,45 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
     if (!path) return false;
     const normalizedPath = path.replace(/\\/g, '/');
     const segments = normalizedPath.split('/').filter(Boolean);
-    
+    const fileName = segments.length > 0 ? segments[segments.length - 1] : '';
+
     if (segments.length === 0) return false;
 
-    return compiledIgnores.some(ignore => {
+    const result = compiledIgnores.some(ignore => {
       if (ignore instanceof RegExp) {
         return ignore.test(normalizedPath);
       }
-      
+
       const ignoreStr = typeof ignore === 'string' ? ignore.replace(/\/$/, '') : ignore;
-      return segments.some(segment => segment === ignoreStr);
+
+      // Check if pattern contains glob characters
+      if (ignoreStr.includes('*') || ignoreStr.includes('?')) {
+        // Convert glob pattern to regex
+        const globToRegex = (glob: string) => {
+          const escaped = glob
+            .replace(/[.+^${}()|[\]\\]/g, '\\$&') // Escape regex special chars except * and ?
+            .replace(/\*/g, '.*')                    // * matches any sequence
+            .replace(/\?/g, '.');                    // ? matches single char
+          return new RegExp(`^${escaped}$`);
+        };
+
+        const patternRegex = globToRegex(ignoreStr);
+
+        // Match against filename for simple patterns (no / in pattern)
+        if (!ignoreStr.includes('/')) {
+          if (patternRegex.test(fileName)) return true;
+        }
+
+        // Also match against full path and each segment
+        if (patternRegex.test(normalizedPath)) return true;
+        return segments.some(segment => patternRegex.test(segment));
+      }
+
+      // For non-glob patterns, use exact matching against segments and filename
+      return segments.some(segment => segment === ignoreStr) || fileName === ignoreStr;
     });
+    
+    return result;
   }, [compiledIgnores]);
 
   const handleDeconcatenate = useCallback(async (inputFiles?: FileItem[]) => {
@@ -244,19 +271,16 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
     
     cancelImportRef.current = false;
     
-    const filesToProcess = Array.from(uploadedFiles as FileList).filter((file: File) => {
-      const path = (file as any).webkitRelativePath || file.name;
-      return !isIgnored(path);
-    }) as File[];
+    const filesToProcess = Array.from(uploadedFiles as FileList) as File[];
 
     if (filesToProcess.length > 0) {
       await processUploadedFiles(filesToProcess);
     } else {
-      setImportError("No files were imported. This might be because all files matched your ignore list (check if any Regex is overly broad) or the folder was empty.");
+      setImportError('No files were imported');
     }
-    
+
     e.target.value = '';
-  }, [isIgnored, processUploadedFiles]);
+  }, [processUploadedFiles]);
 
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
@@ -288,30 +312,21 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
     
     const traverseEntry = async (entry: any, path: string = '', isRoot: boolean = false) => {
       if (cancelImportRef.current) return;
-      
-      const isEntryIgnored = compiledIgnores.some(ignore => {
-        if (ignore instanceof RegExp) {
-          return ignore.test(entry.name);
-        }
-        const ignoreStr = typeof ignore === 'string' ? ignore.replace(/\/$/, '') : ignore;
-        return entry.name === ignoreStr;
-      });
 
-      if (isEntryIgnored) {
-        return;
-      }
-      
       const fullPath = path + entry.name;
 
-      if (entry.isFile) {
-        if (isIgnored(fullPath)) return;
+      // Skip root directories that are explicitly blocked by ignore list
+      if (isRoot && isIgnored(fullPath)) {
+        return;
+      }
 
+      if (entry.isFile) {
         setImportProgress(prev => ({ ...prev, total: prev.total + 1 }));
         const file = await new Promise<File>((resolve, reject) => {
           entry.file((f: File) => resolve(f), (err: any) => reject(err));
         });
         if (cancelImportRef.current) return;
-        
+
         Object.defineProperty(file, 'webkitRelativePath', {
           value: fullPath,
           writable: false,
@@ -365,7 +380,7 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
         setImportError("No files were imported. This might be because all files matched your ignore list (check if any Regex is overly broad) or the folder was empty.");
       }
     }
-  }, [compiledIgnores, isIgnored, processUploadedFiles, setIsProcessing]);
+  }, [processUploadedFiles, setIsProcessing]);
 
   const handleConcatenate = useCallback((filteredFiles: FileItem[]) => {
     if (filteredFiles.length === 0) return;

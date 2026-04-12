@@ -49,13 +49,14 @@ export const FileView: React.FC<FileViewProps> = ({
           <Files className="w-4 h-4" />
           <h2 className="text-sm font-semibold uppercase tracking-wider">
             Selected Files
-            <span className="ml-2 tabular-nums opacity-60">({filteredFiles.length})</span>
+            <span className="ml-2 tabular-nums opacity-60">({filteredFiles.filter(f => f.kind === 'file').length})</span>
           </h2>
         </div>
         
         <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-lg">
           <button
             onClick={() => setViewMode('list')}
+            aria-label="List view"
             className={cn(
               "p-1.5 rounded-md transition-all",
               viewMode === 'list' ? "bg-white dark:bg-slate-800 shadow-sm text-brand-500" : "text-slate-400"
@@ -65,6 +66,7 @@ export const FileView: React.FC<FileViewProps> = ({
           </button>
           <button
             onClick={() => setViewMode('tree')}
+            aria-label="Tree view"
             className={cn(
               "p-1.5 rounded-md transition-all",
               viewMode === 'tree' ? "bg-white dark:bg-slate-800 shadow-sm text-brand-500" : "text-slate-400"
@@ -85,9 +87,9 @@ export const FileView: React.FC<FileViewProps> = ({
           <div className="p-2">
             {viewMode === 'list' ? (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
-                {filteredFiles.map((file) => (
-                  <div 
-                    key={file.path}
+                {filteredFiles.filter(f => f.kind === 'file').map((file, index) => (
+                  <div
+                    key={`${file.path}-${index}`}
                     className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all group min-w-0"
                   >
                     {getFileIcon(file.name, file.kind)}
@@ -151,6 +153,7 @@ export const FileView: React.FC<FileViewProps> = ({
             onClick={onClearAll}
             disabled={files.length === 0 || isProcessing}
             className="px-4 py-2 flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title="Clear All"
           >
             <Trash2 className="w-4 h-4" />
             <span className="hidden sm:inline">Clear All</span>

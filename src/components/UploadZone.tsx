@@ -144,9 +144,11 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
           </div>
           {!importError && (
             <input
+              // key={appMode} intentionally remounts input when mode changes to reset webkitdirectory attribute
+              key={appMode}
               type="file"
               multiple
-              {...({ webkitdirectory: appMode === 'concatenate' ? "" : undefined } as any)}
+              {...(appMode === 'concatenate' ? { webkitdirectory: "" } : {})}
               onChange={handleFileUpload}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
               disabled={isProcessing}

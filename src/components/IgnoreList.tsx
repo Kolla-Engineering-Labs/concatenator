@@ -60,13 +60,14 @@ export const IgnoreList: React.FC<IgnoreListProps> = ({
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 pb-8 shadow-sm">
               <div className="flex flex-wrap gap-2 items-center">
                 <AnimatePresence mode="popLayout">
-                  {ignoreList.map((item) => (
+                  {ignoreList.map((item, index) => (
                     <motion.div
-                      key={item}
+                      key={`${item}-${index}`}
                       layout
                       initial={{ opacity: 0, scale: 0.8 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.8 }}
+                      transition={{ duration: 0.15 }}
                       className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-sm font-medium group border border-slate-200 dark:border-slate-700 hover:border-brand-300 dark:hover:border-brand-700 transition-colors"
                     >
                       <span>{item}</span>

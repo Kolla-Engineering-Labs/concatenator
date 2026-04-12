@@ -18,19 +18,17 @@ async function startServer() {
 
   app.get("/api/ignore-list", async (req, res) => {
     try {
-      try {
-        await fs.access(IGNORE_FILE_PATH);
-      } catch {
-        // If file doesn't exist, return default list
-        return res.json(['node_modules', '.git', '.DS_Store', 'dist', '.next']);
-      }
       const content = await fs.readFile(IGNORE_FILE_PATH, "utf-8");
       const list = content
         .split("\n")
         .map((line) => line.trim())
         .filter((line) => line !== "");
       res.json(list);
-    } catch (error) {
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        // If file doesn't exist, return default list
+        return res.json(['node_modules', '.git', '.DS_Store', 'dist', '.next']);
+      }
       console.error("Error reading ignore file:", error);
       res.status(500).json({ error: "Failed to read ignore list" });
     }
@@ -44,11 +42,21 @@ async function startServer() {
       }
       const content = list.join("\n");
       await fs.writeFile(IGNORE_FILE_PATH, content, "utf-8");
-      console.log(`Successfully updated .concatenate-ignore with ${list.length} items`);
       res.json({ success: true });
     } catch (error) {
       console.error("Error writing ignore file:", error);
       res.status(500).json({ error: "Failed to update ignore list" });
+    }
+  });
+
+  // Test-only endpoint to reset ignore list to defaults
+  app.delete("/api/ignore-list", async (req, res) => {
+    try {
+      await fs.unlink(IGNORE_FILE_PATH).catch(() => {});
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error resetting ignore file:", error);
+      res.status(500).json({ error: "Failed to reset ignore list" });
     }
   });
 
