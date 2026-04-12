@@ -50,15 +50,17 @@ async function startServer() {
   });
 
   // Test-only endpoint to reset ignore list to defaults
-  app.delete("/api/ignore-list", async (req, res) => {
-    try {
-      await fs.unlink(IGNORE_FILE_PATH).catch(() => {});
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Error resetting ignore file:", error);
-      res.status(500).json({ error: "Failed to reset ignore list" });
-    }
-  });
+  if (process.env.NODE_ENV !== "production") {
+    app.delete("/api/ignore-list", async (req, res) => {
+      try {
+        await fs.unlink(IGNORE_FILE_PATH).catch(() => {});
+        res.json({ success: true });
+      } catch (error) {
+        console.error("Error resetting ignore file:", error);
+        res.status(500).json({ error: "Failed to reset ignore list" });
+      }
+    });
+  }
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
