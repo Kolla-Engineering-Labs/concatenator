@@ -759,8 +759,13 @@ test.describe.serial('Concatenate Mode', () => {
             try {
               fs.unlinkSync(downloadPath);
               break;
-            } catch (err: any) {
-              if (err.code === 'EBUSY' && retries > 1) {
+            } catch (err: unknown) {
+              const isEBUSY =
+                typeof err === 'object' &&
+                err !== null &&
+                'code' in err &&
+                (err as { code?: unknown }).code === 'EBUSY';
+              if (isEBUSY && retries > 1) {
                 retries--;
                 await new Promise(r => setTimeout(r, 100));
               } else {

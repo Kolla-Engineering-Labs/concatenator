@@ -12,10 +12,7 @@ export default defineConfig(({ mode }) => {
 
   // Load .secrets file if it exists (suppress dotenv logging)
   if (fs.existsSync('.secrets')) {
-    const originalLog = console.log;
-    console.log = () => {};
-    const secrets = config({ path: '.secrets' }).parsed || {};
-    console.log = originalLog;
+    const secrets = config({ path: '.secrets', debug: false }).parsed || {};
     Object.assign(env, secrets);
   }
 
@@ -26,8 +23,8 @@ export default defineConfig(({ mode }) => {
       exclude: ['e2e/**/*', 'node_modules/**/*'],
       coverage: {
         provider: 'v8',
-        reporter: process.env.CI 
-          ? ['lcov', 'json-summary'] 
+        reporter: env.CI
+          ? ['lcov', 'json-summary']
           : ['text', 'html'],
         reportsDirectory: './coverage',
         all: true,

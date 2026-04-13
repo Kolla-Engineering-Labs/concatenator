@@ -398,7 +398,7 @@ describe('TreeNode Component', () => {
       children: []
     });
     
-    const { container } = render(
+    render(
       <TreeNode 
         node={node} 
         depth={0}

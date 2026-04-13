@@ -88,9 +88,7 @@ export class FileUploadHelper {
     // stripping the attribute. It patches each File object's webkitRelativePath
     // via Object.defineProperty (own properties shadow the read-only prototype
     // getter) so that React's handler reads the correct directory path.
-    const pathMap = Object.fromEntries(
-      payload.map(f => [f.name, f.relativePath ?? f.name])
-    );
+    const pathMap = payload.map(f => f.relativePath ?? f.name);
     await this.page.evaluate((map) => {
       const input = document.querySelector('input[type="file"]') as HTMLInputElement;
       if (!input) return;
@@ -100,7 +98,7 @@ export class FileUploadHelper {
         if (!files) return;
         for (let i = 0; i < files.length; i++) {
           const file = files[i];
-          const relativePath = (map as Record<string, string>)[file.name] ?? file.name;
+          const relativePath = (map as string[])[i] ?? file.name;
           try {
             Object.defineProperty(file, 'webkitRelativePath', {
               value: relativePath,

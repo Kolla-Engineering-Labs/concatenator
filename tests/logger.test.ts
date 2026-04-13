@@ -140,7 +140,7 @@ describe('logger', () => {
       expect(timestampMatch).toBeTruthy();
       if (timestampMatch) {
         const loggedTimestamp = timestampMatch[1];
-        expect(loggedTimestamp >= beforeCall || loggedTimestamp <= afterCall).toBe(true);
+        expect(loggedTimestamp >= beforeCall && loggedTimestamp <= afterCall).toBe(true);
       }
     });
   });

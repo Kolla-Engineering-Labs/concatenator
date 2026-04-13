@@ -6,7 +6,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Settings2, Maximize2, Minimize2, X, Plus } from 'lucide-react';
-import { cn } from '../lib/utils';
 
 interface IgnoreListProps {
   ignoreList: string[];
