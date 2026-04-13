@@ -1,6 +1,7 @@
 /// <reference types="vitest" />
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
+import { codecovVitePlugin } from '@codecov/vite-plugin';
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import { config } from 'dotenv';
@@ -32,7 +33,15 @@ export default defineConfig(({ mode }) => {
         all: true,
       },
     },
-    plugins: [react(), tailwindcss()],
+    plugins: [
+      react(),
+      tailwindcss(),
+      codecovVitePlugin({
+        enableBundleAnalysis: process.env.CODECOV_TOKEN !== undefined,
+        bundleName: 'concatenator-bundle',
+        uploadToken: process.env.CODECOV_TOKEN,
+      }),
+    ],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || ''),
       'process.env.OPENAI_API_KEY': JSON.stringify(env.OPENAI_API_KEY || ''),
@@ -50,6 +59,9 @@ export default defineConfig(({ mode }) => {
       watch: {
         ignored: ['**/.concatenate-ignore'],
       },
+    },
+    build: {
+      sourcemap: true, // Required for detailed bundle analysis
     },
   };
 });
