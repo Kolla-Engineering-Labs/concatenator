@@ -34,8 +34,8 @@ export default defineConfig({
    */
   workers: process.env.CI ? 1 : Math.min(2, os.cpus().length),
 
-  /* Reporter to use */
-  reporter: 'html',
+  /* Unified reporter for CI and local use */
+  reporter: process.env.CI ? [['github'], ['html']] : 'html',
 
   /* Global setup to clean test results before run */
   globalSetup: './e2e/global-setup.ts',
@@ -75,6 +75,9 @@ export default defineConfig({
       name: 'webkit',
       use: {
         ...devices['Desktop Safari'],
+        /* WebKit-specific timeouts for stability - higher for directory uploads */
+        actionTimeout: 30000,
+        navigationTimeout: 60000,
         launchOptions: {
           downloadsPath: './test-results/downloads/webkit',
         },
@@ -97,6 +100,9 @@ export default defineConfig({
       name: 'Mobile Safari',
       use: {
         ...devices['iPhone 12'],
+        /* Mobile Safari needs higher timeouts for stability - higher for directory uploads */
+        actionTimeout: 30000,
+        navigationTimeout: 60000,
         launchOptions: {
           downloadsPath: './test-results/downloads/mobile-safari',
         },
