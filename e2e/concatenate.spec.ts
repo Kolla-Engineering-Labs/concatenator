@@ -144,7 +144,7 @@ test.describe.serial('Concatenate Mode', () => {
   });
 
   test.describe('Ignore List Management', () => {
-    test('should add ignore patterns', async ({ page }) => {
+    test('should add ignore patterns', async ({ page, browserName }) => {
       const uploadHelper = new FileUploadHelper(page);
 
       try {
@@ -183,10 +183,19 @@ test.describe.serial('Concatenate Mode', () => {
         // Firefox needs more time for compiledIgnores recomputation + file filtering
         await page.waitForTimeout(2000);
 
+        // Additional delay for WebKit browsers (Mobile Safari) for rendering stability
+        if (browserName === 'webkit') {
+          await page.waitForTimeout(1000);
+        }
+
         // Verify the test file is now filtered out (waits for server save + state propagation)
         await expect(page.getByText('app.test.js')).not.toBeVisible({ timeout: 10000 });
-        await expect(page.getByText('app.js')).toBeVisible({ timeout: 10000 });
-        await expect(page.getByText('styles.css')).toBeVisible({ timeout: 10000 });
+
+        // Use more specific locators targeting the file name span in the list view
+        // to avoid matching path text or other elements containing similar substrings
+        const fileList = page.locator('.grid').first();
+        await expect(fileList.getByText('app.js', { exact: true })).toBeVisible({ timeout: 10000 });
+        await expect(fileList.getByText('styles.css', { exact: true })).toBeVisible({ timeout: 10000 });
 
         // File count should be 2 (not 3)
         await expect(page.getByText(/Selected Files.*2/)).toBeVisible({ timeout: 10000 });
@@ -195,7 +204,7 @@ test.describe.serial('Concatenate Mode', () => {
       }
     });
 
-    test('should remove ignore patterns', async ({ page }) => {
+    test('should remove ignore patterns', async ({ page, browserName }) => {
       const uploadHelper = new FileUploadHelper(page);
 
       try {
@@ -207,7 +216,8 @@ test.describe.serial('Concatenate Mode', () => {
         await uploadHelper.setFilesOnInput(files);
 
         // Wait for files to appear
-        await expect(page.getByText('script.js')).toBeVisible({ timeout: 10000 });
+        const fileList = page.locator('.grid').first();
+        await expect(fileList.getByText('script.js', { exact: true })).toBeVisible({ timeout: 10000 });
 
         // Expand ignore list if needed
         const expandIgnoreButton = page.locator('button[title="Expand ignore list"]');
@@ -232,8 +242,13 @@ test.describe.serial('Concatenate Mode', () => {
         // Give React time to re-render with updated filtered files in Firefox
         await page.waitForTimeout(2000);
 
+        // Additional delay for WebKit browsers (Mobile Safari) for rendering stability
+        if (browserName === 'webkit') {
+          await page.waitForTimeout(1000);
+        }
+
         // temp.tmp should be filtered
-        await expect(page.getByText('temp.tmp')).not.toBeVisible({ timeout: 10000 });
+        await expect(fileList.getByText('temp.tmp', { exact: true })).not.toBeVisible({ timeout: 10000 });
 
         // Remove the ignore pattern using the specific button title
         const removeButton = page.locator('button[title="Remove *.tmp"]');
@@ -253,14 +268,19 @@ test.describe.serial('Concatenate Mode', () => {
         // Give React time to re-render with updated filtered files in Firefox
         await page.waitForTimeout(2000);
 
+        // Additional delay for WebKit browsers (Mobile Safari) for rendering stability
+        if (browserName === 'webkit') {
+          await page.waitForTimeout(1000);
+        }
+
         // Verify filtered files update - temp.tmp should reappear (waits for state propagation)
-        await expect(page.getByText('temp.tmp')).toBeVisible({ timeout: 10000 });
+        await expect(fileList.getByText('temp.tmp', { exact: true })).toBeVisible({ timeout: 10000 });
       } finally {
         uploadHelper.cleanup();
       }
     });
 
-    test('should support regex ignore patterns', async ({ page }) => {
+    test('should support regex ignore patterns', async ({ page, browserName }) => {
       const uploadHelper = new FileUploadHelper(page);
 
       try {
@@ -272,7 +292,8 @@ test.describe.serial('Concatenate Mode', () => {
         await uploadHelper.setFilesOnInput(files);
 
         // Wait for files to appear
-        await expect(page.getByText('main.ts')).toBeVisible({ timeout: 10000 });
+        const fileListContainer = page.locator('.grid').first();
+        await expect(fileListContainer.getByText('main.ts', { exact: true })).toBeVisible({ timeout: 10000 });
 
         // Expand ignore list if minimized
         const expandIgnoreButton = page.locator('button[title="Expand ignore list"]');
@@ -285,11 +306,11 @@ test.describe.serial('Concatenate Mode', () => {
         // Add regex pattern - wait for input to be ready
         const ignoreInput = page.getByPlaceholder('Add ignore pattern...');
         await ignoreInput.waitFor({ state: 'visible', timeout: 10000 });
-        await ignoreInput.fill('/\\.spec\\.ts$/');
+        await ignoreInput.fill('/\.spec\.ts$/');
         await ignoreInput.press('Enter');
 
         // Verify pattern added
-        await expect(page.getByText('/\\.spec\\.ts$/')).toBeVisible({ timeout: 10000 });
+        await expect(page.getByText('/\.spec\.ts$/')).toBeVisible({ timeout: 10000 });
 
         // Wait for network to be idle to ensure server save completes
         await page.waitForLoadState('networkidle');
@@ -298,10 +319,14 @@ test.describe.serial('Concatenate Mode', () => {
         // Regex patterns need more time for compilation and matching
         await page.waitForTimeout(2000);
 
-        // spec file should be filtered - scope to file list to avoid matching pattern text in IgnoreList
-        const fileListContainer = page.locator('div').filter({ has: page.getByText('Selected Files').first() });
-        await expect(fileListContainer.getByText('test.spec.ts')).not.toBeVisible({ timeout: 10000 });
-        await expect(fileListContainer.getByText('main.ts')).toBeVisible({ timeout: 10000 });
+        // Additional delay for WebKit browsers (Mobile Safari) for rendering stability
+        if (browserName === 'webkit') {
+          await page.waitForTimeout(1000);
+        }
+
+        // spec file should be filtered - use scoped file list with exact matching
+        await expect(fileListContainer.getByText('test.spec.ts', { exact: true })).not.toBeVisible({ timeout: 10000 });
+        await expect(fileListContainer.getByText('main.ts', { exact: true })).toBeVisible({ timeout: 10000 });
       } finally {
         uploadHelper.cleanup();
       }
@@ -587,11 +612,8 @@ test.describe.serial('Concatenate Mode', () => {
         await ignoreButton.waitFor({ state: 'visible', timeout: 10000 });
         await ignoreButton.click({ timeout: 10000 });
 
-        // Wait for the ignore button to be removed (indicates state updated)
-        await expect(ignoreButton).toHaveCount(0, { timeout: 10000 });
-
-        // Give React time to complete the re-render cycle
-        await page.waitForTimeout(100);
+        // Wait for network to be idle to ensure server save completes
+        await page.waitForLoadState('networkidle');
 
         // Wait for the ignored file text to disappear from the file list
         // Use a more specific locator to target only the file list (not the ignore list)

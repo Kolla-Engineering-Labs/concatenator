@@ -3,7 +3,7 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import fs from "fs/promises";
 import { fileURLToPath } from "url";
-import rateLimit from "express-rate-limit";
+import { rateLimit } from "express-rate-limit";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

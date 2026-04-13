@@ -5,12 +5,24 @@
 
 import { test, expect, Page } from '@playwright/test';
 import { SIMPLE_PROJECT, REACT_PROJECT } from './fixtures/test-data';
-import { createTestDirectory, cleanupTestDirectory } from './helpers/file-upload';
+
 
 /**
  * Helper to upload files to a webkitdirectory input.
- * For webkitdirectory inputs, Playwright requires passing a path to an actual directory.
- * Returns a cleanup function that should be called after file processing is complete.
+ *
+ * Uses buffer-based payloads with a temporary attribute removal to avoid two
+ * separate issues on macOS GitHub Actions runners with Node 22 + WebKit:
+ *
+ * Problem 1: Passing a directory *path* crashes the WebKit process
+ *   ("Target page, context or browser has been closed").
+ *
+ * Problem 2: Playwright rejects buffer payloads at the framework level for
+ *   webkitdirectory inputs ("Error: [webkitdirectory] input requires passing
+ *   a path to a directory").
+ *
+ * Solution: Temporarily remove webkitdirectory, set files via buffer (the
+ * relativePath field correctly sets file.webkitRelativePath via CDP), then
+ * restore the attribute. Returns a no-op cleanup function for API compatibility.
  */
 async function setFilesForWebkitDirectory(
   page: Page,
@@ -19,23 +31,43 @@ async function setFilesForWebkitDirectory(
   // Wait for page to be fully loaded and stable
   await page.waitForLoadState('domcontentloaded');
 
-  // Wait for file input to be available
-  const fileInput = page.locator('input[type="file"][webkitdirectory]');
-  await fileInput.waitFor({ state: 'attached' });
+  // Wait for the webkitdirectory input to be present in the DOM.
+  const fileInputWithAttr = page.locator('input[type="file"][webkitdirectory]');
+  await fileInputWithAttr.waitFor({ state: 'attached' });
 
-  // Create temp directory with the files
-  const mockFiles = files.map(f => ({
+  // Build buffer-based payload. The relativePath field sets file.webkitRelativePath.
+  const payload = files.map(f => ({
     name: f.name,
-    path: f.relativePath,
-    content: f.content
+    mimeType: 'application/octet-stream',
+    buffer: Buffer.from(f.content),
+    relativePath: f.relativePath,
   }));
-  const testDir = createTestDirectory(mockFiles);
 
-  // webkitdirectory input requires a directory path - CRITICAL: must await
-  await fileInput.setInputFiles(testDir);
+  // Resolve a bare locator (no [webkitdirectory] filter) BEFORE stripping the attribute.
+  // Playwright re-evaluates locators lazily — if we call setInputFiles() on a locator
+  // that includes [webkitdirectory] in its CSS selector, and we already removed the
+  // attribute, the element no longer matches and the call times out on WebKit.
+  const fileInput = page.locator('input[type="file"]').first();
 
-  // Return cleanup function - caller must call this after files are processed
-  return () => cleanupTestDirectory(testDir);
+  // Momentarily remove webkitdirectory so Playwright lets us pass buffer payloads,
+  // then restore it so the input remains semantically correct after this call.
+  await fileInput.evaluate((el: HTMLInputElement) => el.removeAttribute('webkitdirectory'));
+  try {
+    await fileInput.setInputFiles(payload);
+  } finally {
+    // Restore the attribute. On WebKit/Mobile Safari the browser context may
+    // have been recycled by the time we get here (e.g. the file-input change
+    // triggered a navigation or the process was restarted). Swallow those
+    // errors — the restore is cosmetic and does not affect test correctness.
+    try {
+      await fileInput.evaluate((el: HTMLInputElement) => el.setAttribute('webkitdirectory', ''));
+    } catch {
+      // Ignore "Target page, context or browser has been closed" on WebKit.
+    }
+  }
+
+  // No temp directory was created, so cleanup is a no-op.
+  return () => { /* no-op */ };
 }
 
 /**
@@ -81,7 +113,8 @@ async function jsClick(locator: import('@playwright/test').Locator): Promise<voi
       await expect(page.getByText(/Reading Files/)).not.toBeVisible({ timeout: 10000 });
 
       // Verify file appears in the list
-      await expect(page.getByText('hello.js')).toBeVisible();
+      const fileList = page.locator('.grid').first();
+      await expect(fileList.getByText('hello.js', { exact: true })).toBeVisible();
       await expect(page.getByText(/Selected Files.*1/)).toBeVisible();
     } finally {
       cleanup();
@@ -103,8 +136,9 @@ async function jsClick(locator: import('@playwright/test').Locator): Promise<voi
       await expect(page.getByText(/Reading Files/)).not.toBeVisible({ timeout: 10000 });
 
       // Verify all files appear
+      const fileList = page.locator('.grid').first();
       for (const { name } of fileContents) {
-        await expect(page.getByText(name)).toBeVisible();
+        await expect(fileList.getByText(name, { exact: true })).toBeVisible();
       }
 
       await expect(page.getByText(/Selected Files.*3/)).toBeVisible();
@@ -128,9 +162,10 @@ async function jsClick(locator: import('@playwright/test').Locator): Promise<voi
       await expect(page.getByText(/Reading Files/)).not.toBeVisible({ timeout: 10000 });
 
       // Verify files appear
-      await expect(page.getByText('index.js')).toBeVisible();
-      await expect(page.getByText('helpers.js')).toBeVisible();
-      await expect(page.getByText('index.test.js')).toBeVisible();
+      const fileList = page.locator('.grid').first();
+      await expect(fileList.getByText('index.js', { exact: true })).toBeVisible();
+      await expect(fileList.getByText('helpers.js', { exact: true })).toBeVisible();
+      await expect(fileList.getByText('index.test.js', { exact: true })).toBeVisible();
     } finally {
       cleanup();
     }
@@ -220,8 +255,9 @@ test.describe.serial('File Upload with Test Fixtures', () => {
       await expect(page.getByText(/Reading Files/)).not.toBeVisible({ timeout: 10000 });
 
       // Verify all fixture files are present
+      const fileList = page.locator('.grid').first();
       for (const file of SIMPLE_PROJECT) {
-        await expect(page.getByText(file.name)).toBeVisible();
+        await expect(fileList.getByText(file.name, { exact: true })).toBeVisible();
       }
     } finally {
       cleanup();
@@ -243,9 +279,10 @@ test.describe.serial('File Upload with Test Fixtures', () => {
       await expect(page.getByText(/Reading Files/)).not.toBeVisible({ timeout: 10000 });
 
       // Verify React project files
-      await expect(page.getByText('App.tsx')).toBeVisible();
-      await expect(page.getByText('Button.tsx')).toBeVisible();
-      await expect(page.getByText('package.json')).toBeVisible();
+      const fileList = page.locator('.grid').first();
+      await expect(fileList.getByText('App.tsx', { exact: true })).toBeVisible();
+      await expect(fileList.getByText('Button.tsx', { exact: true })).toBeVisible();
+      await expect(fileList.getByText('package.json', { exact: true })).toBeVisible();
     } finally {
       cleanup();
     }
