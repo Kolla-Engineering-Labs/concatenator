@@ -81,7 +81,8 @@ async function jsClick(locator: import('@playwright/test').Locator): Promise<voi
       await expect(page.getByText(/Reading Files/)).not.toBeVisible({ timeout: 10000 });
 
       // Verify file appears in the list
-      await expect(page.getByText('hello.js')).toBeVisible();
+      const fileList = page.locator('.grid').first();
+      await expect(fileList.getByText('hello.js', { exact: true })).toBeVisible();
       await expect(page.getByText(/Selected Files.*1/)).toBeVisible();
     } finally {
       cleanup();
@@ -103,8 +104,9 @@ async function jsClick(locator: import('@playwright/test').Locator): Promise<voi
       await expect(page.getByText(/Reading Files/)).not.toBeVisible({ timeout: 10000 });
 
       // Verify all files appear
+      const fileList = page.locator('.grid').first();
       for (const { name } of fileContents) {
-        await expect(page.getByText(name)).toBeVisible();
+        await expect(fileList.getByText(name, { exact: true })).toBeVisible();
       }
 
       await expect(page.getByText(/Selected Files.*3/)).toBeVisible();
@@ -128,9 +130,10 @@ async function jsClick(locator: import('@playwright/test').Locator): Promise<voi
       await expect(page.getByText(/Reading Files/)).not.toBeVisible({ timeout: 10000 });
 
       // Verify files appear
-      await expect(page.getByText('index.js')).toBeVisible();
-      await expect(page.getByText('helpers.js')).toBeVisible();
-      await expect(page.getByText('index.test.js')).toBeVisible();
+      const fileList = page.locator('.grid').first();
+      await expect(fileList.getByText('index.js', { exact: true })).toBeVisible();
+      await expect(fileList.getByText('helpers.js', { exact: true })).toBeVisible();
+      await expect(fileList.getByText('index.test.js', { exact: true })).toBeVisible();
     } finally {
       cleanup();
     }
@@ -220,8 +223,9 @@ test.describe.serial('File Upload with Test Fixtures', () => {
       await expect(page.getByText(/Reading Files/)).not.toBeVisible({ timeout: 10000 });
 
       // Verify all fixture files are present
+      const fileList = page.locator('.grid').first();
       for (const file of SIMPLE_PROJECT) {
-        await expect(page.getByText(file.name)).toBeVisible();
+        await expect(fileList.getByText(file.name, { exact: true })).toBeVisible();
       }
     } finally {
       cleanup();
@@ -243,9 +247,10 @@ test.describe.serial('File Upload with Test Fixtures', () => {
       await expect(page.getByText(/Reading Files/)).not.toBeVisible({ timeout: 10000 });
 
       // Verify React project files
-      await expect(page.getByText('App.tsx')).toBeVisible();
-      await expect(page.getByText('Button.tsx')).toBeVisible();
-      await expect(page.getByText('package.json')).toBeVisible();
+      const fileList = page.locator('.grid').first();
+      await expect(fileList.getByText('App.tsx', { exact: true })).toBeVisible();
+      await expect(fileList.getByText('Button.tsx', { exact: true })).toBeVisible();
+      await expect(fileList.getByText('package.json', { exact: true })).toBeVisible();
     } finally {
       cleanup();
     }
