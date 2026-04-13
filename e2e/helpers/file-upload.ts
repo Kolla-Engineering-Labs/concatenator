@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Page } from '@playwright/test';
+import { Page, Locator } from '@playwright/test';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -38,6 +38,41 @@ export class FileUploadHelper {
   }
 
   /**
+   * Detects if the current browser is WebKit (Safari).
+   */
+  private async isWebKit(): Promise<boolean> {
+    return this.page.evaluate(() => {
+      const ua = navigator.userAgent.toLowerCase();
+      return ua.includes('safari') && !ua.includes('chrome') && !ua.includes('chromium');
+    });
+  }
+
+  /**
+   * Sets input files with WebKit-specific handling for directory uploads.
+   * WebKit on macOS needs longer timeouts and sometimes requires retry logic.
+   */
+  private async setInputFilesWithRetry(fileInput: Locator, files: string | string[]): Promise<void> {
+    const isWebKit = await this.isWebKit();
+    const timeout = isWebKit ? 45000 : 30000;
+
+    // Wait for input to be ready
+    await fileInput.waitFor({ state: 'attached', timeout });
+
+    try {
+      await fileInput.setInputFiles(files, { timeout });
+    } catch (error) {
+      // On WebKit, retry once if it times out (known WebKit issue with directory uploads)
+      if (isWebKit && error instanceof Error && error.message.includes('Timeout')) {
+        // Small delay before retry
+        await this.page.waitForTimeout(500);
+        await fileInput.setInputFiles(files, { timeout });
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  /**
    * Creates files on disk and uses Playwright's setInputFiles for reliable uploads.
    * This properly handles FileReader and webkitRelativePath in the browser.
    */
@@ -63,7 +98,8 @@ export class FileUploadHelper {
       }
 
       // Upload the subdirectory (browser will use 'upload' as the root name)
-      await fileInput.setInputFiles(uploadDir);
+      // Use retry logic for WebKit compatibility
+      await this.setInputFilesWithRetry(fileInput, uploadDir);
     } else {
       // For regular file inputs, create files directly in temp dir
       for (const file of files) {
@@ -75,7 +111,7 @@ export class FileUploadHelper {
 
       // Pass individual file paths
       const filePaths = files.map(file => path.join(this.tempDir, file.path));
-      await fileInput.setInputFiles(filePaths);
+      await this.setInputFilesWithRetry(fileInput, filePaths);
     }
   }
 
@@ -94,12 +130,12 @@ export class FileUploadHelper {
       fs.mkdirSync(dirPath, { recursive: true });
       const targetPath = path.join(dirPath, name);
       fs.writeFileSync(targetPath, content);
-      await fileInput.setInputFiles(dirPath);
+      await this.setInputFilesWithRetry(fileInput, dirPath);
     } else {
       // For regular file inputs, pass the file path directly
       const filePath = path.join(this.tempDir, name);
       fs.writeFileSync(filePath, content);
-      await fileInput.setInputFiles(filePath);
+      await this.setInputFilesWithRetry(fileInput, filePath);
     }
   }
 
