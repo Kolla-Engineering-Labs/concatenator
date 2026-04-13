@@ -82,8 +82,6 @@ describe('useFileTree', () => {
       { name: 'mango.txt', path: 'mango.txt', kind: 'file' },
     ];
     
-    const { result } = renderHook(() => useFileTree(files));
-    
     // Single file becomes root, so test with multiple
     const { result: result2 } = renderHook(() => 
       useFileTree([
