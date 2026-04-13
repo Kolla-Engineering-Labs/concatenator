@@ -33,6 +33,28 @@ A professional, minimalist tool designed to streamline the process of merging mu
 - **Build Tool**: [Vite 6](https://vitejs.dev/)
 - **Utilities**: [JSZip](https://stuk.github.io/jszip/) for archive generation
 
+## Development
+
+### Logging
+
+Concatenator uses a lightweight logging utility (`src/lib/logger.ts`) for debugging:
+
+- **Levels**: `debug` < `info` < `error` (higher levels include lower ones)
+- **Default**: `info` (logs info and error, suppresses debug)
+- **Format**: `[2026-04-13T12:34:56.789Z] [LEVEL] message`
+
+Set `LOG_LEVEL=debug` in your `.env` to see detailed file parsing logs useful for debugging edge cases.
+
+### Running Tests
+
+```bash
+# Unit tests
+npm test
+
+# E2E tests
+npm run test:e2e
+```
+
 ## Installation & Setup
 
 To run Concatenator locally, ensure you have [Node.js](https://nodejs.org/) installed, then follow these steps:
@@ -73,6 +95,9 @@ Create a `.env` file in the root directory and add your API keys:
 GEMINI_API_KEY=your_gemini_key
 OPENAI_API_KEY=your_openai_key
 ANTHROPIC_API_KEY=your_anthropic_key
+
+# Optional: Logging level (debug | info | error)
+LOG_LEVEL=info
 ```
 
 ## Usage
