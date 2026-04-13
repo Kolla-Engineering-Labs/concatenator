@@ -75,8 +75,8 @@ export default defineConfig({
       name: 'webkit',
       use: {
         ...devices['Desktop Safari'],
-        /* WebKit-specific timeouts for stability */
-        actionTimeout: 15000,
+        /* WebKit-specific timeouts for stability - higher for directory uploads */
+        actionTimeout: 30000,
         navigationTimeout: 60000,
         launchOptions: {
           downloadsPath: './test-results/downloads/webkit',
@@ -100,8 +100,8 @@ export default defineConfig({
       name: 'Mobile Safari',
       use: {
         ...devices['iPhone 12'],
-        /* Mobile Safari needs higher timeouts for stability */
-        actionTimeout: 15000,
+        /* Mobile Safari needs higher timeouts for stability - higher for directory uploads */
+        actionTimeout: 30000,
         navigationTimeout: 60000,
         launchOptions: {
           downloadsPath: './test-results/downloads/mobile-safari',
