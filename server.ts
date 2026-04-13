@@ -33,10 +33,15 @@ async function startServer() {
         .map((line) => line.trim())
         .filter((line) => line !== "");
       res.json(list);
-    } catch (error: any) {
-      if (error.code === 'ENOENT') {
+    } catch (error: unknown) {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        (error as { code?: string }).code === "ENOENT"
+      ) {
         // If file doesn't exist, return default list
-        return res.json(['node_modules', '.git', '.DS_Store', 'dist', '.next']);
+        return res.json(["node_modules", ".git", ".DS_Store", "dist", ".next"]);
       }
       console.error("Error reading ignore file:", error);
       res.status(500).json({ error: "Failed to read ignore list" });

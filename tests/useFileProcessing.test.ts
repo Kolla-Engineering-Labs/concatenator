@@ -216,7 +216,6 @@ describe('useFileProcessing', () => {
 
   describe('De-Concatenation Regex Logic Edge Cases', () => {
     it('handles files containing correct regex paths and complex formats', async () => {
-      const JSZip = (await import('jszip')).default;
       const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [] }));
       
       const complexPath = 'src/test-(spec)+1.js';
@@ -241,7 +240,6 @@ describe('useFileProcessing', () => {
     });
 
     it('gracefully skips files with malformed EOF delimiters', async () => {
-      const JSZip = (await import('jszip')).default;
       const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [] }));
       
       // Deliberately missing the closing end delimiter
@@ -717,7 +715,6 @@ describe('useFileProcessing', () => {
     it('safely aborts FileReader operations to prevent memory leaks (Edge Case 42)', async () => {
       const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [] }));
       
-      let readerAbort: any;
       const file = new File(['content'], 'big.txt', { type: 'text/plain' });
       
       const originalFileReader = global.FileReader;
@@ -912,7 +909,6 @@ describe('useFileProcessing', () => {
       const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [] }));
       const mockFiles = [{ name: 't.txt', path: 't.txt', kind: 'file' as const, content: 't', size: 1 }];
 
-      const originalClick = HTMLAnchorElement.prototype.click;
       const downloadSpy = vi.fn();
       
       // Override createElement to spy on 'a' tag download attrib
