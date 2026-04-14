@@ -452,7 +452,7 @@ describe('useIgnoreList', () => {
     });
 
     it('handles special regex characters in pattern body', async () => {
-      localStorage.setItem('concatenate-ignore', JSON.stringify(['/\\d+\.test$/']));
+      localStorage.setItem('concatenate-ignore', JSON.stringify(['/\\d+\\.test$/']));
       const { result } = renderHook(() => useIgnoreList());
       
       await waitFor(() => {

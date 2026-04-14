@@ -43,9 +43,9 @@ export default function App() {
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set(['/', 'root']));
 
   // --- API Key State ---
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('google-ai-api-key') || process.env.GEMINI_API_KEY || '');
-  const [openaiKey, setOpenaiKey] = useState(() => localStorage.getItem('openai-api-key') || process.env.OPENAI_API_KEY || '');
-  const [anthropicKey, setAnthropicKey] = useState(() => localStorage.getItem('anthropic-api-key') || process.env.ANTHROPIC_API_KEY || '');
+  const [apiKey, setApiKey] = useState(() => process.env.GEMINI_API_KEY || '');
+  const [openaiKey, setOpenaiKey] = useState(() => process.env.OPENAI_API_KEY || '');
+  const [anthropicKey, setAnthropicKey] = useState(() => process.env.ANTHROPIC_API_KEY || '');
 
   // --- Custom Hooks ---
   const { 
@@ -118,9 +118,6 @@ export default function App() {
 
   // --- Handlers ---
   const handleSaveSettings = () => {
-    localStorage.setItem('google-ai-api-key', apiKey);
-    localStorage.setItem('openai-api-key', openaiKey);
-    localStorage.setItem('anthropic-api-key', anthropicKey);
     setShowSettings(false);
   };
 
