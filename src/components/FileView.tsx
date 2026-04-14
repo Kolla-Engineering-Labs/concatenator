@@ -6,9 +6,10 @@
 import React from 'react';
 import { Files, List, Network, FileCode, Ban, X, Download, Trash2 } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { FileItem, TreeItem, ViewMode } from '../types';
+import { FileItem, TreeItem, ViewMode, OutputFormat } from '../types';
 import { getFileIcon } from '../lib/fileIcons';
 import { TreeNode } from './TreeNode';
+import { OutputFormatToggle } from './OutputFormatToggle';
 
 interface FileViewProps {
   files: FileItem[];
@@ -23,6 +24,8 @@ interface FileViewProps {
   onClearAll: () => void;
   onIgnoreFile: (name: string) => void;
   onRemoveFile: (file: FileItem) => void;
+  outputFormat: OutputFormat;
+  setOutputFormat: (format: OutputFormat) => void;
 }
 
 /**
@@ -41,6 +44,8 @@ export const FileView: React.FC<FileViewProps> = ({
   onClearAll,
   onIgnoreFile,
   onRemoveFile,
+  outputFormat,
+  setOutputFormat,
 }) => {
   return (
     <div className="space-y-4">
@@ -52,7 +57,7 @@ export const FileView: React.FC<FileViewProps> = ({
             <span className="ml-2 tabular-nums opacity-60">({filteredFiles.filter(f => f.kind === 'file').length})</span>
           </h2>
         </div>
-        
+
         <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-lg">
           <button
             onClick={() => setViewMode('list')}
@@ -97,7 +102,7 @@ export const FileView: React.FC<FileViewProps> = ({
                       <span className="text-sm font-medium truncate leading-tight">
                         {file.name}
                       </span>
-                      <span 
+                      <span
                         className="text-[10px] text-slate-400 truncate leading-tight cursor-help"
                         title={file.path}
                       >
@@ -105,14 +110,14 @@ export const FileView: React.FC<FileViewProps> = ({
                       </span>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
-                      <button 
+                      <button
                         onClick={() => onIgnoreFile(file.name)}
                         className="p-1 text-slate-400 hover:text-brand-500 transition-all"
                         title={`Ignore ${file.name}`}
                       >
                         <Ban className="w-3 h-3" />
                       </button>
-                      <button 
+                      <button
                         onClick={() => onRemoveFile(file)}
                         className="p-1 text-slate-400 hover:text-red-500 transition-all"
                         title={`Remove ${file.name}`}
@@ -124,17 +129,22 @@ export const FileView: React.FC<FileViewProps> = ({
                 ))}
               </div>
             ) : (
-              <TreeNode 
-                node={fileTree} 
-                expandedPaths={expandedPaths} 
-                setExpandedPaths={setExpandedPaths} 
+              <TreeNode
+                node={fileTree}
+                expandedPaths={expandedPaths}
+                setExpandedPaths={setExpandedPaths}
               />
             )}
           </div>
         )}
       </div>
 
-      <div className="relative flex items-center justify-center pt-4">
+      <div className="flex items-center justify-between pt-4">
+        <OutputFormatToggle
+          outputFormat={outputFormat}
+          setOutputFormat={setOutputFormat}
+        />
+
         <button
           onClick={onConcatenate}
           disabled={filteredFiles.length === 0 || isProcessing}
@@ -148,17 +158,15 @@ export const FileView: React.FC<FileViewProps> = ({
           Concatenate & Download
         </button>
 
-        <div className="absolute right-0">
-          <button
-            onClick={onClearAll}
-            disabled={files.length === 0 || isProcessing}
-            className="px-4 py-2 flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            title="Clear All"
-          >
-            <Trash2 className="w-4 h-4" />
-            <span className="hidden sm:inline">Clear All</span>
-          </button>
-        </div>
+        <button
+          onClick={onClearAll}
+          disabled={files.length === 0 || isProcessing}
+          className="px-4 py-2 flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          title="Clear All"
+        >
+          <Trash2 className="w-4 h-4" />
+          <span className="hidden sm:inline">Clear All</span>
+        </button>
       </div>
     </div>
   );
