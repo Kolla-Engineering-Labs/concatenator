@@ -318,12 +318,24 @@ export const useFileProcessing = ({ appMode, compiledIgnores, maxFileLimit }: Us
 
       const fullPath = path + entry.name;
 
-      // Skip root directories that are explicitly blocked by ignore list
-      if (isRoot && isIgnored(fullPath)) {
+      // Skip directories (root or nested) that are explicitly blocked by ignore list
+      if (entry.isDirectory && isIgnored(fullPath)) {
+        return;
+      }
+
+      // Skip files that are explicitly blocked by ignore list
+      if (entry.isFile && isIgnored(fullPath)) {
         return;
       }
 
       if (entry.isFile) {
+        // Check max file limit before adding (halt immediately when exceeded)
+        if (droppedFiles.length >= maxFileLimit) {
+          setImportError(`Import halted: The folder contains more than ${maxFileLimit} files. Please increase the Max Files limit or select a folder with fewer files.`);
+          cancelImportRef.current = true;
+          return;
+        }
+
         setImportProgress(prev => ({ ...prev, total: prev.total + 1 }));
         const file = await new Promise<File>((resolve, reject) => {
           entry.file((f: File) => resolve(f), (err: any) => reject(err));
@@ -375,6 +387,14 @@ export const useFileProcessing = ({ appMode, compiledIgnores, maxFileLimit }: Us
       await traverseEntry(entry, '', true);
     }
 
+    // Check if user cancelled during traversal (Bug 2 fix)
+    if (cancelImportRef.current) {
+      setIsProcessing(false);
+      setImportProgress({ current: 0, total: 0 });
+      cancelImportRef.current = false;
+      return;
+    }
+
     if (droppedFiles.length > 0) {
       await processUploadedFiles(droppedFiles);
     } else {
@@ -383,7 +403,7 @@ export const useFileProcessing = ({ appMode, compiledIgnores, maxFileLimit }: Us
         setImportError("No files were imported. This might be because all files matched your ignore list (check if any Regex is overly broad) or the folder was empty.");
       }
     }
-  }, [processUploadedFiles, setIsProcessing]);
+  }, [processUploadedFiles, setIsProcessing, maxFileLimit]);
 
   const handleConcatenate = useCallback((filteredFiles: FileItem[], outputFormat: OutputFormat = 'text') => {
     if (filteredFiles.length === 0) return;
