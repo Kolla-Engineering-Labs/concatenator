@@ -21,6 +21,10 @@ export default defineConfig(({ mode }) => {
       environment: 'jsdom',
       globals: true,
       exclude: ['e2e/**/*', 'node_modules/**/*'],
+      reporters: env.CI ? ['default', 'junit'] : ['default'],
+      outputFile: {
+        junit: './test-report.junit.xml',
+      },
       coverage: {
         provider: 'v8',
         reporter: env.CI
@@ -28,15 +32,25 @@ export default defineConfig(({ mode }) => {
           : ['text', 'html'],
         reportsDirectory: './coverage',
         all: true,
+        exclude: [
+          '**/node_modules/**',
+          '**/dist/**',
+          '**/cypress/**',
+          '**/.{eslint,mocha,prettier}rc.{js,cjs,yml}',
+          'src/main.tsx',
+          '**/*.test.ts',
+          '**/*.test.tsx',
+          '**/*.spec.ts',
+          'e2e/**',
+        ],
       },
     },
     plugins: [
       react(),
       tailwindcss(),
       codecovVitePlugin({
-        enableBundleAnalysis: process.env.CODECOV_TOKEN !== undefined,
+        enableBundleAnalysis: env.CI === 'true',
         bundleName: 'concatenator-bundle',
-        uploadToken: process.env.CODECOV_TOKEN,
       }),
     ],
     define: {

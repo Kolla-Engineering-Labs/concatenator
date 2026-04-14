@@ -10,6 +10,11 @@ on:
 jobs:
   build-and-test:
     runs-on: ${{ matrix.os }}
+    
+    permissions:
+      id-token: write
+      contents: read
+
     strategy:
       fail-fast: false
       matrix:
@@ -28,9 +33,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install Playwright Browsers
-        run: npx playwright install --with-deps
-
       - name: Type Check (TypeScript)
         run: npm run lint
 
@@ -40,16 +42,28 @@ jobs:
       - name: Run Unit Tests (Vitest)
         run: npm run test:coverage
 
+      - name: Install Playwright Browsers
+        # Only happens if Build and Unit Tests pass
+        run: npx playwright install --with-deps
+
       - name: Run E2E Tests (Playwright)
         run: npm run test:e2e
         env:
           CI: true
 
-      - name: Upload coverage to Codecov
-        if: matrix.os == 'ubuntu-latest'
+      # --- All Uploads at the End ---
+      - name: Upload Test Results to Codecov
+        if: matrix.os == 'ubuntu-latest' && !cancelled() 
+        uses: codecov/test-results-action@v1
+        with:
+          files: ./test-report.junit.xml
+          use_oidc: true
+
+      - name: Upload Coverage Report to Codecov
+        if: matrix.os == 'ubuntu-latest' && !cancelled() 
         uses: codecov/codecov-action@v4
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
+          use_oidc: true
           files: ./coverage/lcov.info
           fail_ci_if_error: false
 
