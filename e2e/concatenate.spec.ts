@@ -802,4 +802,146 @@ test.describe.serial('Concatenate Mode', () => {
       }
     });
   });
+
+  test.describe('Output Format Toggle', () => {
+    test('should show TEXT and PDF toggle buttons', async ({ page }) => {
+      // Both buttons should be visible
+      await expect(page.getByRole('button', { name: 'TEXT' })).toBeVisible({ timeout: 10000 });
+      await expect(page.getByRole('button', { name: 'PDF' })).toBeVisible({ timeout: 10000 });
+    });
+
+    test('should have TEXT as default active format', async ({ page }) => {
+      const textButton = page.getByRole('button', { name: 'TEXT' });
+      const pdfButton = page.getByRole('button', { name: 'PDF' });
+
+      // TEXT button should have active styling (bg-white or shadow)
+      await expect(textButton).toHaveClass(/bg-white|shadow-sm/, { timeout: 10000 });
+      // PDF button should not have active styling
+      await expect(pdfButton).not.toHaveClass(/bg-white|shadow-sm/, { timeout: 10000 });
+    });
+
+    test('should switch to PDF format when PDF button clicked', async ({ page }) => {
+      const textButton = page.getByRole('button', { name: 'TEXT' });
+      const pdfButton = page.getByRole('button', { name: 'PDF' });
+
+      // Click PDF button
+      await jsClick(pdfButton);
+      await page.waitForTimeout(200);
+
+      // PDF button should now be active
+      await expect(pdfButton).toHaveClass(/bg-white|shadow-sm/, { timeout: 10000 });
+      // TEXT button should not be active
+      await expect(textButton).not.toHaveClass(/bg-white|shadow-sm/, { timeout: 10000 });
+    });
+
+    test('should switch back to TEXT format when TEXT button clicked', async ({ page }) => {
+      const textButton = page.getByRole('button', { name: 'TEXT' });
+      const pdfButton = page.getByRole('button', { name: 'PDF' });
+
+      // First switch to PDF
+      await jsClick(pdfButton);
+      await page.waitForTimeout(200);
+
+      // Then switch back to TEXT
+      await jsClick(textButton);
+      await page.waitForTimeout(200);
+
+      // TEXT button should be active again
+      await expect(textButton).toHaveClass(/bg-white|shadow-sm/, { timeout: 10000 });
+      // PDF button should not be active
+      await expect(pdfButton).not.toHaveClass(/bg-white|shadow-sm/, { timeout: 10000 });
+    });
+
+    test('should persist output format preference', async ({ page }) => {
+      const uploadHelper = new FileUploadHelper(page);
+
+      try {
+        // Pre-set PDF format before navigation
+        await page.addInitScript(() => {
+          localStorage.setItem('concatenate-output-format', 'pdf');
+        });
+
+        // Navigate fresh (init script sets the preference)
+        await page.goto('/', { waitUntil: 'domcontentloaded' });
+
+        // Upload a file to ensure we're in concatenate mode
+        const files = [{ name: 'file.txt', path: 'file.txt', content: 'test' }];
+        await uploadHelper.setFilesOnInput(files);
+
+        // Wait for files to appear
+        await expect(page.getByText('file.txt')).toBeVisible({ timeout: 10000 });
+
+        // Should be in PDF mode (PDF button active)
+        const pdfButton = page.getByRole('button', { name: 'PDF' });
+        await expect(pdfButton).toHaveClass(/bg-white|shadow-sm/, { timeout: 10000 });
+      } finally {
+        uploadHelper.cleanup();
+      }
+    });
+
+    test('should download PDF file when PDF format is selected', async ({ page }) => {
+      const uploadHelper = new FileUploadHelper(page);
+
+      try {
+        const files = [
+          { name: 'hello.js', path: 'src/hello.js', content: 'const hello = "world";' },
+        ];
+        await uploadHelper.setFilesOnInput(files);
+
+        // Wait for files to appear
+        await expect(page.getByText('hello.js')).toBeVisible({ timeout: 10000 });
+
+        // Switch to PDF format
+        const pdfButton = page.getByRole('button', { name: 'PDF' });
+        await jsClick(pdfButton);
+        await page.waitForTimeout(200);
+
+        // Wait for button to be visible and enabled
+        const concatDownloadButton = page.getByRole('button', { name: /Concatenate & Download/ });
+        await concatDownloadButton.waitFor({ state: 'visible', timeout: 10000 });
+        await expect(concatDownloadButton).toBeEnabled({ timeout: 10000 });
+
+        // Wait for UI to stabilize before clicking
+        await page.waitForTimeout(300);
+
+        // Trigger download
+        const [download] = await Promise.all([
+          page.waitForEvent('download', { timeout: 30000 }),
+          jsClick(concatDownloadButton),
+        ]);
+
+        // Verify download - filename format should be .pdf
+        expect(download.suggestedFilename()).toMatch(/concatenator.*\.pdf/);
+
+        const downloadPath = await download.path();
+        expect(downloadPath).toBeTruthy();
+
+        // Clean up download file with retry
+        if (downloadPath) {
+          const fs = await import('fs');
+          let retries = 5;
+          while (retries > 0) {
+            try {
+              fs.unlinkSync(downloadPath);
+              break;
+            } catch (err: unknown) {
+              const isEBUSY =
+                typeof err === 'object' &&
+                err !== null &&
+                'code' in err &&
+                (err as { code?: unknown }).code === 'EBUSY';
+              if (isEBUSY && retries > 1) {
+                retries--;
+                await new Promise(r => setTimeout(r, 100));
+              } else {
+                throw err;
+              }
+            }
+          }
+        }
+      } finally {
+        uploadHelper.cleanup();
+      }
+    });
+  });
 });

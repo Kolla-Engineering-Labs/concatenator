@@ -5,7 +5,8 @@
 
 import React, { useState, useRef, useCallback } from 'react';
 import JSZip from 'jszip';
-import { FileItem, AppMode } from '../types';
+import { jsPDF } from 'jspdf';
+import { FileItem, AppMode, OutputFormat } from '../types';
 import { START_DELIMITER, END_DELIMITER, FILE_END_DELIMITER } from '../constants';
 import { logger } from '../lib/logger';
 
@@ -78,47 +79,47 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
       // For non-glob patterns, use exact matching against segments and filename
       return segments.some(segment => segment === ignoreStr) || fileName === ignoreStr;
     });
-    
+
     return result;
   }, [compiledIgnores]);
 
   const handleDeconcatenate = useCallback(async (inputFiles?: FileItem[]) => {
     const targetFiles = inputFiles || files;
     if (targetFiles.length === 0) return;
-    
+
     setIsProcessing(true);
     let foundAnyTotal = false;
-    
+
     try {
       for (const fileItem of targetFiles) {
         if (fileItem.kind !== 'file' || !fileItem.content) continue;
-        
+
         const zip = new JSZip();
         let foundInThisFile = false;
         const content = fileItem.content as string;
-        
+
         let searchIndex = 0;
-        
+
         while (true) {
           const startIndex = content.indexOf(START_DELIMITER, searchIndex);
           if (startIndex === -1) break;
-          
+
           const pathStart = startIndex + START_DELIMITER.length;
           const pathEnd = content.indexOf(END_DELIMITER, pathStart);
           if (pathEnd === -1) break;
-          
+
           const nextStartDelimiter = content.indexOf(START_DELIMITER, pathStart);
 
           const contentStartRaw = pathEnd + END_DELIMITER.length;
           let fileEndIndex = content.indexOf(FILE_END_DELIMITER, contentStartRaw);
-          
+
           if (fileEndIndex === -1 || (nextStartDelimiter !== -1 && nextStartDelimiter < fileEndIndex)) {
             searchIndex = nextStartDelimiter !== -1 ? nextStartDelimiter : content.length;
             continue;
           }
 
           let path = content.substring(pathStart, pathEnd).trim();
-          
+
           let sanitizedPath = path.replace(/^[/\\]+/, '');
           while (/^(?:\.\.[/\\])+/.test(sanitizedPath)) {
             sanitizedPath = sanitizedPath.replace(/^(?:\.\.[/\\])+/, '');
@@ -135,7 +136,7 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
             foundInThisFile = true;
             foundAnyTotal = true;
           }
-          
+
           searchIndex = fileEndIndex + FILE_END_DELIMITER.length;
         }
 
@@ -170,9 +171,9 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
     cancelImportRef.current = false;
     activeReaderRef.current = null;
     setImportProgress({ current: 0, total: uploadedFiles.length });
-    
+
     await new Promise(resolve => setTimeout(resolve, 50));
-    
+
     const newFiles: FileItem[] = [];
     let lastRenderTime = Date.now();
 
@@ -181,7 +182,7 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
 
       const file = uploadedFiles[i];
       const path = (file as any).webkitRelativePath || file.name;
-      
+
       const content = await new Promise<string | ArrayBuffer | null>((resolve, reject) => {
         const reader = new FileReader();
         activeReaderRef.current = reader;
@@ -193,7 +194,7 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
         logger.error('Failed to read file:', err);
         return null;
       });
-      
+
       activeReaderRef.current = null;
 
       if (content === null || cancelImportRef.current) {
@@ -230,7 +231,7 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
         setImportProgress(prev => ({ ...prev, current: i + 1 }));
         lastRenderTime = now;
       }
-      
+
       if (i % 10 === 0) {
         await new Promise(resolve => setTimeout(resolve, 0));
       }
@@ -244,12 +245,12 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
           // Optimized Deduplication preventing Array [...spread] max call stack and Map loop limits
           const newPaths = new Set(newFiles.map(f => f.path));
           const filteredPrev = prev.filter(f => !newPaths.has(f.path));
-          
+
           const uniqueNewFilesMap = new Map();
           for (const nf of newFiles) {
             uniqueNewFilesMap.set(nf.path, nf);
           }
-          
+
           return filteredPrev.concat(Array.from(uniqueNewFilesMap.values()));
         });
       }
@@ -266,12 +267,12 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
       e.preventDefault();
       return;
     }
-    
+
     const uploadedFiles = e.target.files;
     if (!uploadedFiles) return;
-    
+
     cancelImportRef.current = false;
-    
+
     const filesToProcess = Array.from(uploadedFiles as FileList) as File[];
 
     if (filesToProcess.length > 0) {
@@ -286,7 +287,7 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     if (isProcessingRef.current) return;
 
     const items = e.dataTransfer.items;
@@ -306,11 +307,11 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
     setImportError(null);
     cancelImportRef.current = false;
     setImportProgress({ current: 0, total: 0 });
-    
+
     await new Promise(resolve => setTimeout(resolve, 100));
-    
+
     const droppedFiles: File[] = [];
-    
+
     const traverseEntry = async (entry: any, path: string = '', isRoot: boolean = false) => {
       if (cancelImportRef.current) return;
 
@@ -360,7 +361,7 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
           };
           readBatch();
         });
-        
+
         for (const childEntry of entriesBatch) {
           if (cancelImportRef.current) break;
           await traverseEntry(childEntry, fullPath + '/', false);
@@ -383,19 +384,19 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
     }
   }, [processUploadedFiles, setIsProcessing]);
 
-  const handleConcatenate = useCallback((filteredFiles: FileItem[]) => {
+  const handleConcatenate = useCallback((filteredFiles: FileItem[], outputFormat: OutputFormat = 'text') => {
     if (filteredFiles.length === 0) return;
-    
+
     const maxFilesLimit = 10000;
     if (filteredFiles.length > maxFilesLimit) {
       setImportError(`Warning: You are attempting to concatenate over ${maxFilesLimit} files. This exceeds safe UI thread memory parameters. Please split your architecture into smaller batch folders.`);
-      return; 
+      return;
     }
 
     setIsProcessing(true);
     const now = new Date();
     const timestamp = now.toLocaleString();
-    
+
     const YYYY = now.getFullYear();
     const MM = String(now.getMonth() + 1).padStart(2, '0');
     const DD = String(now.getDate()).padStart(2, '0');
@@ -404,24 +405,100 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
     const SS = String(now.getSeconds()).padStart(2, '0');
     const fileTimestamp = `${YYYY}${MM}${DD}_${HH}${II}${SS}`;
 
-    let result = `Concatenated on: ${timestamp}\n\n`;
-    
-    filteredFiles.filter(f => f.kind === 'file').forEach(file => {
-      result += `${START_DELIMITER}${file.path}${END_DELIMITER}\n`;
-      result += file.content;
-      result += `\n${FILE_END_DELIMITER}\n\n`;
-    });
+    const fileList = filteredFiles.filter(f => f.kind === 'file');
 
-    const blob = new Blob([result], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `concatenator-${fileTimestamp}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    
+    if (outputFormat === 'pdf') {
+      // Generate PDF
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const margin = 10;
+      const contentWidth = pageWidth - 2 * margin;
+      const lineHeight = 5;
+
+      let yPosition = margin;
+
+      // Add timestamp header
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Concatenated on: ${timestamp}`, margin, yPosition);
+      yPosition += lineHeight * 2;
+
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+
+      fileList.forEach((file, index) => {
+        // Check if we need a new page
+        if (yPosition > doc.internal.pageSize.getHeight() - margin - lineHeight * 5) {
+          doc.addPage();
+          yPosition = margin;
+        }
+
+        // Add file header with delimiters
+        doc.setFont('helvetica', 'bold');
+        const headerText = `${START_DELIMITER}${file.path}${END_DELIMITER}`;
+        const headerLines = doc.splitTextToSize(headerText, contentWidth);
+        doc.text(headerLines, margin, yPosition);
+        yPosition += headerLines.length * lineHeight;
+
+        // Add file content
+        doc.setFont('helvetica', 'normal');
+        const content = typeof file.content === 'string' ? file.content : '';
+        const contentLines = doc.splitTextToSize(content, contentWidth);
+
+        // Handle page breaks for long content
+        for (let i = 0; i < contentLines.length; i++) {
+          if (yPosition > doc.internal.pageSize.getHeight() - margin) {
+            doc.addPage();
+            yPosition = margin;
+          }
+          doc.text(contentLines[i], margin, yPosition);
+          yPosition += lineHeight;
+        }
+
+        // Add file end delimiter
+        if (yPosition > doc.internal.pageSize.getHeight() - margin - lineHeight) {
+          doc.addPage();
+          yPosition = margin;
+        }
+
+        doc.setFont('helvetica', 'bold');
+        const endText = FILE_END_DELIMITER;
+        doc.text(endText, margin, yPosition);
+        yPosition += lineHeight * 2; // Extra spacing between files
+
+        // Add separator line between files (except for last file)
+        if (index < fileList.length - 1) {
+          if (yPosition > doc.internal.pageSize.getHeight() - margin - lineHeight * 2) {
+            doc.addPage();
+            yPosition = margin;
+          }
+          yPosition += lineHeight;
+        }
+      });
+
+      // Save PDF
+      doc.save(`concatenator-${fileTimestamp}.pdf`);
+    } else {
+      // Generate text file (default)
+      let result = `Concatenated on: ${timestamp}\n\n`;
+
+      fileList.forEach(file => {
+        result += `${START_DELIMITER}${file.path}${END_DELIMITER}\n`;
+        result += file.content;
+        result += `\n${FILE_END_DELIMITER}\n\n`;
+      });
+
+      const blob = new Blob([result], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `concatenator-${fileTimestamp}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
     setIsProcessing(false);
   }, [setIsProcessing]);
 

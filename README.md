@@ -9,19 +9,23 @@ A professional, minimalist tool designed to streamline the process of merging mu
 
 ## Key Features
 
-- **Bidirectional Workflow**: 
+- **Bidirectional Workflow**:
   - **Concatenate**: Merge entire directory structures or selected files into a single `.txt` file with clear delimiters.
   - **De-concatenate**: Automatically extract files from a previously concatenated document back into a structured ZIP archive.
-- **Smart Ignore System**: 
+- **Multiple Output Formats**:
+  - **Text (default)**: Save concatenated files as a plain `.txt` file.
+  - **PDF**: Export concatenated files as a formatted PDF document with proper pagination and delimiters.
+- **Smart Ignore System**:
   - Exclude common noise (e.g., `node_modules`, `.git`, `package-lock.json`) using simple string matches or powerful Regular Expressions.
   - Persistent ignore lists synced between `localStorage` and a server-side `.concatenate-ignore` file.
-- **Advanced Visualization**: 
+- **Advanced Visualization**:
   - Switch between **List View** for flat file management and **Tree View** for hierarchical directory inspection.
   - Real-time filtering and sorting (directories first, then alphabetical).
-- **Developer-Centric UI**: 
+- **Developer-Centric UI**:
   - Drag-and-drop support for folders and files.
   - Dark Mode optimized for long coding sessions.
   - Automatic de-concatenation upon dropping a compatible `.txt` file.
+  - Output format toggle (TEXT/PDF) with localStorage persistence.
 - **BYOK (Bring Your Own Key)**: Integrated settings to manage API keys for Gemini, OpenAI, and Anthropic. Keys are held in-memory for the current session only and are not persisted to browser storage.
 
 ## Tech Stack
@@ -31,7 +35,7 @@ A professional, minimalist tool designed to streamline the process of merging mu
 - **Icons**: [Lucide React](https://lucide.dev/)
 - **Backend**: [Express](https://expressjs.com/) (Node.js)
 - **Build Tool**: [Vite 6](https://vitejs.dev/)
-- **Utilities**: [JSZip](https://stuk.github.io/jszip/) for archive generation
+- **Utilities**: [JSZip](https://stuk.github.io/jszip/) for archive generation, [jsPDF](https://github.com/parallax/jsPDF) for PDF generation
 
 ## Development
 
@@ -113,7 +117,8 @@ LOG_LEVEL=info
 1. Ensure the mode is set to **Concatenate**.
 2. Drag and drop a folder or multiple files into the upload zone.
 3. Review the **Selected Files** list. Use the **Ignore List** to filter out unwanted files.
-4. Click **Concatenate & Download**. The output will be a timestamped `.txt` file (e.g., `concatenator-20260410_123045.txt`).
+4. Choose your output format using the **TEXT/PDF** toggle at the bottom (TEXT is default).
+5. Click **Concatenate & Download**. The output will be a timestamped file (e.g., `concatenator-20260410_123045.txt` or `concatenator-20260410_123045.pdf`).
 
 ### De-concatenating Files
 1. Switch the mode to **De-concatenate**.
@@ -122,10 +127,10 @@ LOG_LEVEL=info
 
 ## Contribution
 
-This project is maintained by the **Kolla-Engineering-Labs** team. 
+This project is maintained by the **Kolla-Engineering-Labs** team.
 
 - **Reporting Issues**: Please use the GitHub Issues tab to report bugs or suggest features.
-- **Submitting PRs**: 
+- **Submitting PRs**:
   1. Fork the repository.
   2. Create a feature branch (`git checkout -b feature/amazing-feature`).
   3. Commit your changes (`git commit -m 'Add amazing feature'`).

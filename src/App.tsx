@@ -14,7 +14,7 @@ import { SettingsModal } from './components/SettingsModal';
 import { useIgnoreList } from './hooks/useIgnoreList';
 import { useFileProcessing } from './hooks/useFileProcessing';
 import { useFileTree } from './hooks/useFileTree';
-import { ViewMode, AppMode, FileItem, TreeItem } from './types';
+import { ViewMode, AppMode, FileItem, TreeItem, OutputFormat } from './types';
 
 /**
  * The main application component that orchestrates the file concatenation and de-concatenation workflow.
@@ -38,6 +38,10 @@ export default function App() {
     const saved = localStorage.getItem('concatenate-ignore-minimized');
     return saved === 'true';
   });
+  const [outputFormat, setOutputFormat] = useState<OutputFormat>(() => {
+    const saved = localStorage.getItem('concatenate-output-format');
+    return (saved as OutputFormat) || 'text';
+  });
   const [showSettings, setShowSettings] = useState(false);
   const [newIgnoreItem, setNewIgnoreItem] = useState('');
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set(['/', 'root']));
@@ -48,11 +52,11 @@ export default function App() {
   const [anthropicKey, setAnthropicKey] = useState(() => process.env.ANTHROPIC_API_KEY || '');
 
   // --- Custom Hooks ---
-  const { 
-    ignoreList, 
-    compiledIgnores, 
-    addIgnoreItem, 
-    removeIgnoreItem 
+  const {
+    ignoreList,
+    compiledIgnores,
+    addIgnoreItem,
+    removeIgnoreItem
   } = useIgnoreList();
 
   const {
@@ -103,6 +107,10 @@ export default function App() {
   }, [isIgnoreListMinimized]);
 
   useEffect(() => {
+    localStorage.setItem('concatenate-output-format', outputFormat);
+  }, [outputFormat]);
+
+  useEffect(() => {
     setExpandedPaths(prev => {
       const next = new Set(prev);
       const addDirectoryPaths = (node: TreeItem) => {
@@ -142,23 +150,23 @@ export default function App() {
       >
         Skip to main content
       </a>
-      <Header 
-        isDarkMode={isDarkMode} 
-        setIsDarkMode={setIsDarkMode} 
-        setShowSettings={setShowSettings} 
+      <Header
+        isDarkMode={isDarkMode}
+        setIsDarkMode={setIsDarkMode}
+        setShowSettings={setShowSettings}
       />
 
       <main id="main-content" className="max-w-4xl mx-auto px-6 py-8 space-y-8">
-        <ModeToggle 
-          appMode={appMode} 
-          setAppMode={setAppMode} 
+        <ModeToggle
+          appMode={appMode}
+          setAppMode={setAppMode}
           onModeChange={() => {
             setFiles([]);
             setImportError(null);
-          }} 
+          }}
         />
 
-        <UploadZone 
+        <UploadZone
           isProcessing={isProcessing}
           isDropzoneMinimized={isDropzoneMinimized}
           setIsDropzoneMinimized={setIsDropzoneMinimized}
@@ -173,7 +181,7 @@ export default function App() {
 
         {appMode === 'concatenate' && (
           <>
-            <IgnoreList 
+            <IgnoreList
               ignoreList={ignoreList}
               isIgnoreListMinimized={isIgnoreListMinimized}
               setIsIgnoreListMinimized={setIsIgnoreListMinimized}
@@ -195,16 +203,18 @@ export default function App() {
               expandedPaths={expandedPaths}
               setExpandedPaths={setExpandedPaths}
               isProcessing={isProcessing}
-              onConcatenate={() => handleConcatenate(filteredFiles)}
+              onConcatenate={() => handleConcatenate(filteredFiles, outputFormat)}
               onClearAll={handleClearAll}
               onIgnoreFile={addIgnoreItem}
               onRemoveFile={handleRemoveFile}
+              outputFormat={outputFormat}
+              setOutputFormat={setOutputFormat}
             />
           </>
         )}
       </main>
 
-      <SettingsModal 
+      <SettingsModal
         show={showSettings}
         onClose={() => setShowSettings(false)}
         apiKey={apiKey}

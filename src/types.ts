@@ -15,3 +15,4 @@ export interface TreeItem {
 
 export type ViewMode = 'list' | 'tree';
 export type AppMode = 'concatenate' | 'deconcatenate';
+export type OutputFormat = 'text' | 'pdf';
