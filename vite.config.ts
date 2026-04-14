@@ -52,7 +52,7 @@ export default defineConfig(({ mode }) => {
         enableBundleAnalysis: env.CI === 'true',
         bundleName: 'concatenator-bundle',
         oidc: {
-          useGitHubOIDC: true, 
+          useGitHubOIDC: true,
         },
       }),
     ],
