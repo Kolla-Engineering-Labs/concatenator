@@ -51,6 +51,9 @@ export default defineConfig(({ mode }) => {
       codecovVitePlugin({
         enableBundleAnalysis: env.CI === 'true',
         bundleName: 'concatenator-bundle',
+        oidc: {
+          useGitHubOIDC: true, 
+        },
       }),
     ],
     define: {
