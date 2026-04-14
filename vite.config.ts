@@ -20,6 +20,10 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: 'jsdom',
       globals: true,
+      // Automatically clear mock call counts and restore spyOn implementations
+      // after each test, preventing leaks without requiring manual afterEach calls.
+      clearMocks: true,
+      restoreMocks: true,
       exclude: ['e2e/**/*', 'node_modules/**/*'],
       reporters: env.CI ? ['default', 'junit'] : ['default'],
       outputFile: {

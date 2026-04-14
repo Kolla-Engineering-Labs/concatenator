@@ -10,7 +10,7 @@ on:
 jobs:
   build-and-test:
     runs-on: ${{ matrix.os }}
-    
+
     permissions:
       id-token: write
       contents: read
@@ -23,6 +23,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetches all history so Codecov can find the base commit
 
       - name: Set up Node ${{ matrix.node-version }}
         uses: actions/setup-node@v4
@@ -42,6 +44,14 @@ jobs:
       - name: Run Unit Tests (Vitest)
         run: npm run test:coverage
 
+      - name: Archive coverage results
+        if: matrix.os == 'ubuntu-latest' && !cancelled()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report-${{ matrix.os }}
+          path: ./coverage/
+          retention-days: 1
+
       - name: Install Playwright Browsers
         # Only happens if Build and Unit Tests pass
         run: npx playwright install --with-deps
@@ -50,6 +60,10 @@ jobs:
         run: npm run test:e2e
         env:
           CI: true
+
+      # --- Visualize Coverage Directory ---
+      - name: List coverage directory
+        run: ls -R ./coverage
 
       # --- All Uploads at the End ---
       - name: Upload Test Results to Codecov
@@ -62,7 +76,7 @@ jobs:
           use_oidc: true
 
       - name: Upload Coverage Report to Codecov
-        if: matrix.os == 'ubuntu-latest' && !cancelled() 
+        if: matrix.os == 'ubuntu-latest' && !cancelled()
         uses: codecov/codecov-action@v5
         with:
           use_oidc: true

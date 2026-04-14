@@ -27,10 +27,14 @@ test.describe.serial('Concatenate Mode', () => {
       localStorage.removeItem('concatenate-dark-mode');
     });
 
-    // Reset server-side ignore list BEFORE navigation so client fetches correct state
-    await page.request.post('/api/ignore-list', {
+    // Reset server-side ignore list BEFORE navigation so client fetches correct state.
+    // Validate the response to ensure the server committed the reset before we navigate.
+    const ignoreResetResponse = await page.request.post('/api/ignore-list', {
       data: ['.concatenate-ignore', '.DS_Store', '.env', '.expo', '.git', '.gradle', '.next', '.secrets', '.terraform', '.vagrant', '.vscode', '/\\.class$/', '/\\.exe$/', '/\\.jar$/', '/\\.log$/', '/\\.o$/', '/\\.obj$/', '/\\.swp$/', '/^__.*cache__$/', '/^\\..*_cache$/', 'bin', 'build', 'desktop.ini', 'dist', 'LICENSE', 'node_modules', 'obj', 'package-lock.json', 'ruff_output.txt', 'target', 'Thumbs.db', 'vendor', 'venv']
     });
+    if (!ignoreResetResponse.ok()) {
+      throw new Error(`beforeEach: Failed to reset ignore list — HTTP ${ignoreResetResponse.status()}`);
+    }
 
     // Navigate to page with 'domcontentloaded' for faster Firefox navigation
     // 'networkidle' and 'load' can be slow/flaky in Firefox
@@ -176,20 +180,12 @@ test.describe.serial('Concatenate Mode', () => {
         // Verify pattern was added
         await expect(page.getByText('*.test.js')).toBeVisible({ timeout: 10000 });
 
-        // Wait for network to be idle to ensure server save completes
+        // Wait for network to be idle to ensure server save completes before asserting.
         await page.waitForLoadState('networkidle');
 
-        // Give React time to re-render with updated filtered files in Firefox
-        // Firefox needs more time for compiledIgnores recomputation + file filtering
-        await page.waitForTimeout(2000);
-
-        // Additional delay for WebKit browsers (Mobile Safari) for rendering stability
-        if (browserName === 'webkit') {
-          await page.waitForTimeout(1000);
-        }
-
-        // Verify the test file is now filtered out (waits for server save + state propagation)
-        await expect(page.getByText('app.test.js')).not.toBeVisible({ timeout: 10000 });
+        // Verify the test file is now filtered out. Playwright's retry engine polls
+        // until the condition is true or the timeout expires — no arbitrary sleep needed.
+        await expect(page.getByText('app.test.js')).not.toBeVisible({ timeout: 15000 });
 
         // Use more specific locators targeting the file name span in the list view
         // to avoid matching path text or other elements containing similar substrings
@@ -236,19 +232,11 @@ test.describe.serial('Concatenate Mode', () => {
         // Verify pattern added
         await expect(page.getByText('*.tmp')).toBeVisible({ timeout: 10000 });
 
-        // Wait for network to be idle to ensure server save completes
+        // Wait for network to be idle to ensure server save completes before asserting.
         await page.waitForLoadState('networkidle');
 
-        // Give React time to re-render with updated filtered files in Firefox
-        await page.waitForTimeout(2000);
-
-        // Additional delay for WebKit browsers (Mobile Safari) for rendering stability
-        if (browserName === 'webkit') {
-          await page.waitForTimeout(1000);
-        }
-
-        // temp.tmp should be filtered
-        await expect(fileList.getByText('temp.tmp', { exact: true })).not.toBeVisible({ timeout: 10000 });
+        // temp.tmp should be filtered — Playwright's retry engine polls until true.
+        await expect(fileList.getByText('temp.tmp', { exact: true })).not.toBeVisible({ timeout: 15000 });
 
         // Remove the ignore pattern using the specific button title
         const removeButton = page.locator('button[title="Remove *.tmp"]');
@@ -262,19 +250,11 @@ test.describe.serial('Concatenate Mode', () => {
         // Now verify the pattern is gone from the ignore list
         await expect(page.getByText('*.tmp')).not.toBeVisible({ timeout: 15000 });
 
-        // Wait for network to be idle to ensure server save completes
+        // Wait for network to be idle to ensure server save completes before asserting.
         await page.waitForLoadState('networkidle');
 
-        // Give React time to re-render with updated filtered files in Firefox
-        await page.waitForTimeout(2000);
-
-        // Additional delay for WebKit browsers (Mobile Safari) for rendering stability
-        if (browserName === 'webkit') {
-          await page.waitForTimeout(1000);
-        }
-
-        // Verify filtered files update - temp.tmp should reappear (waits for state propagation)
-        await expect(fileList.getByText('temp.tmp', { exact: true })).toBeVisible({ timeout: 10000 });
+        // Verify filtered files update — Playwright's retry engine polls until temp.tmp reappears.
+        await expect(fileList.getByText('temp.tmp', { exact: true })).toBeVisible({ timeout: 15000 });
       } finally {
         uploadHelper.cleanup();
       }
@@ -312,20 +292,11 @@ test.describe.serial('Concatenate Mode', () => {
         // Verify pattern added
         await expect(page.getByText('/\.spec\.ts$/')).toBeVisible({ timeout: 10000 });
 
-        // Wait for network to be idle to ensure server save completes
+        // Wait for network to be idle to ensure server save completes before asserting.
         await page.waitForLoadState('networkidle');
 
-        // Give React time to re-render with updated filtered files in Firefox
-        // Regex patterns need more time for compilation and matching
-        await page.waitForTimeout(2000);
-
-        // Additional delay for WebKit browsers (Mobile Safari) for rendering stability
-        if (browserName === 'webkit') {
-          await page.waitForTimeout(1000);
-        }
-
-        // spec file should be filtered - use scoped file list with exact matching
-        await expect(fileListContainer.getByText('test.spec.ts', { exact: true })).not.toBeVisible({ timeout: 10000 });
+        // spec file should be filtered — Playwright's retry engine polls until true.
+        await expect(fileListContainer.getByText('test.spec.ts', { exact: true })).not.toBeVisible({ timeout: 15000 });
         await expect(fileListContainer.getByText('main.ts', { exact: true })).toBeVisible({ timeout: 10000 });
       } finally {
         uploadHelper.cleanup();

@@ -42,6 +42,10 @@ export default function App() {
     const saved = localStorage.getItem('concatenate-output-format');
     return (saved as OutputFormat) || 'text';
   });
+  const [maxFilesLimit, setMaxFilesLimit] = useState<number>(() => {
+    const saved = localStorage.getItem('concatenator-max-files');
+    return saved ? parseInt(saved, 10) : 10000;
+  });
   const [showSettings, setShowSettings] = useState(false);
   const [newIgnoreItem, setNewIgnoreItem] = useState('');
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set(['/', 'root']));
@@ -71,7 +75,7 @@ export default function App() {
     handleFileUpload,
     handleDrop,
     handleConcatenate,
-  } = useFileProcessing({ appMode, compiledIgnores });
+  } = useFileProcessing({ appMode, compiledIgnores, maxFilesLimit });
 
   // --- Derived State ---
   const filteredFiles = useMemo(() => {
@@ -109,6 +113,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('concatenate-output-format', outputFormat);
   }, [outputFormat]);
+
+  useEffect(() => {
+    localStorage.setItem('concatenator-max-files', maxFilesLimit.toString());
+  }, [maxFilesLimit]);
 
   useEffect(() => {
     setExpandedPaths(prev => {
@@ -157,14 +165,37 @@ export default function App() {
       />
 
       <main id="main-content" className="max-w-4xl mx-auto px-6 py-8 space-y-8">
-        <ModeToggle
-          appMode={appMode}
-          setAppMode={setAppMode}
-          onModeChange={() => {
-            setFiles([]);
-            setImportError(null);
-          }}
-        />
+        <div className="flex items-center justify-between">
+          <ModeToggle
+            appMode={appMode}
+            setAppMode={setAppMode}
+            onModeChange={() => {
+              setFiles([]);
+              setImportError(null);
+            }}
+          />
+
+          {appMode === 'concatenate' && (
+            <div className="flex items-center gap-2">
+              <label htmlFor="max-file-limit" className="text-sm text-slate-600 dark:text-slate-400">
+                Max Files:
+              </label>
+              <select
+                id="max-file-limit"
+                value={maxFilesLimit}
+                onChange={(e) => setMaxFilesLimit(parseInt(e.target.value, 10))}
+                className="text-sm px-2 py-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500"
+              >
+                <option value="500">500</option>
+                <option value="1000">1,000</option>
+                <option value="2500">2,500</option>
+                <option value="5000">5,000</option>
+                <option value="10000">10,000</option>
+                <option value="20000">20,000</option>
+              </select>
+            </div>
+          )}
+        </div>
 
         <UploadZone
           isProcessing={isProcessing}

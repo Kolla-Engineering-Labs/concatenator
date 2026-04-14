@@ -24,10 +24,14 @@ test.describe.serial('UI Interactions and Edge Cases', () => {
       localStorage.removeItem('concatenate-ignore');
     });
 
-    // Reset server-side ignore list BEFORE navigation so client fetches correct state
-    await page.request.post('/api/ignore-list', {
+    // Reset server-side ignore list BEFORE navigation so client fetches correct state.
+    // Validate the response to ensure the server committed the reset before we navigate.
+    const ignoreResetResponse = await page.request.post('/api/ignore-list', {
       data: ['.concatenate-ignore', '.DS_Store', '.env', '.expo', '.git', '.gradle', '.next', '.secrets', '.terraform', '.vagrant', '.vscode', '/\\.class$/', '/\\.exe$/', '/\\.jar$/', '/\\.log$/', '/\\.o$/', '/\\.obj$/', '/\\.swp$/', '/^__.*cache__$/', '/^\\..*_cache$/', 'bin', 'build', 'desktop.ini', 'dist', 'LICENSE', 'node_modules', 'obj', 'package-lock.json', 'ruff_output.txt', 'target', 'Thumbs.db', 'vendor', 'venv']
     });
+    if (!ignoreResetResponse.ok()) {
+      throw new Error(`beforeEach: Failed to reset ignore list — HTTP ${ignoreResetResponse.status()}`);
+    }
 
     // Use 'domcontentloaded' for faster Firefox navigation
     await page.goto('/', { waitUntil: 'domcontentloaded' });

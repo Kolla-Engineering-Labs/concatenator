@@ -30,7 +30,10 @@ async function startServer() {
 
   // API Routes
   const IGNORE_FILE_PATH = path.join(process.cwd(), ".concatenate-ignore");
-  app.use("/api/ignore-list", ignoreListLimiter);
+  // Only apply rate limiting in production (skip for E2E tests)
+  if (process.env.NODE_ENV === "production") {
+    app.use("/api/ignore-list", ignoreListLimiter);
+  }
 
   app.get("/api/ignore-list", async (req, res) => {
     try {
