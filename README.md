@@ -27,6 +27,7 @@ A professional, minimalist tool designed to streamline the process of merging mu
   - Automatic de-concatenation upon dropping a compatible `.txt` file.
   - Output format toggle (TEXT/PDF) with localStorage persistence.
 - **BYOK (Bring Your Own Key)**: Integrated settings to manage API keys for Gemini, OpenAI, and Anthropic. Keys are held in-memory for the current session only and are not persisted to browser storage.
+- **Hardware Safety Guardrails**: Configurable **Max File Limit** (default: 10,000 files) protects against browser memory issues when dragging in large folders. Adjustable via dropdown (500 - 20,000 files) with localStorage persistence.
 
 ## Tech Stack
 
@@ -115,10 +116,13 @@ LOG_LEVEL=info
 
 ### Concatenating Files
 1. Ensure the mode is set to **Concatenate**.
-2. Drag and drop a folder or multiple files into the upload zone.
-3. Review the **Selected Files** list. Use the **Ignore List** to filter out unwanted files.
-4. Choose your output format using the **TEXT/PDF** toggle at the bottom (TEXT is default).
-5. Click **Concatenate & Download**. The output will be a timestamped file (e.g., `concatenator-20260410_123045.txt` or `concatenator-20260410_123045.pdf`).
+2. (Optional) Adjust the **Max Files** dropdown to set a safety limit (500 - 20,000 files, default: 10,000). This prevents browser memory issues when processing large folders.
+3. Drag and drop a folder or multiple files into the upload zone.
+4. Review the **Selected Files** list. Use the **Ignore List** to filter out unwanted files.
+5. Choose your output format using the **TEXT/PDF** toggle at the bottom (TEXT is default).
+6. Click **Concatenate & Download**. The output will be a timestamped file (e.g., `concatenator-20260410_123045.txt` or `concatenator-20260410_123045.pdf`).
+
+**Note**: If you attempt to concatenate more files than the selected Max File Limit, a warning will be displayed and the operation will be blocked to prevent browser crashes.
 
 ### De-concatenating Files
 1. Switch the mode to **De-concatenate**.

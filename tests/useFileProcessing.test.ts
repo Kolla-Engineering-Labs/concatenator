@@ -152,6 +152,23 @@ describe('useFileProcessing', () => {
       expect(result.current.importError).toContain('Warning: You are attempting to concatenate over 10000 files.');
     });
 
+    it('respects custom maxFileLimit of 500 and trips importError with 501 files instead of defaulting to 10000', async () => {
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 500 }));
+
+      const filesOverLimit = Array.from({ length: 501 }).map((_, i) => ({
+        name: `file-${i}.txt`,
+        path: `batch/file-${i}.txt`,
+        kind: 'file' as const,
+        content: `content ${i}`,
+        size: 100
+      }));
+
+      act(() => { result.current.handleConcatenate(filesOverLimit); });
+
+      expect(global.URL.createObjectURL).not.toHaveBeenCalled();
+      expect(result.current.importError).toContain('Warning: You are attempting to concatenate over 500 files.');
+    });
+
     it('executes URL.revokeObjectURL synchronously which may cause download race conditions on slow devices', async () => {
       const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFilesLimit: 10000 }));
 
