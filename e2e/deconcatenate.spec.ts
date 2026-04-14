@@ -45,10 +45,14 @@ test.describe.serial('De-concatenate Mode', () => {
       localStorage.removeItem('concatenate-dark-mode');
     });
 
-    // Reset server-side ignore list BEFORE navigation so client fetches correct state
-    await page.request.post('/api/ignore-list', {
+    // Reset server-side ignore list BEFORE navigation so client fetches correct state.
+    // Validate the response to ensure the server committed the reset before we navigate.
+    const ignoreResetResponse = await page.request.post('/api/ignore-list', {
       data: ['.concatenate-ignore', '.DS_Store', '.env', '.expo', '.git', '.gradle', '.next', '.secrets', '.terraform', '.vagrant', '.vscode', '/\\.class$/', '/\\.exe$/', '/\\.jar$/', '/\\.log$/', '/\\.o$/', '/\\.obj$/', '/\\.swp$/', '/^__.*cache__$/', '/^\\..*_cache$/', 'bin', 'build', 'desktop.ini', 'dist', 'LICENSE', 'node_modules', 'obj', 'package-lock.json', 'ruff_output.txt', 'target', 'Thumbs.db', 'vendor', 'venv']
     });
+    if (!ignoreResetResponse.ok()) {
+      throw new Error(`beforeEach: Failed to reset ignore list — HTTP ${ignoreResetResponse.status()}`);
+    }
 
     // Use 'domcontentloaded' for faster Firefox navigation
     await page.goto('/', { waitUntil: 'domcontentloaded' });
@@ -170,56 +174,63 @@ test.describe.serial('De-concatenate Mode', () => {
 
       const mockContent = createMockConcatenatedFile(files);
 
-      // Wait for the download event (app auto-downloads ZIP after processing)
-      // Mobile Safari needs more time for de-concatenation + ZIP creation
-      const [download] = await Promise.all([
-        page.waitForEvent('download', { timeout: 30000 }),
-        uploadHelper.uploadSingleFile('project-bundle.txt', mockContent),
-      ]);
+      try {
+        // Wait for the download event (app auto-downloads ZIP after processing)
+        // Mobile Safari needs more time for de-concatenation + ZIP creation
+        const [download] = await Promise.all([
+          page.waitForEvent('download', { timeout: 30000 }),
+          uploadHelper.uploadSingleFile('project-bundle.txt', mockContent),
+        ]);
 
-      // Verify it's a ZIP file
-      expect(download.suggestedFilename()).toMatch(/\.zip$/i);
+        // Verify it's a ZIP file
+        expect(download.suggestedFilename()).toMatch(/\.zip$/i);
 
-      // Verify the download actually happened
-      const downloadPath = await download.path();
-      expect(downloadPath).toBeTruthy();
-      expect(fs.existsSync(downloadPath)).toBe(true);
+        // Verify the download actually happened
+        const downloadPath = await download.path();
+        expect(downloadPath).toBeTruthy();
+        expect(fs.existsSync(downloadPath!)).toBe(true);
 
-      // Verify it's a valid ZIP with expected content
-      if (downloadPath) {
-        const zipContent = fs.readFileSync(downloadPath);
-        const zip = await JSZip.loadAsync(zipContent);
+        // Verify it's a valid ZIP with expected content
+        if (downloadPath) {
+          const zipContent = fs.readFileSync(downloadPath);
+          const zip = await JSZip.loadAsync(zipContent);
 
-        // Check for expected files in the ZIP (parallel extraction for speed)
-        const extractionPromises = files.map(async (file) => {
-          const zipFile = zip.file(file.path);
-          expect(zipFile).toBeTruthy();
+          // Check for expected files in the ZIP (parallel extraction for speed)
+          const extractionPromises = files.map(async (file) => {
+            const zipFile = zip.file(file.path);
+            expect(zipFile).toBeTruthy();
 
-          if (zipFile) {
-            const content = await zipFile.async('text');
-            expect(content).toBe(file.content);
-          }
-        });
-        await Promise.all(extractionPromises);
-
-        // Clean up download file with retry to handle EBUSY race condition
-        let retries = 5;
-        while (retries > 0) {
-          try {
-            fs.unlinkSync(downloadPath);
-            break;
-          } catch (err: any) {
-            if (err.code === 'EBUSY' && retries > 1) {
-              retries--;
-              await new Promise(r => setTimeout(r, 100));
-            } else {
-              throw err;
+            if (zipFile) {
+              const content = await zipFile.async('text');
+              expect(content).toBe(file.content);
             }
+          });
+          await Promise.all(extractionPromises);
+
+          // Clean up download file with retry to handle EBUSY race condition.
+          // Wrapped in try/catch so uploadHelper.cleanup() is guaranteed to run.
+          try {
+            let retries = 5;
+            while (retries > 0) {
+              try {
+                fs.unlinkSync(downloadPath);
+                break;
+              } catch (err: any) {
+                if (err.code === 'EBUSY' && retries > 1) {
+                  retries--;
+                  await new Promise(r => setTimeout(r, 100));
+                } else {
+                  throw err;
+                }
+              }
+            }
+          } catch (unlinkErr: unknown) {
+            console.warn('[deconcatenate] Failed to clean up download file:', unlinkErr);
           }
         }
+      } finally {
+        uploadHelper.cleanup();
       }
-
-      uploadHelper.cleanup();
     });
 
     test('should preserve directory structure in ZIP', async ({ page }) => {
@@ -234,52 +245,59 @@ test.describe.serial('De-concatenate Mode', () => {
 
       const mockContent = createMockConcatenatedFile(files);
 
-      // Wait for the download event (app auto-downloads ZIP after processing)
-      // Mobile Safari needs more time for de-concatenation + ZIP creation
-      const [download] = await Promise.all([
-        page.waitForEvent('download', { timeout: 30000 }),
-        uploadHelper.uploadSingleFile('structured-bundle.txt', mockContent),
-      ]);
+      try {
+        // Wait for the download event (app auto-downloads ZIP after processing)
+        // Mobile Safari needs more time for de-concatenation + ZIP creation
+        const [download] = await Promise.all([
+          page.waitForEvent('download', { timeout: 30000 }),
+          uploadHelper.uploadSingleFile('structured-bundle.txt', mockContent),
+        ]);
 
-      const downloadPath = await download.path();
-      expect(downloadPath).toBeTruthy();
+        const downloadPath = await download.path();
+        expect(downloadPath).toBeTruthy();
 
-      if (downloadPath) {
-        const zipContent = fs.readFileSync(downloadPath);
-        const zip = await JSZip.loadAsync(zipContent);
+        if (downloadPath) {
+          const zipContent = fs.readFileSync(downloadPath);
+          const zip = await JSZip.loadAsync(zipContent);
 
-        // Verify directory structure is preserved (parallel extraction)
-        const extractionPromises = files.map(async (file) => {
-          const zipFile = zip.file(file.path);
-          expect(zipFile).toBeTruthy();
-        });
-        await Promise.all(extractionPromises);
+          // Verify directory structure is preserved (parallel extraction)
+          const extractionPromises = files.map(async (file) => {
+            const zipFile = zip.file(file.path);
+            expect(zipFile).toBeTruthy();
+          });
+          await Promise.all(extractionPromises);
 
-        // Verify folder structure
-        const folders = Object.keys(zip.files).filter(name => name.endsWith('/'));
-        expect(folders.some(f => f.includes('src/'))).toBe(true);
-        expect(folders.some(f => f.includes('src/components/'))).toBe(true);
-        expect(folders.some(f => f.includes('src/utils/'))).toBe(true);
-        expect(folders.some(f => f.includes('tests/'))).toBe(true);
+          // Verify folder structure
+          const folders = Object.keys(zip.files).filter(name => name.endsWith('/'));
+          expect(folders.some(f => f.includes('src/'))).toBe(true);
+          expect(folders.some(f => f.includes('src/components/'))).toBe(true);
+          expect(folders.some(f => f.includes('src/utils/'))).toBe(true);
+          expect(folders.some(f => f.includes('tests/'))).toBe(true);
 
-        // Clean up download file with retry to handle EBUSY race condition
-        let retries = 5;
-        while (retries > 0) {
+          // Clean up download file with retry to handle EBUSY race condition.
+          // Wrapped in try/catch so uploadHelper.cleanup() is guaranteed to run.
           try {
-            fs.unlinkSync(downloadPath);
-            break;
-          } catch (err: any) {
-            if (err.code === 'EBUSY' && retries > 1) {
-              retries--;
-              await new Promise(r => setTimeout(r, 100));
-            } else {
-              throw err;
+            let retries = 5;
+            while (retries > 0) {
+              try {
+                fs.unlinkSync(downloadPath);
+                break;
+              } catch (err: any) {
+                if (err.code === 'EBUSY' && retries > 1) {
+                  retries--;
+                  await new Promise(r => setTimeout(r, 100));
+                } else {
+                  throw err;
+                }
+              }
             }
+          } catch (unlinkErr: unknown) {
+            console.warn('[deconcatenate] Failed to clean up download file:', unlinkErr);
           }
         }
+      } finally {
+        uploadHelper.cleanup();
       }
-
-      uploadHelper.cleanup();
     });
 
     test('should handle special characters in filenames', async ({ page }) => {
@@ -294,45 +312,52 @@ test.describe.serial('De-concatenate Mode', () => {
 
       const mockContent = createMockConcatenatedFile(files);
 
-      // Wait for the download event (app auto-downloads ZIP after processing)
-      // Mobile Safari needs more time for de-concatenation + ZIP creation
-      const [download] = await Promise.all([
-        page.waitForEvent('download', { timeout: 30000 }),
-        uploadHelper.uploadSingleFile('special-chars.txt', mockContent),
-      ]);
+      try {
+        // Wait for the download event (app auto-downloads ZIP after processing)
+        // Mobile Safari needs more time for de-concatenation + ZIP creation
+        const [download] = await Promise.all([
+          page.waitForEvent('download', { timeout: 30000 }),
+          uploadHelper.uploadSingleFile('special-chars.txt', mockContent),
+        ]);
 
-      const downloadPath = await download.path();
-      expect(downloadPath).toBeTruthy();
+        const downloadPath = await download.path();
+        expect(downloadPath).toBeTruthy();
 
-      if (downloadPath) {
-        const zipContent = fs.readFileSync(downloadPath);
-        const zip = await JSZip.loadAsync(zipContent);
+        if (downloadPath) {
+          const zipContent = fs.readFileSync(downloadPath);
+          const zip = await JSZip.loadAsync(zipContent);
 
-        // Verify all files with special characters are present (parallel)
-        const extractionPromises = files.map(async (file) => {
-          const zipFile = zip.file(file.path);
-          expect(zipFile).toBeTruthy();
-        });
-        await Promise.all(extractionPromises);
+          // Verify all files with special characters are present (parallel)
+          const extractionPromises = files.map(async (file) => {
+            const zipFile = zip.file(file.path);
+            expect(zipFile).toBeTruthy();
+          });
+          await Promise.all(extractionPromises);
 
-        // Clean up download file with retry to handle EBUSY race condition
-        let retries = 5;
-        while (retries > 0) {
+          // Clean up download file with retry to handle EBUSY race condition.
+          // Wrapped in try/catch so uploadHelper.cleanup() is guaranteed to run.
           try {
-            fs.unlinkSync(downloadPath);
-            break;
-          } catch (err: any) {
-            if (err.code === 'EBUSY' && retries > 1) {
-              retries--;
-              await new Promise(r => setTimeout(r, 100));
-            } else {
-              throw err;
+            let retries = 5;
+            while (retries > 0) {
+              try {
+                fs.unlinkSync(downloadPath);
+                break;
+              } catch (err: any) {
+                if (err.code === 'EBUSY' && retries > 1) {
+                  retries--;
+                  await new Promise(r => setTimeout(r, 100));
+                } else {
+                  throw err;
+                }
+              }
             }
+          } catch (unlinkErr: unknown) {
+            console.warn('[deconcatenate] Failed to clean up download file:', unlinkErr);
           }
         }
+      } finally {
+        uploadHelper.cleanup();
       }
-
-      uploadHelper.cleanup();
     });
   });
 

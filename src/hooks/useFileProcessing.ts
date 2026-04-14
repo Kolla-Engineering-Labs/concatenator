@@ -13,13 +13,13 @@ import { logger } from '../lib/logger';
 interface UseFileProcessingProps {
   appMode: AppMode;
   compiledIgnores: (string | RegExp)[];
-  maxFileLimit?: number;
+  maxFileLimit: number;
 }
 
 /**
  * Custom hook to handle file processing, concatenation, and de-concatenation.
  */
-export const useFileProcessing = ({ appMode, compiledIgnores, maxFileLimit = 10000 }: UseFileProcessingProps) => {
+export const useFileProcessing = ({ appMode, compiledIgnores, maxFileLimit }: UseFileProcessingProps) => {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [isProcessing, setIsProcessingState] = useState(false);
   const isProcessingRef = useRef(false);

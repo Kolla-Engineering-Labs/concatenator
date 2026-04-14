@@ -20,10 +20,14 @@ test.describe.serial('Max File Limit Feature', () => {
       localStorage.removeItem('concatenate-dark-mode');
     });
 
-    // Reset server-side ignore list BEFORE navigation so client fetches correct state
-    await page.request.post('/api/ignore-list', {
+    // Reset server-side ignore list BEFORE navigation so client fetches correct state.
+    // Validate the response to ensure the server committed the reset before we navigate.
+    const ignoreResetResponse = await page.request.post('/api/ignore-list', {
       data: ['.concatenate-ignore', '.DS_Store', '.env', '.expo', '.git', '.gradle', '.next', '.secrets', '.terraform', '.vagrant', '.vscode', '/\\.class$/', '/\\.exe$/', '/\\.jar$/', '/\\.log$/', '/\\.o$/', '/\\.obj$/', '/\\.swp$/', '/^__.*cache__$/', '/^\\..*_cache$/', 'bin', 'build', 'desktop.ini', 'dist', 'LICENSE', 'node_modules', 'obj', 'package-lock.json', 'ruff_output.txt', 'target', 'Thumbs.db', 'vendor', 'venv']
     });
+    if (!ignoreResetResponse.ok()) {
+      throw new Error(`beforeEach: Failed to reset ignore list — HTTP ${ignoreResetResponse.status()}`);
+    }
 
     // Use 'domcontentloaded' for faster Firefox navigation
     await page.goto('/', { waitUntil: 'domcontentloaded' });
@@ -46,12 +50,10 @@ test.describe.serial('Max File Limit Feature', () => {
     });
 
     test('should hide max file limit dropdown in deconcatenate mode', async ({ page }) => {
-      // Switch to deconcatenate mode
+      // Switch to deconcatenate mode and wait for the transition to complete
       const deconcatenateButton = page.getByRole('button', { name: 'De-concatenate', exact: true });
       await deconcatenateButton.click();
-
-      // Wait for mode change animation
-      await page.waitForTimeout(300);
+      await expect(deconcatenateButton).toHaveClass(/bg-white|dark:bg-slate-800/, { timeout: 5000 });
 
       // Check that the dropdown is hidden
       const maxFileLimitSelect = page.locator('select#max-file-limit');
@@ -63,15 +65,15 @@ test.describe.serial('Max File Limit Feature', () => {
     });
 
     test('should show dropdown again when switching back to concatenate mode', async ({ page }) => {
-      // First switch to deconcatenate mode
+      // First switch to deconcatenate mode and confirm
       const deconcatenateButton = page.getByRole('button', { name: 'De-concatenate', exact: true });
       await deconcatenateButton.click();
-      await page.waitForTimeout(300);
+      await expect(deconcatenateButton).toHaveClass(/bg-white|dark:bg-slate-800/, { timeout: 5000 });
 
-      // Then switch back to concatenate mode
+      // Then switch back to concatenate mode and confirm
       const concatenateButton = page.getByRole('button', { name: 'Concatenate', exact: true });
       await concatenateButton.click();
-      await page.waitForTimeout(300);
+      await expect(concatenateButton).toHaveClass(/bg-white|dark:bg-slate-800/, { timeout: 5000 });
 
       // Check that the dropdown is visible again
       const maxFileLimitSelect = page.locator('select#max-file-limit');
@@ -248,14 +250,14 @@ test.describe.serial('Max File Limit Feature', () => {
         const errorMessage = page.locator('text=Warning: You are attempting to concatenate');
         await expect(errorMessage).not.toBeVisible({ timeout: 5000 });
 
-        // Clear the files by switching modes
+        // Clear the files by switching modes — wait for the transition to confirm
         const deconcatenateButton = page.getByRole('button', { name: 'De-concatenate', exact: true });
         await deconcatenateButton.click();
-        await page.waitForTimeout(300);
+        await expect(deconcatenateButton).toHaveClass(/bg-white|dark:bg-slate-800/, { timeout: 5000 });
 
         const concatenateModeButton = page.getByRole('button', { name: 'Concatenate', exact: true });
         await concatenateModeButton.click();
-        await page.waitForTimeout(300);
+        await expect(concatenateModeButton).toHaveClass(/bg-white|dark:bg-slate-800/, { timeout: 5000 });
 
         // Change limit to 500
         const maxFileLimitSelect = page.locator('select#max-file-limit');

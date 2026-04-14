@@ -44,8 +44,7 @@ export default function App() {
   });
   const [maxFileLimit, setMaxFileLimit] = useState<number>(() => {
     const saved = localStorage.getItem('concatenator-max-files');
-    const parsed = parseInt(saved || '', 10);
-    return !isNaN(parsed) ? parsed : 10000;
+    return saved ? parseInt(saved, 10) : 10000;
   });
   const [showSettings, setShowSettings] = useState(false);
   const [newIgnoreItem, setNewIgnoreItem] = useState('');
@@ -167,33 +166,32 @@ export default function App() {
 
       <main id="main-content" className="max-w-4xl mx-auto px-6 py-8 space-y-8">
         <div className="flex items-center justify-between">
-          <div className="flex-1 flex justify-center">
-            <ModeToggle
-              appMode={appMode}
-              setAppMode={setAppMode}
-              onModeChange={() => {
-                setFiles([]);
-                setImportError(null);
-              }}
-            />
-          </div>
+          <ModeToggle
+            appMode={appMode}
+            setAppMode={setAppMode}
+            onModeChange={() => {
+              setFiles([]);
+              setImportError(null);
+            }}
+          />
+
           {appMode === 'concatenate' && (
-            <div className="flex items-center gap-2 ml-4">
-              <label htmlFor="max-file-limit" className="text-sm text-slate-600 dark:text-slate-400 whitespace-nowrap">
+            <div className="flex items-center gap-2">
+              <label htmlFor="max-file-limit" className="text-sm text-slate-600 dark:text-slate-400">
                 Max Files:
               </label>
               <select
                 id="max-file-limit"
                 value={maxFileLimit}
-                onChange={(e) => setMaxFileLimit(Number(e.target.value))}
-                className="px-3 py-2 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                onChange={(e) => setMaxFileLimit(parseInt(e.target.value, 10))}
+                className="text-sm px-2 py-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500"
               >
-                <option value={500}>500</option>
-                <option value={1000}>1,000</option>
-                <option value={2500}>2,500</option>
-                <option value={5000}>5,000</option>
-                <option value={10000}>10,000</option>
-                <option value={20000}>20,000</option>
+                <option value="500">500</option>
+                <option value="1000">1,000</option>
+                <option value="2500">2,500</option>
+                <option value="5000">5,000</option>
+                <option value="10000">10,000</option>
+                <option value="20000">20,000</option>
               </select>
             </div>
           )}

@@ -61,8 +61,10 @@ async function setFilesForWebkitDirectory(
     // errors — the restore is cosmetic and does not affect test correctness.
     try {
       await fileInput.evaluate((el: HTMLInputElement) => el.setAttribute('webkitdirectory', ''));
-    } catch {
-      // Ignore "Target page, context or browser has been closed" on WebKit.
+    } catch (restoreErr: unknown) {
+      // Log — don't fail — attribute restore is cosmetic. On WebKit the browser
+      // context may have been recycled by the file-input change event.
+      console.warn('[file-chooser] webkitdirectory restore failed (likely WebKit context recycle):', restoreErr);
     }
   }
 
@@ -93,10 +95,14 @@ async function jsClick(locator: import('@playwright/test').Locator): Promise<voi
       localStorage.removeItem('concatenate-dark-mode');
     });
 
-    // Reset server-side ignore list BEFORE navigation so client fetches correct state
-    await page.request.post('/api/ignore-list', {
+    // Reset server-side ignore list BEFORE navigation so client fetches correct state.
+    // Validate the response to ensure the server committed the reset before we navigate.
+    const ignoreResetResponse = await page.request.post('/api/ignore-list', {
       data: ['.concatenate-ignore', '.DS_Store', '.env', '.expo', '.git', '.gradle', '.next', '.secrets', '.terraform', '.vagrant', '.vscode', '/\\.class$/', '/\\.exe$/', '/\\.jar$/', '/\\.log$/', '/\\.o$/', '/\\.obj$/', '/\\.swp$/', '/^__.*cache__$/', '/^\\..*_cache$/', 'bin', 'build', 'desktop.ini', 'dist', 'LICENSE', 'node_modules', 'obj', 'package-lock.json', 'ruff_output.txt', 'target', 'Thumbs.db', 'vendor', 'venv']
     });
+    if (!ignoreResetResponse.ok()) {
+      throw new Error(`beforeEach: Failed to reset ignore list — HTTP ${ignoreResetResponse.status()}`);
+    }
 
     // Use 'domcontentloaded' for faster Firefox navigation
     await page.goto('/', { waitUntil: 'domcontentloaded' });
