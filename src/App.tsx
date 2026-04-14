@@ -42,7 +42,7 @@ export default function App() {
     const saved = localStorage.getItem('concatenate-output-format');
     return (saved as OutputFormat) || 'text';
   });
-  const [maxFilesLimit, setMaxFilesLimit] = useState<number>(() => {
+  const [maxFileLimit, setMaxFileLimit] = useState<number>(() => {
     const saved = localStorage.getItem('concatenator-max-files');
     return saved ? parseInt(saved, 10) : 10000;
   });
@@ -75,7 +75,7 @@ export default function App() {
     handleFileUpload,
     handleDrop,
     handleConcatenate,
-  } = useFileProcessing({ appMode, compiledIgnores, maxFilesLimit });
+  } = useFileProcessing({ appMode, compiledIgnores, maxFileLimit });
 
   // --- Derived State ---
   const filteredFiles = useMemo(() => {
@@ -115,8 +115,8 @@ export default function App() {
   }, [outputFormat]);
 
   useEffect(() => {
-    localStorage.setItem('concatenator-max-files', maxFilesLimit.toString());
-  }, [maxFilesLimit]);
+    localStorage.setItem('concatenator-max-files', maxFileLimit.toString());
+  }, [maxFileLimit]);
 
   useEffect(() => {
     setExpandedPaths(prev => {
@@ -182,8 +182,8 @@ export default function App() {
               </label>
               <select
                 id="max-file-limit"
-                value={maxFilesLimit}
-                onChange={(e) => setMaxFilesLimit(parseInt(e.target.value, 10))}
+                value={maxFileLimit}
+                onChange={(e) => setMaxFileLimit(parseInt(e.target.value, 10))}
                 className="text-sm px-2 py-1 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500"
               >
                 <option value="500">500</option>

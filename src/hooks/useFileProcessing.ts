@@ -13,13 +13,13 @@ import { logger } from '../lib/logger';
 interface UseFileProcessingProps {
   appMode: AppMode;
   compiledIgnores: (string | RegExp)[];
-  maxFilesLimit: number;
+  maxFileLimit: number;
 }
 
 /**
  * Custom hook to handle file processing, concatenation, and de-concatenation.
  */
-export const useFileProcessing = ({ appMode, compiledIgnores, maxFilesLimit }: UseFileProcessingProps) => {
+export const useFileProcessing = ({ appMode, compiledIgnores, maxFileLimit }: UseFileProcessingProps) => {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [isProcessing, setIsProcessingState] = useState(false);
   const isProcessingRef = useRef(false);
@@ -388,8 +388,8 @@ export const useFileProcessing = ({ appMode, compiledIgnores, maxFilesLimit }: U
   const handleConcatenate = useCallback((filteredFiles: FileItem[], outputFormat: OutputFormat = 'text') => {
     if (filteredFiles.length === 0) return;
 
-    if (filteredFiles.length > maxFilesLimit) {
-      setImportError(`Warning: You are attempting to concatenate over ${maxFilesLimit} files. This exceeds safe UI thread memory parameters. Please split your architecture into smaller batch folders.`);
+    if (filteredFiles.length > maxFileLimit) {
+      setImportError(`Warning: You are attempting to concatenate over ${maxFileLimit} files. This exceeds safe UI thread memory parameters. Please split your architecture into smaller batch folders.`);
       return;
     }
 
@@ -500,7 +500,7 @@ export const useFileProcessing = ({ appMode, compiledIgnores, maxFilesLimit }: U
     }
 
     setIsProcessing(false);
-  }, [setIsProcessing, maxFilesLimit]);
+  }, [setIsProcessing, maxFileLimit]);
 
   return {
     files,
