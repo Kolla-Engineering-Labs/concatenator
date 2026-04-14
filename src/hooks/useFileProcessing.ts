@@ -414,7 +414,6 @@ export const useFileProcessing = ({ appMode, compiledIgnores }: UseFileProcessin
       const margin = 10;
       const contentWidth = pageWidth - 2 * margin;
       const lineHeight = 5;
-      const linesPerPage = 50;
 
       let yPosition = margin;
 
