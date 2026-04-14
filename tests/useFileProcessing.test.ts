@@ -696,6 +696,167 @@ describe('useFileProcessing', () => {
 
       global.FileReader = originalFileReader;
     });
+
+    it('skips nested ignored directories and their children (like venv) during traversal', async () => {
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: ['venv'], maxFileLimit: 10 }));
+
+      // Create a nested venv directory structure with many files
+      const createVenvDirectory = (): any => ({
+        name: 'venv',
+        isFile: false,
+        isDirectory: true,
+        createReader: () => {
+          let read = false;
+          return {
+            readEntries: (callback: any) => {
+              if (read) return callback([]);
+              read = true;
+              // Simulate 50 files inside venv (should be ignored)
+              callback(Array.from({ length: 50 }, (_, i) => ({
+                name: `venv-file-${i}.txt`,
+                isFile: true,
+                isDirectory: false,
+                file: (cb: any) => cb(new File(['content'], `venv-file-${i}.txt`, { type: 'text/plain' }))
+              })));
+            }
+          };
+        }
+      });
+
+      const rootEntry = {
+        name: 'myproject',
+        isFile: false,
+        isDirectory: true,
+        createReader: () => {
+          let read = false;
+          return {
+            readEntries: (callback: any) => {
+              if (read) return callback([]);
+              read = true;
+              callback([
+                // 5 non-ignored files in root
+                ...Array.from({ length: 5 }, (_, i) => ({
+                  name: `file-${i}.txt`,
+                  isFile: true,
+                  isDirectory: false,
+                  file: (cb: any) => cb(new File(['content'], `file-${i}.txt`, { type: 'text/plain' }))
+                })),
+                // The venv directory (should be ignored entirely)
+                createVenvDirectory()
+              ]);
+            }
+          };
+        }
+      };
+
+      const mockEvent = {
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+        dataTransfer: {
+          items: [{ webkitGetAsEntry: () => rootEntry }]
+        }
+      } as unknown as React.DragEvent;
+
+      // Mock FileReader to avoid test blocking on read
+      const originalFileReader = global.FileReader;
+      global.FileReader = class {
+        readAsText = vi.fn().mockImplementation(function (this: any) {
+          this.result = 'content';
+          setTimeout(() => this.onload(), 5);
+        });
+      } as any;
+
+      await act(async () => {
+        await result.current.handleDrop(mockEvent);
+      });
+
+      // Should only have the 5 non-ignored files, not the 50 inside venv
+      // Plus 1 directory entry for myproject itself
+      const fileCount = result.current.files.filter((f: any) => f.kind === 'file').length;
+      expect(fileCount).toBe(5);
+      expect(result.current.importError).toBeNull();
+
+      global.FileReader = originalFileReader;
+    });
+
+    it('only counts non-ignored files toward max file limit during drop', async () => {
+      // Set limit to 10, but have 5 non-ignored + 50 ignored files (in venv)
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: ['venv'], maxFileLimit: 10 }));
+
+      const createVenvDirectory = (): any => ({
+        name: 'venv',
+        isFile: false,
+        isDirectory: true,
+        createReader: () => {
+          let read = false;
+          return {
+            readEntries: (callback: any) => {
+              if (read) return callback([]);
+              read = true;
+              // 50 files inside venv - should be ignored and not counted toward limit
+              callback(Array.from({ length: 50 }, (_, i) => ({
+                name: `venv-file-${i}.txt`,
+                isFile: true,
+                isDirectory: false,
+                file: (cb: any) => cb(new File(['content'], `venv-file-${i}.txt`, { type: 'text/plain' }))
+              })));
+            }
+          };
+        }
+      });
+
+      const rootEntry = {
+        name: 'project',
+        isFile: false,
+        isDirectory: true,
+        createReader: () => {
+          let read = false;
+          return {
+            readEntries: (callback: any) => {
+              if (read) return callback([]);
+              read = true;
+              callback([
+                // 5 non-ignored files (under the limit of 10)
+                ...Array.from({ length: 5 }, (_, i) => ({
+                  name: `file-${i}.txt`,
+                  isFile: true,
+                  isDirectory: false,
+                  file: (cb: any) => cb(new File(['content'], `file-${i}.txt`, { type: 'text/plain' }))
+                })),
+                createVenvDirectory()
+              ]);
+            }
+          };
+        }
+      };
+
+      const mockEvent = {
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+        dataTransfer: {
+          items: [{ webkitGetAsEntry: () => rootEntry }]
+        }
+      } as unknown as React.DragEvent;
+
+      const originalFileReader = global.FileReader;
+      global.FileReader = class {
+        readAsText = vi.fn().mockImplementation(function (this: any) {
+          this.result = 'content';
+          setTimeout(() => this.onload(), 5);
+        });
+      } as any;
+
+      await act(async () => {
+        await result.current.handleDrop(mockEvent);
+      });
+
+      // Should succeed with only 5 non-ignored files (well under the 10 limit)
+      const fileCount = result.current.files.filter((f: any) => f.kind === 'file').length;
+      expect(fileCount).toBe(5);
+      expect(result.current.importError).toBeNull();
+
+      global.FileReader = originalFileReader;
+    });
   });
 
   describe('UI State & Asynchronous Concurrency Edge Cases', () => {

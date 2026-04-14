@@ -27,7 +27,7 @@ A professional, minimalist tool designed to streamline the process of merging mu
   - Automatic de-concatenation upon dropping a compatible `.txt` file.
   - Output format toggle (TEXT/PDF) with localStorage persistence.
 - **BYOK (Bring Your Own Key)**: Integrated settings to manage API keys for Gemini, OpenAI, and Anthropic. Keys are held in-memory for the current session only and are not persisted to browser storage.
-- **Hardware Safety Guardrails**: Configurable **Max File Limit** (default: 10,000 files) protects against browser memory issues when dragging in large folders. Adjustable via dropdown (500 - 20,000 files) with localStorage persistence.
+- **Hardware Safety Guardrails**: Configurable **Max File Limit** (default: 10,000 files) halts imports and prevents concatenation when exceeded. Adjustable via dropdown (500 - 20,000 files) with localStorage persistence.
 
 ## Tech Stack
 
@@ -122,7 +122,7 @@ LOG_LEVEL=info
 5. Choose your output format using the **TEXT/PDF** toggle at the bottom (TEXT is default).
 6. Click **Concatenate & Download**. The output will be a timestamped file (e.g., `concatenator-20260410_123045.txt` or `concatenator-20260410_123045.pdf`).
 
-**Note**: If you attempt to concatenate more files than the selected Max File Limit, a warning will be displayed and the operation will be blocked to prevent browser crashes.
+**Note**: The Max File Limit applies to both import and concatenation. If you attempt to drag-and-drop or concatenate more files than the selected limit, the operation will be halted and a warning displayed to prevent browser crashes.
 
 ### De-concatenating Files
 1. Switch the mode to **De-concatenate**.
