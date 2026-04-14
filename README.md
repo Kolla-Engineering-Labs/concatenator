@@ -22,7 +22,7 @@ A professional, minimalist tool designed to streamline the process of merging mu
   - Drag-and-drop support for folders and files.
   - Dark Mode optimized for long coding sessions.
   - Automatic de-concatenation upon dropping a compatible `.txt` file.
-- **BYOK (Bring Your Own Key)**: Integrated settings to manage API keys for Gemini, OpenAI, and Anthropic locally in the browser.
+- **BYOK (Bring Your Own Key)**: Integrated settings to manage API keys for Gemini, OpenAI, and Anthropic. Keys are held in-memory for the current session only and are not persisted to browser storage.
 
 ## Tech Stack
 
@@ -83,9 +83,16 @@ To run Concatenator locally, ensure you have [Node.js](https://nodejs.org/) inst
 
 Concatenator uses a hierarchical approach for API key management to ensure flexibility across different environments.
 
+### API Key Handling
+
+**Security Note**: API keys are stored **only in memory** for the current browser session. They are not persisted to `localStorage`, cookies, or any browser storage. This means:
+- Keys must be re-entered after each page reload
+- Keys are never written to disk in the browser
+- Environment variables can still be used for server-side builds
+
 ### Hierarchical Resolution
-1. **User Override**: Keys entered in the **Settings Modal** are stored in `localStorage` and take the highest priority.
-2. **Environment Fallback**: If no local key is found, the app falls back to the `GEMINI_API_KEY` defined in your environment.
+1. **Session Input**: Keys entered in the **Settings Modal** are held in memory and take the highest priority for the current session.
+2. **Environment Fallback**: If no in-memory key is set, the app falls back to the `GEMINI_API_KEY`, `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY` defined in your environment.
 
 ### Configuration
 Create a `.env` file in the root directory and add your API keys:

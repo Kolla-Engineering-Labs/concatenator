@@ -21,6 +21,13 @@ async function startServer() {
     legacyHeaders: false,
   });
 
+  const staticFileLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000,
+    max: 1000,
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
+
   // API Routes
   const IGNORE_FILE_PATH = path.join(process.cwd(), ".concatenate-ignore");
   app.use("/api/ignore-list", ignoreListLimiter);
@@ -86,7 +93,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    app.get("*", staticFileLimiter, (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }

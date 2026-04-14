@@ -399,7 +399,7 @@ test.describe.serial('Concatenate Mode', () => {
       await expect(overlay).toBeHidden({ timeout: 15000 });
     });
 
-    test('should save API keys to localStorage', async ({ page }) => {
+    test('should hold API keys in memory for the session only', async ({ page }) => {
       // Open settings using JavaScript click for Firefox compatibility
       const settingsButton = page.locator('header button[title="Settings"]');
       await settingsButton.waitFor({ state: 'visible', timeout: 5000 });
@@ -416,33 +416,51 @@ test.describe.serial('Concatenate Mode', () => {
       // Save settings - use jsClick for Firefox stability
       const saveButton = page.getByRole('button', { name: 'Save Settings' });
       await saveButton.waitFor({ state: 'visible', timeout: 10000 });
-      
+
       // Blur the active input to ensure focus is cleared before clicking Save in Firefox
       await page.locator('#anthropic-api-key').evaluate((el: HTMLElement) => el.blur());
       await page.waitForTimeout(100);
-      
+
       await jsClick(saveButton);
 
       // Wait for modal to close - check the overlay is gone (animation completes in Firefox)
       const overlay = page.locator('div[class*="bg-slate-950/40"]').first();
       await expect(overlay).toBeHidden({ timeout: 15000 });
 
-      // Verify localStorage was updated
+      // SECURITY: Verify API keys are NOT persisted to localStorage (in-memory only)
       const geminiKey = await page.evaluate(() => localStorage.getItem('google-ai-api-key'));
       const openaiKey = await page.evaluate(() => localStorage.getItem('openai-api-key'));
       const anthropicKey = await page.evaluate(() => localStorage.getItem('anthropic-api-key'));
 
-      expect(geminiKey).toBe('test-gemini-key-123');
-      expect(openaiKey).toBe('test-openai-key-456');
-      expect(anthropicKey).toBe('test-anthropic-key-789');
+      expect(geminiKey).toBeNull();
+      expect(openaiKey).toBeNull();
+      expect(anthropicKey).toBeNull();
+
+      // Re-open settings and verify keys are still in memory (visible in inputs)
+      await jsClick(settingsButton);
+      await page.waitForTimeout(300);
+
+      const geminiInput = page.locator('#gemini-api-key');
+      const openaiInput = page.locator('#openai-api-key');
+      const anthropicInput = page.locator('#anthropic-api-key');
+
+      await geminiInput.waitFor({ state: 'visible', timeout: 10000 });
+      await openaiInput.waitFor({ state: 'visible', timeout: 10000 });
+      await anthropicInput.waitFor({ state: 'visible', timeout: 10000 });
+
+      // Keys should still be visible in the current session
+      await expect(geminiInput).toHaveValue('test-gemini-key-123');
+      await expect(openaiInput).toHaveValue('test-openai-key-456');
+      await expect(anthropicInput).toHaveValue('test-anthropic-key-789');
     });
 
-    test('should load saved API keys on page load', async ({ page }) => {
-      // Set API keys via init script before navigation to avoid reload
+    test('should NOT load API keys from localStorage on page load', async ({ page }) => {
+      // SECURITY: Attempt to set API keys in localStorage before navigation
+      // These should be ignored since keys are now in-memory only
       await page.addInitScript(() => {
-        localStorage.setItem('google-ai-api-key', 'saved-gemini-key');
-        localStorage.setItem('openai-api-key', 'saved-openai-key');
-        localStorage.setItem('anthropic-api-key', 'saved-anthropic-key');
+        localStorage.setItem('google-ai-api-key', 'localstorage-gemini-key');
+        localStorage.setItem('openai-api-key', 'localstorage-openai-key');
+        localStorage.setItem('anthropic-api-key', 'localstorage-anthropic-key');
       });
 
       // Navigate fresh (init script runs automatically)
@@ -469,10 +487,15 @@ test.describe.serial('Concatenate Mode', () => {
       await openaiInput.waitFor({ state: 'visible', timeout: 10000 });
       await anthropicInput.waitFor({ state: 'visible', timeout: 10000 });
 
-      // Verify saved values are loaded
-      await expect(geminiInput).toHaveValue('saved-gemini-key');
-      await expect(openaiInput).toHaveValue('saved-openai-key');
-      await expect(anthropicInput).toHaveValue('saved-anthropic-key');
+      // SECURITY: Verify localStorage keys are NOT loaded (should not contain 'localstorage-' prefix)
+      // Note: Input may have value from environment variable (expected behavior), but NOT from localStorage
+      const geminiValue = await geminiInput.inputValue();
+      const openaiValue = await openaiInput.inputValue();
+      const anthropicValue = await anthropicInput.inputValue();
+
+      expect(geminiValue).not.toContain('localstorage-gemini-key');
+      expect(openaiValue).not.toContain('localstorage-openai-key');
+      expect(anthropicValue).not.toContain('localstorage-anthropic-key');
     });
   });
 
