@@ -3,8 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { test, expect, Locator } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { FileUploadHelper } from './helpers/file-upload';
+import type { Locator } from '@playwright/test';
+import type { APIRequestContext } from '@playwright/test';
 
 /**
  * Helper function to click an element using JavaScript for better Firefox compatibility
@@ -13,13 +15,34 @@ async function jsClick(locator: Locator): Promise<void> {
   await locator.evaluate((el: HTMLElement) => el.click());
 }
 
-/*
- * These tests use the shared server-side ignore list API.
- * Running in serial mode prevents race conditions when multiple tests
- * modify the ignore list state simultaneously.
+/**
+ * Helper to reset the ignore list via API using the worker-specific context.
  */
-test.describe.serial('Concatenate Mode', () => {
-  test.beforeEach(async ({ page }) => {
+async function resetIgnoreList(apiContext: APIRequestContext): Promise<void> {
+  const defaultIgnoreList = [
+    '.concatenate-ignore',
+    '.DS_Store', '.env', '.expo', '.git', '.gradle', '.next',
+    '.secrets', '.terraform', '.vagrant', '.vscode',
+    '/^\\.concatenate-ignore-worker-\\d+$/',
+    '/\\.class$/', '/\\.exe$/',
+    '/\\.jar$/', '/\\.log$/', '/\\.o$/', '/\\.obj$/', '/\\.swp$/', '/^__.*cache__$/',
+    '/^\\..*_cache$/', 'bin', 'build', 'desktop.ini', 'dist', 'LICENSE', 'node_modules',
+    'obj', 'package-lock.json', 'ruff_output.txt', 'target', 'Thumbs.db', 'vendor', 'venv'
+  ];
+  const response = await apiContext.post('/api/ignore-list', {
+    data: defaultIgnoreList,
+  });
+  if (!response.ok()) {
+    throw new Error(`Failed to reset ignore list — HTTP ${response.status()}`);
+  }
+}
+
+/**
+ * Concatenate Mode tests - now fully parallel enabled via worker-specific
+ * ignore files using the X-Worker-Id header.
+ */
+test.describe('Concatenate Mode', () => {
+  test.beforeEach(async ({ page, apiContext }) => {
     // Clear localStorage before navigation to avoid needing a reload
     await page.addInitScript(() => {
       localStorage.removeItem('concatenate-ignore');
@@ -28,13 +51,8 @@ test.describe.serial('Concatenate Mode', () => {
     });
 
     // Reset server-side ignore list BEFORE navigation so client fetches correct state.
-    // Validate the response to ensure the server committed the reset before we navigate.
-    const ignoreResetResponse = await page.request.post('/api/ignore-list', {
-      data: ['.concatenate-ignore', '.DS_Store', '.env', '.expo', '.git', '.gradle', '.next', '.secrets', '.terraform', '.vagrant', '.vscode', '/\\.class$/', '/\\.exe$/', '/\\.jar$/', '/\\.log$/', '/\\.o$/', '/\\.obj$/', '/\\.swp$/', '/^__.*cache__$/', '/^\\..*_cache$/', 'bin', 'build', 'desktop.ini', 'dist', 'LICENSE', 'node_modules', 'obj', 'package-lock.json', 'ruff_output.txt', 'target', 'Thumbs.db', 'vendor', 'venv']
-    });
-    if (!ignoreResetResponse.ok()) {
-      throw new Error(`beforeEach: Failed to reset ignore list — HTTP ${ignoreResetResponse.status()}`);
-    }
+    // Uses worker-specific ignore file via X-Worker-Id header from apiContext fixture.
+    await resetIgnoreList(apiContext);
 
     // Navigate to page with 'domcontentloaded' for faster Firefox navigation
     // 'networkidle' and 'load' can be slow/flaky in Firefox

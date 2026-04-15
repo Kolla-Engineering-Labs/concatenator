@@ -14,6 +14,9 @@ test-results/
 blob-report/
 test-output/
 
+# Worker-specific ignore files (parallel testing)
+.concatenate-ignore-worker-*
+
 # Windows null device file (generated when running tests/scripts in Bash/MSYS2,
 # where 'nul' is treated as a filename rather than the null device)
 nul

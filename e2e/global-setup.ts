@@ -5,6 +5,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { logger } from '../src/lib/logger';
 
 /**
  * Global setup for Playwright tests.
@@ -17,9 +18,9 @@ async function globalSetup(): Promise<void> {
   if (fs.existsSync(testResultsDir)) {
     try {
       fs.rmSync(testResultsDir, { recursive: true, force: true });
-      console.log('[global-setup] Cleaned up test-results directory');
+      logger.info('[global-setup] Cleaned up test-results directory');
     } catch (error) {
-      console.warn('[global-setup] Failed to clean test-results:', error);
+      logger.error('[global-setup] Failed to clean test-results:', error);
     }
   }
 
@@ -28,6 +29,19 @@ async function globalSetup(): Promise<void> {
   for (const dir of downloadDirs) {
     const dirPath = path.join(testResultsDir, 'downloads', dir);
     fs.mkdirSync(dirPath, { recursive: true });
+  }
+
+  // Clean up any leftover worker-specific ignore files from previous runs
+  const cwd = process.cwd();
+  const files = fs.readdirSync(cwd);
+  for (const file of files) {
+    if (file.startsWith('.concatenate-ignore-worker-')) {
+      try {
+        fs.unlinkSync(path.join(cwd, file));
+      } catch (error) {
+        logger.error(`[global-setup] Failed to clean up ${file}:`, error);
+      }
+    }
   }
 }
 

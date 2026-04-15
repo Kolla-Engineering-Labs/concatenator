@@ -3,15 +3,39 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { FileUploadHelper } from './helpers/file-upload';
+import type { APIRequestContext } from '@playwright/test';
+
+/**
+ * Helper to reset the ignore list via API using the worker-specific context.
+ */
+async function resetIgnoreList(apiContext: APIRequestContext): Promise<void> {
+  const defaultIgnoreList = [
+    '.concatenate-ignore',
+    '.DS_Store', '.env', '.expo', '.git', '.gradle', '.next',
+    '.secrets', '.terraform', '.vagrant', '.vscode',
+    '/^\\.concatenate-ignore-worker-\\d+$/',
+    '/\\.class$/', '/\\.exe$/',
+    '/\\.jar$/', '/\\.log$/', '/\\.o$/', '/\\.obj$/', '/\\.swp$/', '/^__.*cache__$/',
+    '/^\\..*_cache$/', 'bin', 'build', 'desktop.ini', 'dist', 'LICENSE', 'node_modules',
+    'obj', 'package-lock.json', 'ruff_output.txt', 'target', 'Thumbs.db', 'vendor', 'venv'
+  ];
+  const response = await apiContext.post('/api/ignore-list', {
+    data: defaultIgnoreList,
+  });
+  if (!response.ok()) {
+    throw new Error(`Failed to reset ignore list — HTTP ${response.status()}`);
+  }
+}
 
 /**
  * E2E tests for Max File Limit feature
- * Tests the dropdown UI, persistence, and enforcement during concatenation
+ * Tests the dropdown UI, persistence, and enforcement during concatenation.
+ * Now fully parallel enabled via worker-specific ignore files.
  */
-test.describe.serial('Max File Limit Feature', () => {
-  test.beforeEach(async ({ page }) => {
+test.describe('Max File Limit Feature', () => {
+  test.beforeEach(async ({ page, apiContext }) => {
     // Clear localStorage before navigation to avoid interference from previous test runs
     // Note: concatenator-max-files is NOT cleared here to allow persistence testing
     await page.addInitScript(() => {
@@ -21,13 +45,8 @@ test.describe.serial('Max File Limit Feature', () => {
     });
 
     // Reset server-side ignore list BEFORE navigation so client fetches correct state.
-    // Validate the response to ensure the server committed the reset before we navigate.
-    const ignoreResetResponse = await page.request.post('/api/ignore-list', {
-      data: ['.concatenate-ignore', '.DS_Store', '.env', '.expo', '.git', '.gradle', '.next', '.secrets', '.terraform', '.vagrant', '.vscode', '/\\.class$/', '/\\.exe$/', '/\\.jar$/', '/\\.log$/', '/\\.o$/', '/\\.obj$/', '/\\.swp$/', '/^__.*cache__$/', '/^\\..*_cache$/', 'bin', 'build', 'desktop.ini', 'dist', 'LICENSE', 'node_modules', 'obj', 'package-lock.json', 'ruff_output.txt', 'target', 'Thumbs.db', 'vendor', 'venv']
-    });
-    if (!ignoreResetResponse.ok()) {
-      throw new Error(`beforeEach: Failed to reset ignore list — HTTP ${ignoreResetResponse.status()}`);
-    }
+    // Uses worker-specific ignore file via X-Worker-Id header from apiContext fixture.
+    await resetIgnoreList(apiContext);
 
     // Use 'domcontentloaded' for faster Firefox navigation
     await page.goto('/', { waitUntil: 'domcontentloaded' });

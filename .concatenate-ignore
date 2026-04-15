@@ -9,6 +9,7 @@
 .terraform
 .vagrant
 .vscode
+/^\.concatenate-ignore-worker-\d+$/
 /\.class$/
 /\.exe$/
 /\.jar$/
