@@ -12,9 +12,10 @@ type TestFixtures = {
 /**
  * Generate a worker-specific ID for test isolation.
  * Uses testInfo.workerIndex which is unique per worker process.
+ * Returns just the numeric index (e.g., "0", "1") for security simplicity.
  */
 function getWorkerId(workerIndex: number): string {
-  return `worker-${workerIndex}`;
+  return String(workerIndex);
 }
 
 /**

@@ -16,6 +16,7 @@ test-output/
 
 # Worker-specific ignore files (parallel testing)
 .concatenate-ignore-worker-*
+temp_ignore_files/
 
 # Windows null device file (generated when running tests/scripts in Bash/MSYS2,
 # where 'nul' is treated as a filename rather than the null device)
