@@ -166,6 +166,10 @@ export default function App() {
 
       <main id="main-content" className="max-w-4xl mx-auto px-6 py-8 space-y-8">
         <div className="flex items-center justify-between">
+          {appMode === 'concatenate' && (
+            <div className="flex-1"></div>
+          )}
+
           <ModeToggle
             appMode={appMode}
             setAppMode={setAppMode}
@@ -176,7 +180,7 @@ export default function App() {
           />
 
           {appMode === 'concatenate' && (
-            <div className="flex items-center gap-2">
+            <div className="flex-1 flex items-center justify-end gap-2">
               <label htmlFor="max-file-limit" className="text-sm text-slate-600 dark:text-slate-400">
                 Max Files:
               </label>
