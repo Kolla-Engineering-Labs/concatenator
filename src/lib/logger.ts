@@ -3,12 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export type LogLevel = 'debug' | 'info' | 'error';
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 const LEVELS: Record<LogLevel, number> = {
   debug: 0,
   info: 1,
-  error: 2,
+  warn: 2,
+  error: 3,
 };
 
 // Default level can be overridden via environment variable
@@ -48,6 +49,11 @@ export const logger = {
   info: (message: string, ...args: unknown[]): void => {
     if (shouldLog('info')) {
       console.info(formatMessage('info', message), ...args);
+    }
+  },
+  warn: (message: string, ...args: unknown[]): void => {
+    if (shouldLog('warn')) {
+      console.warn(formatMessage('warn', message), ...args);
     }
   },
   error: (message: string, ...args: unknown[]): void => {

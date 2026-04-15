@@ -3,10 +3,34 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { test, expect } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { FileUploadHelper } from './helpers/file-upload';
+import { logger } from '../src/lib/logger';
+import type { APIRequestContext } from '@playwright/test';
 import * as fs from 'fs';
 import JSZip from 'jszip';
+
+/**
+ * Helper to reset the ignore list via API using the worker-specific context.
+ */
+async function resetIgnoreList(apiContext: APIRequestContext): Promise<void> {
+  const defaultIgnoreList = [
+    '.concatenate-ignore',
+    '.DS_Store', '.env', '.expo', '.git', '.gradle', '.next',
+    '.secrets', '.terraform', '.vagrant', '.vscode',
+    '/^\\.concatenate-ignore-worker-\\d+$/',
+    '/\\.class$/', '/\\.exe$/',
+    '/\\.jar$/', '/\\.log$/', '/\\.o$/', '/\\.obj$/', '/\\.swp$/', '/^__.*cache__$/',
+    '/^\\..*_cache$/', 'bin', 'build', 'desktop.ini', 'dist', 'LICENSE', 'node_modules',
+    'obj', 'package-lock.json', 'ruff_output.txt', 'target', 'Thumbs.db', 'vendor', 'venv'
+  ];
+  const response = await apiContext.post('/api/ignore-list', {
+    data: defaultIgnoreList,
+  });
+  if (!response.ok()) {
+    throw new Error(`Failed to reset ignore list — HTTP ${response.status()}`);
+  }
+}
 
 /**
  * Creates a mock concatenated file content that the de-concatenator can parse.
@@ -31,13 +55,12 @@ function createMockConcatenatedFile(files: Array<{ path: string; content: string
   return lines.join('\n');
 }
 
-/*
- * These tests modify application state (mode switching, file uploads)
- * and may interact with shared server resources.
- * Serial mode prevents cross-test interference.
+/**
+ * De-concatenate Mode tests - now fully parallel enabled via worker-specific
+ * ignore files using the X-Worker-Id header.
  */
-test.describe.serial('De-concatenate Mode', () => {
-  test.beforeEach(async ({ page }) => {
+test.describe('De-concatenate Mode', () => {
+  test.beforeEach(async ({ page, apiContext }) => {
     // Clear localStorage before navigation to avoid interference from previous test runs
     await page.addInitScript(() => {
       localStorage.removeItem('concatenate-ignore');
@@ -46,13 +69,8 @@ test.describe.serial('De-concatenate Mode', () => {
     });
 
     // Reset server-side ignore list BEFORE navigation so client fetches correct state.
-    // Validate the response to ensure the server committed the reset before we navigate.
-    const ignoreResetResponse = await page.request.post('/api/ignore-list', {
-      data: ['.concatenate-ignore', '.DS_Store', '.env', '.expo', '.git', '.gradle', '.next', '.secrets', '.terraform', '.vagrant', '.vscode', '/\\.class$/', '/\\.exe$/', '/\\.jar$/', '/\\.log$/', '/\\.o$/', '/\\.obj$/', '/\\.swp$/', '/^__.*cache__$/', '/^\\..*_cache$/', 'bin', 'build', 'desktop.ini', 'dist', 'LICENSE', 'node_modules', 'obj', 'package-lock.json', 'ruff_output.txt', 'target', 'Thumbs.db', 'vendor', 'venv']
-    });
-    if (!ignoreResetResponse.ok()) {
-      throw new Error(`beforeEach: Failed to reset ignore list — HTTP ${ignoreResetResponse.status()}`);
-    }
+    // Uses worker-specific ignore file via X-Worker-Id header from apiContext fixture.
+    await resetIgnoreList(apiContext);
 
     // Use 'domcontentloaded' for faster Firefox navigation
     await page.goto('/', { waitUntil: 'domcontentloaded' });
@@ -225,7 +243,7 @@ test.describe.serial('De-concatenate Mode', () => {
               }
             }
           } catch (unlinkErr: unknown) {
-            console.warn('[deconcatenate] Failed to clean up download file:', unlinkErr);
+            logger.warn('[deconcatenate] Failed to clean up download file:', unlinkErr);
           }
         }
       } finally {
@@ -292,7 +310,7 @@ test.describe.serial('De-concatenate Mode', () => {
               }
             }
           } catch (unlinkErr: unknown) {
-            console.warn('[deconcatenate] Failed to clean up download file:', unlinkErr);
+            logger.warn('[deconcatenate] Failed to clean up download file:', unlinkErr);
           }
         }
       } finally {
@@ -352,7 +370,7 @@ test.describe.serial('De-concatenate Mode', () => {
               }
             }
           } catch (unlinkErr: unknown) {
-            console.warn('[deconcatenate] Failed to clean up download file:', unlinkErr);
+            logger.warn('[deconcatenate] Failed to clean up download file:', unlinkErr);
           }
         }
       } finally {

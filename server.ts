@@ -2,8 +2,10 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import fs from "fs/promises";
+import { mkdirSync } from "fs";
 import { fileURLToPath } from "url";
 import { rateLimit } from "express-rate-limit";
+import { logger } from "./src/lib/logger.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,15 +31,68 @@ async function startServer() {
   });
 
   // API Routes
-  const IGNORE_FILE_PATH = path.join(process.cwd(), ".concatenate-ignore");
+  const DEFAULT_IGNORE_FILE_PATH = path.join(process.cwd(), ".concatenate-ignore");
+  // Safe base directory for worker-specific ignore files (CodeQL: js/path-injection prevention)
+  const IGNORE_FILES_DIR = path.resolve(process.cwd(), "temp_ignore_files");
+
+  // Ensure the temp_ignore_files directory exists
+  try {
+    mkdirSync(IGNORE_FILES_DIR, { recursive: true });
+  } catch (err) {
+    logger.error("Failed to create ignore files directory:", err);
+  }
+
+  /**
+   * Sanitize workerId to prevent path injection attacks.
+   * Only numeric digits are allowed (since it's a workerIndex from Playwright).
+   * CodeQL: https://codeql.github.com/codeql-query-help/javascript/js-path-injection/
+   */
+  const sanitizeWorkerId = (workerId: string | undefined): string | null => {
+    if (!workerId) return null;
+    // Validate only numeric digits allowed
+    if (!/^\d+$/.test(workerId)) {
+      return null;
+    }
+    return workerId;
+  };
+
+  /**
+   * Get safe ignore file path with strict validation.
+   * Throws error if path traversal detected. Falls back to default if workerId invalid.
+   * CodeQL: js/path-injection prevention
+   */
+  const getIgnoreFilePath = (workerId: string | undefined): string => {
+    const sanitizedId = sanitizeWorkerId(workerId);
+    if (sanitizedId) {
+      const fileName = `.concatenate-ignore-worker-${sanitizedId}`;
+      const resolvedPath = path.join(IGNORE_FILES_DIR, fileName);
+      // Final guard: throw if path traversal occurred
+      if (!resolvedPath.startsWith(IGNORE_FILES_DIR + path.sep)) {
+        throw new Error(`Path traversal detected: ${resolvedPath}`);
+      }
+      return resolvedPath;
+    }
+    // Fallback to default ignore file if workerId is missing or invalid
+    return process.env.CONCATENATE_IGNORE_FILE_PATH
+      ? path.resolve(process.env.CONCATENATE_IGNORE_FILE_PATH)
+      : DEFAULT_IGNORE_FILE_PATH;
+  };
+
   // Only apply rate limiting in production (skip for E2E tests)
   if (process.env.NODE_ENV === "production") {
     app.use("/api/ignore-list", ignoreListLimiter);
   }
 
   app.get("/api/ignore-list", async (req, res) => {
+    const workerId = req.headers["x-worker-id"] as string | undefined;
+    let ignoreFilePath: string;
     try {
-      const content = await fs.readFile(IGNORE_FILE_PATH, "utf-8");
+      ignoreFilePath = getIgnoreFilePath(workerId);
+    } catch (err) {
+      return res.status(400).json({ error: "Invalid worker ID" });
+    }
+    try {
+      const content = await fs.readFile(ignoreFilePath, "utf-8");
       const list = content
         .split("\n")
         .map((line) => line.trim())
@@ -53,22 +108,29 @@ async function startServer() {
         // If file doesn't exist, return default list
         return res.json(["node_modules", ".git", ".DS_Store", "dist", ".next"]);
       }
-      console.error("Error reading ignore file:", error);
+      logger.error("Error reading ignore file:", error);
       res.status(500).json({ error: "Failed to read ignore list" });
     }
   });
 
   app.post("/api/ignore-list", async (req, res) => {
+    const workerId = req.headers["x-worker-id"] as string | undefined;
+    let ignoreFilePath: string;
+    try {
+      ignoreFilePath = getIgnoreFilePath(workerId);
+    } catch (err) {
+      return res.status(400).json({ error: "Invalid worker ID" });
+    }
     try {
       const list = req.body;
       if (!Array.isArray(list)) {
         return res.status(400).json({ error: "Invalid ignore list format" });
       }
       const content = list.join("\n");
-      await fs.writeFile(IGNORE_FILE_PATH, content, "utf-8");
+      await fs.writeFile(ignoreFilePath, content, "utf-8");
       res.json({ success: true });
     } catch (error) {
-      console.error("Error writing ignore file:", error);
+      logger.error("Error writing ignore file:", error);
       res.status(500).json({ error: "Failed to update ignore list" });
     }
   });
@@ -76,11 +138,22 @@ async function startServer() {
   // Test-only endpoint to reset ignore list to defaults
   if (process.env.NODE_ENV !== "production") {
     app.delete("/api/ignore-list", async (req, res) => {
+      const workerId = req.headers["x-worker-id"] as string | undefined;
+      let ignoreFilePath: string;
       try {
-        await fs.unlink(IGNORE_FILE_PATH).catch(() => {});
+        ignoreFilePath = getIgnoreFilePath(workerId);
+      } catch (err) {
+        return res.status(400).json({ error: "Invalid worker ID" });
+      }
+      // Only allow deletion of worker-specific files (not the default)
+      if (ignoreFilePath === DEFAULT_IGNORE_FILE_PATH) {
+        return res.status(400).json({ error: "Cannot delete default ignore file" });
+      }
+      try {
+        await fs.unlink(ignoreFilePath).catch(() => {});
         res.json({ success: true });
       } catch (error) {
-        console.error("Error resetting ignore file:", error);
+        logger.error("Error resetting ignore file:", error);
         res.status(500).json({ error: "Failed to reset ignore list" });
       }
     });
@@ -102,7 +175,7 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+    logger.info(`Server running on http://localhost:${PORT}`);
   });
 }
 

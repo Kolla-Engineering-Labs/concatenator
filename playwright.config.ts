@@ -19,8 +19,8 @@ export default defineConfig({
     baseURL: 'http://localhost:3000',
   },
 
-  /* Disable fully parallel to prevent shared server state conflicts between test files */
-  fullyParallel: false,
+  /* Enable fully parallel for faster test execution with worker-specific ignore files */
+  fullyParallel: true,
 
   /* Fail the build on CI if you accidentally left test.only in the source code */
   forbidOnly: !!process.env.CI,
@@ -28,11 +28,10 @@ export default defineConfig({
   /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
 
-  /* Limit workers for better stability - use 1 on CI, max 2 locally
-   * Note: Tests using shared server state (ignore list) use describe.serial()
-   * within their respective test files for additional stability.
+  /* Workers: use 1 on CI for stability, max 4 locally to prevent server overload
+   * Worker-specific ignore files prevent race conditions in parallel tests.
    */
-  workers: process.env.CI ? 1 : Math.min(2, os.cpus().length),
+  workers: process.env.CI ? 1 : Math.min(4, os.cpus().length),
 
   /* Unified reporter for CI and local use */
   reporter: process.env.CI ? [['github'], ['html']] : 'html',

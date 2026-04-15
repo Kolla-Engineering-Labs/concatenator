@@ -3,8 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from './fixtures';
 import { SIMPLE_PROJECT, REACT_PROJECT } from './fixtures/test-data';
+import { logger } from '../src/lib/logger';
+import type { Page, APIRequestContext, Locator } from '@playwright/test';
 
 
 /**
@@ -64,7 +66,7 @@ async function setFilesForWebkitDirectory(
     } catch (restoreErr: unknown) {
       // Log — don't fail — attribute restore is cosmetic. On WebKit the browser
       // context may have been recycled by the file-input change event.
-      console.warn('[file-chooser] webkitdirectory restore failed (likely WebKit context recycle):', restoreErr);
+      logger.warn('[file-chooser] webkitdirectory restore failed (likely WebKit context recycle):', restoreErr);
     }
   }
 
@@ -73,21 +75,41 @@ async function setFilesForWebkitDirectory(
 }
 
 /**
- * E2E tests using the native file chooser dialog.
- * This is often more reliable than drag-and-drop simulation.
- *
- * These tests run in serial mode to prevent conflicts with shared
- * temporary directories and server state.
+ * Helper to reset the ignore list via API using the worker-specific context.
  */
-test.describe.serial('File Upload via File Chooser', () => {
+async function resetIgnoreList(apiContext: APIRequestContext): Promise<void> {
+  const defaultIgnoreList = [
+    '.concatenate-ignore',
+    '.DS_Store', '.env', '.expo', '.git', '.gradle', '.next',
+    '.secrets', '.terraform', '.vagrant', '.vscode',
+    '/^\\.concatenate-ignore-worker-\\d+$/',
+    '/\\.class$/', '/\\.exe$/',
+    '/\\.jar$/', '/\\.log$/', '/\\.o$/', '/\\.obj$/', '/\\.swp$/', '/^__.*cache__$/',
+    '/^\\..*_cache$/', 'bin', 'build', 'desktop.ini', 'dist', 'LICENSE', 'node_modules',
+    'obj', 'package-lock.json', 'ruff_output.txt', 'target', 'Thumbs.db', 'vendor', 'venv'
+  ];
+  const response = await apiContext.post('/api/ignore-list', {
+    data: defaultIgnoreList,
+  });
+  if (!response.ok()) {
+    throw new Error(`Failed to reset ignore list — HTTP ${response.status()}`);
+  }
+}
+
 /**
  * Helper function to click an element using JavaScript for better Firefox compatibility
  */
-async function jsClick(locator: import('@playwright/test').Locator): Promise<void> {
+async function jsClick(locator: Locator): Promise<void> {
   await locator.evaluate((el: HTMLElement) => el.click());
 }
 
-  test.beforeEach(async ({ page }) => {
+/**
+ * E2E tests using the native file chooser dialog.
+ * This is often more reliable than drag-and-drop simulation.
+ * Now fully parallel enabled via worker-specific ignore files.
+ */
+test.describe('File Upload via File Chooser', () => {
+  test.beforeEach(async ({ page, apiContext }) => {
     // Clear localStorage before navigation
     await page.addInitScript(() => {
       localStorage.removeItem('concatenate-ignore');
@@ -96,13 +118,8 @@ async function jsClick(locator: import('@playwright/test').Locator): Promise<voi
     });
 
     // Reset server-side ignore list BEFORE navigation so client fetches correct state.
-    // Validate the response to ensure the server committed the reset before we navigate.
-    const ignoreResetResponse = await page.request.post('/api/ignore-list', {
-      data: ['.concatenate-ignore', '.DS_Store', '.env', '.expo', '.git', '.gradle', '.next', '.secrets', '.terraform', '.vagrant', '.vscode', '/\\.class$/', '/\\.exe$/', '/\\.jar$/', '/\\.log$/', '/\\.o$/', '/\\.obj$/', '/\\.swp$/', '/^__.*cache__$/', '/^\\..*_cache$/', 'bin', 'build', 'desktop.ini', 'dist', 'LICENSE', 'node_modules', 'obj', 'package-lock.json', 'ruff_output.txt', 'target', 'Thumbs.db', 'vendor', 'venv']
-    });
-    if (!ignoreResetResponse.ok()) {
-      throw new Error(`beforeEach: Failed to reset ignore list — HTTP ${ignoreResetResponse.status()}`);
-    }
+    // Uses worker-specific ignore file via X-Worker-Id header from apiContext fixture.
+    await resetIgnoreList(apiContext);
 
     // Use 'domcontentloaded' for faster Firefox navigation
     await page.goto('/', { waitUntil: 'domcontentloaded' });
