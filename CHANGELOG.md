@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added path traversal protection details
 - Specified GitHub Private Vulnerability Reporting workflow
 
-## [0.0.0] - 2026-04-15
+## [0.1.0] - 2026-04-15
 
 ### Added
 - Initial release of Concatenator
@@ -36,5 +36,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Rate Limiting**: Production API protection
 - **Path Traversal Protection**: Strict input validation for file operations
 
-[unreleased]: https://github.com/Kolla-Engineering-Labs/concatenator/compare/v0.0.0...HEAD
-[0.0.0]: https://github.com/Kolla-Engineering-Labs/concatenator/releases/tag/v0.0.0
+[unreleased]: https://github.com/Kolla-Engineering-Labs/concatenator/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Kolla-Engineering-Labs/concatenator/releases/tag/v0.1.0
