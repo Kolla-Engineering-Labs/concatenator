@@ -12,6 +12,7 @@ import { logger } from '../lib/logger';
  */
 export const useIgnoreList = () => {
   const [ignoreList, setIgnoreList] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const isUserModified = useRef(false);
 
   // Fetch ignore list from server on mount
@@ -26,6 +27,7 @@ export const useIgnoreList = () => {
             if (!isUserModified.current) {
               setIgnoreList(list.sort((a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base' })));
             }
+            setIsLoading(false);
             return;
           }
         }
@@ -55,6 +57,7 @@ export const useIgnoreList = () => {
           setIgnoreList([...DEFAULT_IGNORE_LIST].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })));
         }
       }
+      setIsLoading(false);
     };
 
     fetchIgnoreList();
@@ -66,7 +69,7 @@ export const useIgnoreList = () => {
     if (!isUserModified.current) return;
 
     localStorage.setItem('concatenate-ignore', JSON.stringify(ignoreList));
-    
+
     const saveToServer = async () => {
       try {
         await fetch('/api/ignore-list', {
@@ -78,7 +81,7 @@ export const useIgnoreList = () => {
         logger.error('Failed to save ignore list to server:', error);
       }
     };
-    
+
     saveToServer();
   }, [ignoreList]);
 
@@ -92,7 +95,7 @@ export const useIgnoreList = () => {
           try {
             return new RegExp(body, flags);
           } catch (e) {
-            return pattern; // Fall back to literal match without lowercasing
+            return pattern; // Fall back to literal match
           }
         }
       }
@@ -103,7 +106,7 @@ export const useIgnoreList = () => {
   const addIgnoreItem = useCallback((item: string) => {
     const trimmed = item.trim();
     if (!trimmed) return;
-    
+
     isUserModified.current = true;
     setIgnoreList(prev => {
       if (prev.includes(trimmed)) {
@@ -122,6 +125,7 @@ export const useIgnoreList = () => {
   return {
     ignoreList,
     compiledIgnores,
+    isLoading,
     addIgnoreItem,
     removeIgnoreItem
   };
