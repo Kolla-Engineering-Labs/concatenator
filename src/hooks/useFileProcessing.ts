@@ -14,12 +14,13 @@ interface UseFileProcessingProps {
   appMode: AppMode;
   compiledIgnores: (string | RegExp)[];
   maxFileLimit: number;
+  isIgnoreListLoading: boolean;
 }
 
 /**
  * Custom hook to handle file processing, concatenation, and de-concatenation.
  */
-export const useFileProcessing = ({ appMode, compiledIgnores, maxFileLimit }: UseFileProcessingProps) => {
+export const useFileProcessing = ({ appMode, compiledIgnores, maxFileLimit, isIgnoreListLoading }: UseFileProcessingProps) => {
   const [files, setFiles] = useState<FileItem[]>([]);
   const [isProcessing, setIsProcessingState] = useState(false);
   const isProcessingRef = useRef(false);
@@ -49,7 +50,10 @@ export const useFileProcessing = ({ appMode, compiledIgnores, maxFileLimit }: Us
 
     const result = compiledIgnores.some(ignore => {
       if (ignore instanceof RegExp) {
-        return ignore.test(normalizedPath);
+        // Test regex against full path, filename, and each segment
+        if (ignore.test(normalizedPath)) return true;
+        if (ignore.test(fileName)) return true;
+        return segments.some(segment => ignore.test(segment));
       }
 
       const ignoreStr = typeof ignore === 'string' ? ignore.replace(/\/$/, '') : ignore;
@@ -290,6 +294,10 @@ export const useFileProcessing = ({ appMode, compiledIgnores, maxFileLimit }: Us
     e.stopPropagation();
 
     if (isProcessingRef.current) return;
+    if (isIgnoreListLoading) {
+      setImportError('Please wait for ignore patterns to load before importing files.');
+      return;
+    }
 
     const items = e.dataTransfer.items;
     if (!items) return;
@@ -313,6 +321,9 @@ export const useFileProcessing = ({ appMode, compiledIgnores, maxFileLimit }: Us
 
     const droppedFiles: File[] = [];
 
+    let skippedCount = 0;
+    let processedCount = 0;
+
     const traverseEntry = async (entry: any, path: string = '', isRoot: boolean = false) => {
       if (cancelImportRef.current) return;
 
@@ -320,15 +331,18 @@ export const useFileProcessing = ({ appMode, compiledIgnores, maxFileLimit }: Us
 
       // Skip directories (root or nested) that are explicitly blocked by ignore list
       if (entry.isDirectory && isIgnored(fullPath)) {
+        skippedCount++;
         return;
       }
 
       // Skip files that are explicitly blocked by ignore list
       if (entry.isFile && isIgnored(fullPath)) {
+        skippedCount++;
         return;
       }
 
       if (entry.isFile) {
+        processedCount++;
         // Check max file limit before adding (halt immediately when exceeded)
         if (droppedFiles.length >= maxFileLimit) {
           setImportError(`Import halted: The folder contains more than ${maxFileLimit} files. Please increase the Max Files limit or select a folder with fewer files.`);
@@ -403,7 +417,7 @@ export const useFileProcessing = ({ appMode, compiledIgnores, maxFileLimit }: Us
         setImportError("No files were imported. This might be because all files matched your ignore list (check if any Regex is overly broad) or the folder was empty.");
       }
     }
-  }, [processUploadedFiles, setIsProcessing, maxFileLimit]);
+  }, [processUploadedFiles, setIsProcessing, maxFileLimit, isIgnored, isIgnoreListLoading]);
 
   const handleConcatenate = useCallback((filteredFiles: FileItem[], outputFormat: OutputFormat = 'text') => {
     if (filteredFiles.length === 0) return;

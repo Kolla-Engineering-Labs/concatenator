@@ -59,6 +59,7 @@ export default function App() {
   const {
     ignoreList,
     compiledIgnores,
+    isLoading: isIgnoreListLoading,
     addIgnoreItem,
     removeIgnoreItem
   } = useIgnoreList();
@@ -75,7 +76,7 @@ export default function App() {
     handleFileUpload,
     handleDrop,
     handleConcatenate,
-  } = useFileProcessing({ appMode, compiledIgnores, maxFileLimit });
+  } = useFileProcessing({ appMode, compiledIgnores, maxFileLimit, isIgnoreListLoading });
 
   // --- Derived State ---
   const filteredFiles = useMemo(() => {
