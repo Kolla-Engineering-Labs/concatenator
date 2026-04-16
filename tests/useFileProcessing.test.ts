@@ -153,7 +153,7 @@ describe('useFileProcessing', () => {
     });
 
     it('respects custom maxFileLimit of 500 and trips importError with 501 files instead of defaulting to 10000', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 500 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 500, isIgnoreListLoading: false }));
 
       const filesOverLimit = Array.from({ length: 501 }).map((_, i) => ({
         name: `file-${i}.txt`,
@@ -698,7 +698,7 @@ describe('useFileProcessing', () => {
     });
 
     it('skips nested ignored directories and their children (like venv) during traversal', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: ['venv'], maxFileLimit: 10 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: ['venv'], maxFileLimit: 10, isIgnoreListLoading: false }));
 
       // Create a nested venv directory structure with many files
       const createVenvDirectory = (): any => ({
@@ -781,7 +781,7 @@ describe('useFileProcessing', () => {
 
     it('only counts non-ignored files toward max file limit during drop', async () => {
       // Set limit to 10, but have 5 non-ignored + 50 ignored files (in venv)
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: ['venv'], maxFileLimit: 10 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: ['venv'], maxFileLimit: 10, isIgnoreListLoading: false }));
 
       const createVenvDirectory = (): any => ({
         name: 'venv',
