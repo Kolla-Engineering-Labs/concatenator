@@ -1,0 +1,357 @@
+# 🤝 Contributing to Concatenator
+
+Thank you for your interest in contributing to Concatenator! This document provides detailed guidelines for setting up your development environment, understanding our architecture, and submitting contributions.
+
+## Table of Contents
+
+- [Development Environment Setup](#development-environment-setup)
+- [Project Architecture](#project-architecture)
+- [Testing Stack](#testing-stack)
+- [Pull Request Process](#pull-request-process)
+- [Code Style & Standards](#code-style--standards)
+- [Questions?](#questions)
+
+---
+
+## 💻 Development Environment Setup
+
+### 🛠️ Prerequisites
+
+- **Node.js** (v18 or later recommended)
+- **npm** (comes with Node.js)
+- **Git**
+
+### ⚙️ Initial Setup
+
+1. **Fork and clone the repository**:
+   ```bash
+   git clone https://github.com/Kolla-Engineering-Labs/concatenator.git
+   cd concatenator
+   ```
+
+2. **Install dependencies**:
+   ```bash
+   npm install
+   ```
+
+3. **Set up environment variables**:
+   ```bash
+   cp .env.example .env
+   # Edit .env and add your API keys (optional for basic development)
+   ```
+
+4. **Start the development server**:
+   ```bash
+   npm run dev
+   ```
+   The application will be available at `http://localhost:3000`.
+
+### ⌨️ Available Scripts
+
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start the development server with hot reload |
+| `npm run build` | Build the production bundle |
+| `npm run preview` | Preview the production build locally |
+| `npm run lint` | Run TypeScript type checking |
+| `npm test` | Run unit tests with Vitest |
+| `npm run test:coverage` | Run unit tests with coverage report |
+| `npm run test:e2e` | Run E2E tests with Playwright |
+| `npm run test:e2e:ui` | Run E2E tests with Playwright UI mode |
+| `npm run test:e2e:debug` | Run E2E tests in debug mode |
+| `npm run test:e2e:headed` | Run E2E tests in headed mode (visible browser) |
+
+---
+
+## 🏗️ Project Architecture
+
+We value **Clean Architecture** and **Decoupled Logic**. Understanding these principles will help you write code that aligns with the project's philosophy.
+
+### 📂 Directory Structure
+
+```
+src/
+├── components/     # React UI components (presentation layer)
+├── hooks/          # Custom React hooks (business logic orchestration)
+├── lib/            # Core business logic and utilities
+│   ├── logger.ts   # Logging utility
+│   └── ...         # Pure functions, parsers, generators
+├── types.ts        # TypeScript type definitions
+├── constants.ts    # Application constants
+├── App.tsx         # Main application component
+├── main.tsx        # Application entry point
+└── tests/          # Unit tests (colocated with Vitest)
+    └── *.test.ts   # Test files for lib/ utilities
+
+e2e/                # End-to-end tests (Playwright)
+├── *.spec.ts       # E2E test files
+└── fixtures/       # Test data and helpers
+```
+
+### 🧩 Architectural Principles
+
+1. **Separation of Concerns**: UI components should focus on presentation. Business logic lives in hooks and `lib/` utilities.
+
+2. **Decoupled Logic**: Functions in `lib/` should be pure and have no side effects. They receive inputs and return outputs without depending on React or browser APIs.
+
+3. **Hook-Based State Management**: Complex state logic is encapsulated in custom hooks (e.g., `useFileOperations`, `useIgnoreList`) rather than scattered across components.
+
+4. **Type Safety**: All functions should have explicit TypeScript types. Avoid `any` when possible.
+
+### Example: Adding a New Feature
+
+When adding functionality, follow this pattern:
+
+```typescript
+// 1. Define types in types.ts
+export interface MyFeatureOptions {
+  files: FileNode[];
+  format: 'text' | 'pdf';
+}
+
+// 2. Implement pure logic in lib/
+// src/lib/myFeature.ts
+export function processFeature(options: MyFeatureOptions): Result {
+  // Pure function - no React, no side effects
+  return transformedData;
+}
+
+// 3. Create a hook for state management
+// src/hooks/useMyFeature.ts
+export function useMyFeature() {
+  const [state, setState] = useState(...);
+
+  const execute = useCallback((options) => {
+    const result = processFeature(options);
+    setState(result);
+  }, []);
+
+  return { state, execute };
+}
+
+// 4. Use in a component
+// src/components/MyFeatureComponent.tsx
+export function MyFeatureComponent() {
+  const { state, execute } = useMyFeature();
+  // Component focuses on UI only
+}
+```
+
+---
+
+## 🧪 Testing Stack
+
+### 🧪 Unit Tests (Vitest)
+
+We use **Vitest** for unit testing. Unit tests focus on:
+
+- Pure functions in `lib/`
+- Custom hooks in `hooks/`
+- Utility functions
+
+**Location**: `tests/` directory
+
+**Running unit tests**:
+```bash
+npm test              # Run once
+npm run test:coverage # Run with coverage report
+```
+
+**Writing unit tests**:
+```typescript
+import { describe, it, expect } from 'vitest';
+import { parseConcatenatedContent } from '../src/lib/parser';
+
+describe('parseConcatenatedContent', () => {
+  it('should extract files from concatenated content', () => {
+    const content = '--- FILE: test.js ---\nconst x = 1;';
+    const result = parseConcatenatedContent(content);
+    expect(result).toHaveLength(1);
+    expect(result[0].path).toBe('test.js');
+  });
+});
+```
+
+### 🎭 E2E Tests (Playwright)
+
+We use **Playwright** for end-to-end testing. E2E tests focus on:
+
+- Critical user flows (concatenation, de-concatenation)
+- File System Access API interactions
+- Cross-browser compatibility
+
+**Location**: `e2e/` directory
+
+**Running E2E tests**:
+```bash
+npm run test:e2e          # Headless mode (CI)
+npm run test:e2e:ui       # Interactive UI mode
+npm run test:e2e:headed   # Visible browser
+npm run test:e2e:debug    # Debug mode with step-through
+```
+
+**Important notes for E2E tests**:
+- Tests use worker-specific `.concatenate-ignore` files to ensure isolation
+- The `x-worker-id` header is used to route requests to the correct ignore file
+- File System Access API requires Chrome/Edge browsers (Playwright's Chromium is used)
+
+**Writing E2E tests**:
+```typescript
+import { test, expect } from '@playwright/test';
+
+test('user can concatenate files', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('drop-zone').dispatchEvent('drop', {
+    dataTransfer: { files: [mockFile] }
+  });
+  await expect(page.getByText('1 file selected')).toBeVisible();
+});
+```
+
+### Test Coverage
+
+We aim for high test coverage on core logic. Coverage reports are generated automatically in CI and uploaded to Codecov.
+
+---
+
+## 🚀 Pull Request Process
+
+### Before You Start
+
+1. **Check existing issues**: Look for existing issues or discussions related to your change.
+2. **Create an issue** (optional but recommended): For significant changes, create an issue to discuss the approach first.
+
+### 🛤️ Workflow
+
+1. **Create a feature branch**:
+   ```bash
+   git checkout -b feature/your-feature-name
+   # or
+   git checkout -b fix/bug-description
+   ```
+
+   **Branch Naming Convention**: Use the format `type/description` where `type` matches [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#summary) types:
+   - `feat/` — New features (e.g., `feat/add-maxFilesLimit`)
+   - `fix/` — Bug fixes (e.g., `fix/correct-concatenate-ignore-handling`)
+   - `docs/` — Documentation changes (e.g., `docs/update-security-policy`)
+   - `refactor/` — Code refactoring (e.g., `refactor/simplify-parser-logic`)
+   - `test/` — Test additions or fixes (e.g., `test/add-e2e-coverage`)
+   - `chore/` — Maintenance tasks (e.g., `chore/update-dependencies`)
+
+2. **Make your changes**:
+   - Follow the [Code Style & Standards](#code-style--standards)
+   - Keep commits atomic and focused
+   - Write clear commit messages
+
+3. **Run quality checks**:
+   ```bash
+   npm run lint        # TypeScript type checking
+   npm test            # Unit tests
+   npm run test:e2e    # E2E tests (required for UI flows; see below)
+   ```
+
+   **What constitutes "UI Flows"?** E2E tests are required for changes touching:
+   - `src/components/*` — Any React component changes
+   - Framer Motion animations — Motion/transition changes
+   - File System Access API logic — Drag-and-drop, file picker interactions
+   - Mode toggles, output format changes, or settings modal updates
+
+4. **Update documentation**:
+   - Update `README.md` if adding new features
+   - Update `QUICKSTART.md` if changing user-facing behavior
+   - Add JSDoc comments for new public functions
+
+5. **Submit your PR**:
+   - Use a PR title following [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#summary) format (e.g., `feat: add PDF export option`)
+   - Fill out the PR template completely
+   - Link any related issues (use `Fixes #123` to auto-close)
+   - Ensure all CI checks pass
+
+### PR Review Criteria
+
+Your PR will be reviewed for:
+
+- **Correctness**: Does it solve the stated problem?
+- **Architecture**: Does it follow Clean Architecture and Decoupled Logic principles?
+- **Testing**: Are there adequate tests? Do they pass?
+- **Documentation**: Is the change documented?
+- **Security**: Does it maintain our security standards (especially regarding API key handling)?
+
+### After Merge
+
+- Your contribution will be acknowledged in the release notes
+- The `main` branch will be automatically deployed (if applicable)
+
+---
+
+## Code Style & Standards
+
+### TypeScript
+
+- Enable strict mode features
+- Avoid `any` - use `unknown` with type guards when necessary
+- Use explicit return types on exported functions
+
+### React
+
+- Use functional components with hooks
+- Keep components focused - split when they grow too large
+- Use `useCallback` and `useMemo` appropriately for performance
+
+### CSS/Styling
+
+- Use Tailwind CSS for styling
+- Prefer semantic class names over arbitrary values
+- All UI components must support both **light and dark themes**
+
+### Commit Messages
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#summary) format:
+
+```
+type(scope): subject
+
+body (optional)
+
+footer (optional)
+```
+
+Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
+
+See [conventionalcommits.org](https://www.conventionalcommits.org/en/v1.0.0/#summary) for the full specification.
+
+Examples:
+```
+feat(parser): add support for binary file detection
+fix(ui): resolve dark mode flicker on initial load
+docs(readme): update installation instructions
+```
+
+---
+
+## Community Standards
+
+All contributors are expected to adhere to our [Code of Conduct](./CODE_OF_CONDUCT.md). Please review it before participating.
+
+## Questions & Reporting Issues
+
+### ❓ General Questions
+- Open a [GitHub Discussion](https://github.com/Kolla-Engineering-Labs/concatenator/discussions)
+
+### 🐞 Bug Reports (Non-Security)
+For functional bugs, crashes, or unexpected behavior:
+- Use the [Bug Report template](https://github.com/Kolla-Engineering-Labs/concatenator/issues/new?template=bug_report.md)
+- Provide browser version, steps to reproduce, and log levels
+
+### 🔒 Security Vulnerabilities
+**⚠️ Critical**: Do not report security vulnerabilities via public GitHub Issues.
+- Use GitHub's **Private Vulnerability Reporting** (Security tab → "Report a vulnerability")
+- Or visit: `https://github.com/Kolla-Engineering-Labs/concatenator/security/advisories/new`
+- See [SECURITY.md](./SECURITY.md) for our full security policy
+
+### Feature Requests
+- Use the [Feature Request template](https://github.com/Kolla-Engineering-Labs/concatenator/issues/new?template=feature_request.md)
+
+---
+
+Thank you for contributing to Concatenator! Your efforts help make this tool better for developers worldwide.
