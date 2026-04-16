@@ -36,7 +36,7 @@ describe('useFileProcessing', () => {
 
   describe('Concatenation Logic Edge Cases', () => {
     it('does nothing when handling empty concatenate payload', () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       act(() => {
         result.current.handleConcatenate([]);
@@ -46,7 +46,7 @@ describe('useFileProcessing', () => {
     });
 
     it('demonstrates format collision when source file contains exact START delimiter', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
       const mockFiles = [
         {
           name: 'malicious.js',
@@ -66,7 +66,7 @@ describe('useFileProcessing', () => {
     });
 
     it('appends proper delimiters and handles missing trailing new lines', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       const mockFiles = [
         {
@@ -93,7 +93,7 @@ describe('useFileProcessing', () => {
     });
 
     it('safely processes files with empty or undefined webkitRelativePath properties', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
       const mockFiles = [
         {
           name: 'orphan.txt',
@@ -113,7 +113,7 @@ describe('useFileProcessing', () => {
     });
 
     it('handles heavy surrogate pair emojis in file content correctly without charset mangling', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       const emojiContent = '👨‍👩‍👧‍👦 complex proxy content 🚀';
       const mockFiles = [
@@ -135,7 +135,7 @@ describe('useFileProcessing', () => {
     });
 
     it('throws a memory safeguard warning synchronously without crashing UI thread when concatenating massive array structures', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       // Simulating edge case #17 checking array iteration locks. Vitest tests break if this takes > 5000ms.
       const massiveFiles = Array.from({ length: 15_000 }).map((_, i) => ({
@@ -170,7 +170,7 @@ describe('useFileProcessing', () => {
     });
 
     it('executes URL.revokeObjectURL synchronously which may cause download race conditions on slow devices', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       const mockFiles = [
         {
@@ -188,7 +188,7 @@ describe('useFileProcessing', () => {
     });
 
     it('concatenates files containing unregulated URI components in paths leading to special path injection risks', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       const mockFiles = [
         {
@@ -209,7 +209,7 @@ describe('useFileProcessing', () => {
     });
 
     it('does not enforce individual file size limitations risking V8 string accumulation memory issues', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       // Simulate large string concatenation risk
       const mockFiles = [
@@ -233,7 +233,7 @@ describe('useFileProcessing', () => {
 
   describe('De-Concatenation Regex Logic Edge Cases', () => {
     it('handles files containing correct regex paths and complex formats', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       const complexPath = 'src/test-(spec)+1.js';
       const fileContent = 'const a = 1;';
@@ -257,7 +257,7 @@ describe('useFileProcessing', () => {
     });
 
     it('gracefully skips files with malformed EOF delimiters', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       // Deliberately missing the closing end delimiter
       const concatenatedContent = `${START_DELIMITER}src/bad.js${END_DELIMITER}\nThis is bad content\n<BAD_DELIMITER>`;
@@ -282,7 +282,7 @@ describe('useFileProcessing', () => {
     });
 
     it('sets import error when deconcatenating a file with no matches', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       const mockFiles = [
         {
@@ -303,7 +303,7 @@ describe('useFileProcessing', () => {
     });
 
     it('gracefully handles duplicated file paths in concatenated payload by sequential processing', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       const concatenatedContent =
         `${START_DELIMITER}src/dup.js${END_DELIMITER}\nFirst content\n${FILE_END_DELIMITER}\n\n` +
@@ -319,7 +319,7 @@ describe('useFileProcessing', () => {
     });
 
     it('truncates concatenated file contents prematurely if EOF delimiter exists natively inside code logic', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       const fileContent = `const a = 1;\n${FILE_END_DELIMITER}\nconst b = 2;`;
       const concatenatedContent = `${START_DELIMITER}src/trunc.js${END_DELIMITER}\n${fileContent}\n${FILE_END_DELIMITER}\n\n`;
@@ -334,7 +334,7 @@ describe('useFileProcessing', () => {
     });
 
     it('gracefully skips broken files and parses subsequent ones without delimiter bleeding (Edge Case 25)', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       const concatenatedContent =
         `${START_DELIMITER}src/file1.js${END_DELIMITER}\nContent 1\n` +
@@ -352,7 +352,7 @@ describe('useFileProcessing', () => {
     });
 
     it('fails to extract files if start delimiters are completely missing (Edge Case 26)', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       const concatenatedContent =
         `I have no start delimiter\nContent 1\n${FILE_END_DELIMITER}\n\n` +
@@ -368,7 +368,7 @@ describe('useFileProcessing', () => {
     });
 
     it('safely handles and cleans mangled newlines directly after delimiters (Edge Case 27)', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       // Simulating a mangled newline \n\r instead of \n or \r\n
       const concatenatedContent =
@@ -384,7 +384,7 @@ describe('useFileProcessing', () => {
     });
 
     it('sanitizes inputs to prevent Zip Path Traversal attacks (Edge Case 29)', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       const maliciousPath = '../../../etc/passwd';
       const concatenatedContent = `${START_DELIMITER}${maliciousPath}${END_DELIMITER}\nMalicious Content\n${FILE_END_DELIMITER}\n\n`;
@@ -402,7 +402,7 @@ describe('useFileProcessing', () => {
     it('evaluates case-sensitivity accurately based on user configuration (Edge Case 35 fixed)', () => {
       // Assuming compiledIgnores is constructed carefully by useIgnoreList
       const compiledIgnores = [/makefile/i, 'debug'];
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores, maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores, maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       // Strict uppercase 'Makefile' should be ignored by insensitive regex
       expect(result.current.isIgnored('Makefile')).toBe(true);
@@ -419,7 +419,7 @@ describe('useFileProcessing', () => {
 
     it('ignores empty folders or explicitly matched root directories appropriately', () => {
       const compiledIgnores = ['node_modules'];
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores, maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores, maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       // isIgnored passing in root segment
       // Fixed: isIgnored now correctly maps all string segments globally without slice(1) leaks.
@@ -434,7 +434,7 @@ describe('useFileProcessing', () => {
 
     it('normalizes windows backslash paths correctly for ignore evaluation', () => {
       const compiledIgnores = [/test\.js/i];
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores, maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores, maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       // Testing backslash replacement edge case (normalize string internally to /)
       expect(result.current.isIgnored('src\\components\\test.js')).toBe(true);
@@ -443,7 +443,7 @@ describe('useFileProcessing', () => {
     it('demonstrates that over-broad regex patterns can accidentally match and ignore everything (Edge Case 34)', () => {
       // User accidentally saves an over-broad regex
       const compiledIgnores = [/[\s\S]+/];
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores, maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores, maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       expect(result.current.isIgnored('src/main.js')).toBe(true);
       expect(result.current.isIgnored('index.html')).toBe(true);
@@ -452,7 +452,7 @@ describe('useFileProcessing', () => {
 
     it('properly evaluates trailing slash paths by dropping trailing slashes during strict matching (Edge Case 40 Fixed)', () => {
       const compiledIgnores = ['build/'];
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores, maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores, maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       // The trailing slash in the ignore pattern is handled so "build" directory resolves to true.
       expect(result.current.isIgnored('build/main.js')).toBe(true);
@@ -460,7 +460,7 @@ describe('useFileProcessing', () => {
 
     it('matches *.tmp pattern against temp.tmp filename', () => {
       const compiledIgnores = ['*.tmp'];
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores, maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores, maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       // Should match temp.tmp
       expect(result.current.isIgnored('temp.tmp')).toBe(true);
@@ -476,7 +476,7 @@ describe('useFileProcessing', () => {
   describe('File Upload/Reading Edge Cases', () => {
     it('skips files that fail to read via FileReader silently', async () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       const file1 = new File(['valid'], 'valid.txt', { type: 'text/plain' });
       const file2 = new File(['invalid'], 'invalid.txt', { type: 'text/plain' });
@@ -529,7 +529,7 @@ describe('useFileProcessing', () => {
 
   describe('Drop API Edge Cases', () => {
     it('ignores empty folders in drag-and-drop traversal', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       const mockEntry = {
         name: 'empty-folder',
@@ -557,7 +557,7 @@ describe('useFileProcessing', () => {
     });
 
     it('processes deep directory trees up to internal stack limitations without crashing', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       let depthLimit = 100;
       let currentDepth = 0;
@@ -629,7 +629,7 @@ describe('useFileProcessing', () => {
     });
 
     it('bypasses parsing execution when standard dataTransfer format is missing', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       const mockEvent = {
         preventDefault: vi.fn(),
@@ -647,7 +647,7 @@ describe('useFileProcessing', () => {
 
     it('skips traversing root directories explicitly blocked by ignore list', async () => {
       // Testing edge case mapping logic failure point bypassing children processing
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: ['ignored-root'], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: ['ignored-root'], maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       const rootEntry = {
         name: 'ignored-root',
@@ -861,7 +861,7 @@ describe('useFileProcessing', () => {
 
   describe('UI State & Asynchronous Concurrency Edge Cases', () => {
     it('prevents simultaneous drop race conditions (Edge Case 41)', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       const file1 = new File(['content1'], 'file1.txt', { type: 'text/plain' });
       const file2 = new File(['content2'], 'file2.txt', { type: 'text/plain' });
@@ -900,7 +900,7 @@ describe('useFileProcessing', () => {
     });
 
     it('safely aborts FileReader operations to prevent memory leaks (Edge Case 42)', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       const file = new File(['content'], 'big.txt', { type: 'text/plain' });
 
@@ -933,7 +933,7 @@ describe('useFileProcessing', () => {
     });
 
     it('throttles React state rendering during massive operations (Edge Case 44)', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       const mockedFiles = Array.from({ length: 50 }).map((_, i) => new File(['text'], `f${i}.txt`, { type: 'text/plain' }));
       const mockEvent = { preventDefault: vi.fn(), target: { files: mockedFiles, value: '' } } as unknown as React.ChangeEvent<HTMLInputElement>;
@@ -956,7 +956,7 @@ describe('useFileProcessing', () => {
     });
 
     it('processes massive array sets without spreading constraints (Edge Case 45)', async () => {
-       const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+       const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
        const originalFileReader = global.FileReader;
        global.FileReader = class {
          readAsText = vi.fn().mockImplementation(function (this: any) { this.result = 'foo'; this.onload(); });
@@ -973,7 +973,7 @@ describe('useFileProcessing', () => {
     });
 
     it('optimizes deduplication via sets instead of Map iterations (Edge Case 46)', async () => {
-       const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+       const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
        const mockFiles = [new File(['foo'], 'dedup.txt')];
        const mockEvent = { preventDefault: vi.fn(), target: { files: mockFiles, value: '' } } as unknown as React.ChangeEvent<HTMLInputElement>;
 
@@ -991,7 +991,7 @@ describe('useFileProcessing', () => {
 
   describe('Category 1: File Processing & OS Parity', () => {
     it('handles zero-byte files gracefully without breaking boundaries', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
       const mockFiles = [
         {
           name: 'empty.txt',
@@ -1010,7 +1010,7 @@ describe('useFileProcessing', () => {
     });
 
     it('processes files with special characters and HTML entities in path', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
       const specialPath = 'src/file\nname"test"&<>.txt';
       const mockFiles = [
         {
@@ -1030,7 +1030,7 @@ describe('useFileProcessing', () => {
     });
 
     it('normalizes mixed mac/windows/linux line endings automatically', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
       const mixedContent = "Line 1\r\nLine 2\rLine 3\nLine 4";
       const mockFiles = [{ name: 'mixed.txt', path: 'mixed.txt', kind: 'file' as const, content: mixedContent, size: 100 }];
 
@@ -1041,7 +1041,7 @@ describe('useFileProcessing', () => {
     });
 
     it('gracefully handles missing relative paths by falling back to file name', async () => {
-       const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+       const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
        const file = new File(['content'], 'orphan.js');
        // webkitRelativePath property is missing/empty
        Object.defineProperty(file, 'webkitRelativePath', { value: '' });
@@ -1060,7 +1060,7 @@ describe('useFileProcessing', () => {
 
   describe('Category 2: Concatenation Robustness Tests', () => {
     it('does not choke on exact memory limits (10000 files)', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
 
       const exactFiles = Array.from({ length: 10000 }).map((_, i) => ({
         name: `f${i}.txt`, path: `f${i}.txt`, kind: 'file' as const, content: 'c', size: 1
@@ -1080,7 +1080,7 @@ describe('useFileProcessing', () => {
     });
 
     it('safely handles null byte injections', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
       const nullBytes = "content\0\0\0\0content";
       const mockFiles = [{ name: 'null.txt', path: 'null.txt', kind: 'file' as const, content: nullBytes, size: 10 }];
 
@@ -1096,7 +1096,7 @@ describe('useFileProcessing', () => {
       // preventing subsequent tests from running with a frozen clock.
       try {
         vi.setSystemTime(new Date('2024-01-05T03:04:09'));
-        const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+        const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
         const mockFiles = [{ name: 't.txt', path: 't.txt', kind: 'file' as const, content: 't', size: 1 }];
 
         const downloadSpy = vi.fn();
@@ -1128,7 +1128,7 @@ describe('useFileProcessing', () => {
 
   describe('Category 3: Deconcatenation Regex & Security', () => {
     it('ignores empty paths or spaces between bounds', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
       const concatenatedContent = `${START_DELIMITER}   ${END_DELIMITER}\nMalicious Content\n${FILE_END_DELIMITER}\n\n`;
       const mockFiles = [{ name: 'c.txt', path: 'c.txt', kind: 'file' as const, content: concatenatedContent, size: 10 }];
 
@@ -1145,7 +1145,7 @@ describe('useFileProcessing', () => {
         console.log('[skip] performance timing test skipped on CI — scheduler jitter makes hard limits unreliable');
       }
 
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
       const endlessContent = `${START_DELIMITER}src/endless.js${END_DELIMITER}\n` + 'A'.repeat(500000); // 500kb string
       const mockFiles = [{ name: 'c.txt', path: 'c.txt', kind: 'file' as const, content: endlessContent, size: 100 }];
 
@@ -1161,7 +1161,7 @@ describe('useFileProcessing', () => {
     });
 
     it('normalizes windows backward slashes to forward slashes during deconcatenation zip generation', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
       // Notice the backslash
       const concatenatedContent = `${START_DELIMITER}src\\folder\\file.txt${END_DELIMITER}\nContent\n${FILE_END_DELIMITER}\n\n`;
       const mockFiles = [{ name: 'c.txt', path: 'c.txt', kind: 'file' as const, content: concatenatedContent, size: 10 }];
@@ -1176,7 +1176,7 @@ describe('useFileProcessing', () => {
     it('gracefully handles missing createReader due to OS permissions', async () => {
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
       const rootEntry = {
         name: 'locked-folder',
         isFile: false,
@@ -1194,7 +1194,7 @@ describe('useFileProcessing', () => {
     });
 
     it('traverses deep nested tree pruning immediately hitting ignore list (O(1) stop)', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: ['node_modules'], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: ['node_modules'], maxFileLimit: 10000, isIgnoreListLoading: false }));
       const spy = vi.fn();
 
       const rootEntry = {
@@ -1213,7 +1213,7 @@ describe('useFileProcessing', () => {
 
   describe('Category 6: UI State, Cancellation, and Concurrency', () => {
     it('averts zero-division NaN updates on progress tracker with 0 files', async () => {
-      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
       const mockEvent = { preventDefault: vi.fn(), stopPropagation: vi.fn(), target: { files: [], value: '' } } as unknown as React.ChangeEvent<HTMLInputElement>;
 
       await act(async () => { await result.current.handleFileUpload(mockEvent); });
@@ -1229,7 +1229,7 @@ describe('useFileProcessing', () => {
        // Thus, we expose that cancellation only applies to upload reading, and verify it here.
        // It's acceptable if the deconcatenate continues if cancellation logic wasn't explicitly added there,
        // but we verify the cancel processing fn can be invoked without crashing.
-       const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [], maxFileLimit: 10000 }));
+       const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
 
        act(() => { result.current.cancelProcessing(); });
        // Assert no crash
