@@ -52,10 +52,6 @@ export default function App() {
   const [newIgnoreItem, setNewIgnoreItem] = useState('');
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set(['/', 'root']));
 
-  // --- API Key State ---
-  const [apiKey, setApiKey] = useState(() => process.env.GEMINI_API_KEY || '');
-  const [openaiKey, setOpenaiKey] = useState(() => process.env.OPENAI_API_KEY || '');
-  const [anthropicKey, setAnthropicKey] = useState(() => process.env.ANTHROPIC_API_KEY || '');
 
   // --- Custom Hooks ---
   const {
@@ -136,10 +132,6 @@ export default function App() {
   }, [fileTree]);
 
   // --- Handlers ---
-  const handleSaveSettings = () => {
-    setShowSettings(false);
-  };
-
   const handleRemoveFile = useCallback((file: FileItem) => {
     if (file.kind === 'directory') {
       const prefix = file.path + '/';
@@ -258,13 +250,6 @@ export default function App() {
         <SettingsModal
           show={showSettings}
           onClose={() => setShowSettings(false)}
-          apiKey={apiKey}
-          setApiKey={setApiKey}
-          openaiKey={openaiKey}
-          setOpenaiKey={setOpenaiKey}
-          anthropicKey={anthropicKey}
-          setAnthropicKey={setAnthropicKey}
-          onSave={handleSaveSettings}
         />
       </Suspense>
 

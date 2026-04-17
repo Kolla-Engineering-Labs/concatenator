@@ -10,13 +10,6 @@ import { X } from 'lucide-react';
 interface SettingsModalProps {
   show: boolean;
   onClose: () => void;
-  apiKey: string;
-  setApiKey: (key: string) => void;
-  openaiKey: string;
-  setOpenaiKey: (key: string) => void;
-  anthropicKey: string;
-  setAnthropicKey: (key: string) => void;
-  onSave: () => void;
 }
 
 /**
@@ -25,13 +18,6 @@ interface SettingsModalProps {
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   show,
   onClose,
-  apiKey,
-  setApiKey,
-  openaiKey,
-  setOpenaiKey,
-  anthropicKey,
-  setAnthropicKey,
-  onSave,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -90,69 +76,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             <div className="p-6 space-y-6">
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <label htmlFor="gemini-api-key" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Gemini API Key
-                  </label>
-                  <input
-                    id="gemini-api-key"
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="Enter Gemini API key..."
-                    className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="openai-api-key" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    OpenAI API Key
-                  </label>
-                  <input
-                    id="openai-api-key"
-                    type="password"
-                    value={openaiKey}
-                    onChange={(e) => setOpenaiKey(e.target.value)}
-                    placeholder="Enter OpenAI API key..."
-                    className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label htmlFor="anthropic-api-key" className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Anthropic API Key
-                  </label>
-                  <input
-                    id="anthropic-api-key"
-                    type="password"
-                    value={anthropicKey}
-                    onChange={(e) => setAnthropicKey(e.target.value)}
-                    placeholder="Enter Anthropic API key..."
-                    className="w-full px-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-transparent outline-none transition-all"
-                  />
-                </div>
-
-                <p className="text-xs text-slate-500">
-                  Your keys are stored locally in your browser and are never sent to our servers.
+                <p className="text-sm text-slate-600 dark:text-slate-400">
+                  Concatenator settings are automatically saved to your browser's local storage.
                 </p>
               </div>
             </div>
 
-            <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-3">
+            <div className="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 flex justify-end">
               <button
                 onClick={onClose}
-                className="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={onSave}
                 className="px-6 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-medium shadow-lg shadow-brand-600/20 transition-all active:scale-95"
               >
-                Save Settings
+                Close
               </button>
             </div>
           </motion.div>
