@@ -25,7 +25,7 @@ describe('useIgnoreList', () => {
 
   it('compiles string patterns to correct lowercase comparisons', async () => {
     const { result } = renderHook(() => useIgnoreList());
-    
+
     await waitFor(() => {
         expect(result.current.ignoreList.length).toBeGreaterThan(0);
     });
@@ -44,7 +44,7 @@ describe('useIgnoreList', () => {
     });
 
     const { act } = await import('@testing-library/react');
-    
+
     // Mock an invalid regex path added to the list: e.g. unclosed group
     act(() => {
       result.current.addIgnoreItem('/[invalid/');
@@ -65,10 +65,10 @@ describe('useIgnoreList', () => {
     await waitFor(() => {
       expect(result.current.ignoreList.length).toBe(DEFAULT_IGNORE_LIST.length);
     });
-    
+
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("corrupted"));
     expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining("corrupted"));
-    
+
     consoleSpy.mockRestore();
     alertSpy.mockRestore();
   });
@@ -86,7 +86,7 @@ describe('useIgnoreList', () => {
     expect(regex1.ignoreCase).toBe(false); // Should NOT force case-insensitivity
     expect(regex1.test('debug/file.js')).toBe(false);
     expect(regex1.test('Debug/file.js')).toBe(true);
-    
+
     const regex2 = result.current.compiledIgnores[1] as RegExp;
     expect(regex2.ignoreCase).toBe(true);
     expect(regex2.test('INSENSITIVE/file.js')).toBe(true);
@@ -118,7 +118,7 @@ describe('useIgnoreList', () => {
       const literal = result.current.compiledIgnores[0];
       // Due to string matching in useFileProcessing, compiledIgnores keeps strings as strings!
       expect(typeof literal).toBe('string');
-      expect(literal).toBe('file[A-Z].js'); 
+      expect(literal).toBe('file[A-Z].js');
     });
 
     it('matches unicode and internationalized paths correctly', async () => {
@@ -136,15 +136,15 @@ describe('useIgnoreList', () => {
 
     it('deduplicates identical ignore rules to optimize performance', async () => {
       const { result } = renderHook(() => useIgnoreList());
-      
+
       await waitFor(() => {
         expect(result.current.ignoreList.length).toBe(DEFAULT_IGNORE_LIST.length);
       });
 
       const { act } = await import('@testing-library/react');
-      
+
       const originalLength = result.current.ignoreList.length;
-      
+
       act(() => {
         // Adding it twice shouldn't increase size by two if handling identical
         result.current.addIgnoreItem('duplicate.txt');
@@ -155,7 +155,7 @@ describe('useIgnoreList', () => {
         addedLength = result.current.ignoreList.length;
         expect(addedLength).toBe(originalLength + 1);
       });
-      
+
       act(() => {
         result.current.addIgnoreItem('duplicate.txt');
       });
@@ -171,13 +171,13 @@ describe('useIgnoreList', () => {
     it('removes item from ignore list', async () => {
       localStorage.setItem('concatenate-ignore', JSON.stringify(['item1', 'item2', 'item3']));
       const { result } = renderHook(() => useIgnoreList());
-      
+
       await waitFor(() => {
         expect(result.current.ignoreList).toContain('item1');
       });
 
       const { act } = await import('@testing-library/react');
-      
+
       act(() => {
         result.current.removeIgnoreItem('item2');
       });
@@ -191,14 +191,14 @@ describe('useIgnoreList', () => {
 
     it('handles removing non-existent item gracefully', async () => {
       const { result } = renderHook(() => useIgnoreList());
-      
+
       await waitFor(() => {
         expect(result.current.ignoreList.length).toBeGreaterThan(0);
       });
 
       const { act } = await import('@testing-library/react');
       const originalLength = result.current.ignoreList.length;
-      
+
       act(() => {
         result.current.removeIgnoreItem('non-existent-item');
       });
@@ -211,13 +211,13 @@ describe('useIgnoreList', () => {
     it('persists removal to localStorage', async () => {
       localStorage.setItem('concatenate-ignore', JSON.stringify(['keep', 'remove']));
       const { result } = renderHook(() => useIgnoreList());
-      
+
       await waitFor(() => {
         expect(result.current.ignoreList).toContain('remove');
       });
 
       const { act } = await import('@testing-library/react');
-      
+
       act(() => {
         result.current.removeIgnoreItem('remove');
       });
@@ -233,13 +233,13 @@ describe('useIgnoreList', () => {
   describe('addIgnoreItem edge cases', () => {
     it('trims whitespace from new items', async () => {
       const { result } = renderHook(() => useIgnoreList());
-      
+
       await waitFor(() => {
         expect(result.current.ignoreList.length).toBeGreaterThan(0);
       });
 
       const { act } = await import('@testing-library/react');
-      
+
       act(() => {
         result.current.addIgnoreItem('  spaced-item  ');
       });
@@ -252,14 +252,14 @@ describe('useIgnoreList', () => {
 
     it('does not add empty strings', async () => {
       const { result } = renderHook(() => useIgnoreList());
-      
+
       await waitFor(() => {
         expect(result.current.ignoreList.length).toBeGreaterThan(0);
       });
 
       const { act } = await import('@testing-library/react');
       const originalLength = result.current.ignoreList.length;
-      
+
       act(() => {
         result.current.addIgnoreItem('');
         result.current.addIgnoreItem('   ');
@@ -273,13 +273,13 @@ describe('useIgnoreList', () => {
     it('adds items in sorted order', async () => {
       localStorage.setItem('concatenate-ignore', JSON.stringify(['zebra', 'apple']));
       const { result } = renderHook(() => useIgnoreList());
-      
+
       await waitFor(() => {
         expect(result.current.ignoreList).toEqual(['apple', 'zebra']);
       });
 
       const { act } = await import('@testing-library/react');
-      
+
       act(() => {
         result.current.addIgnoreItem('mango');
       });
@@ -299,7 +299,7 @@ describe('useIgnoreList', () => {
       });
 
       const { result } = renderHook(() => useIgnoreList());
-      
+
       await waitFor(() => {
         expect(result.current.ignoreList).toEqual(['server-item1', 'server-item2']);
       });
@@ -313,16 +313,16 @@ describe('useIgnoreList', () => {
       global.fetch = fetchMock;
 
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-      
+
       const { result } = renderHook(() => useIgnoreList());
-      
+
       // Wait for defaults to load
       await waitFor(() => {
         expect(result.current.ignoreList.length).toBeGreaterThan(0);
       });
 
       const { act } = await import('@testing-library/react');
-      
+
       act(() => {
         result.current.addIgnoreItem('new-server-item');
       });
@@ -336,7 +336,7 @@ describe('useIgnoreList', () => {
           })
         );
       });
-      
+
       consoleSpy.mockRestore();
     });
 
@@ -344,15 +344,15 @@ describe('useIgnoreList', () => {
       global.fetch = vi.fn().mockRejectedValue(new Error('Network error'));
       localStorage.setItem('concatenate-ignore', JSON.stringify(['cached-item']));
 
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const { result } = renderHook(() => useIgnoreList());
-      
+
       await waitFor(() => {
         expect(result.current.ignoreList).toContain('cached-item');
       });
 
       expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to fetch'),
+        expect.stringContaining('Server ignore list unavailable'),
         expect.any(Error)
       );
 
@@ -366,13 +366,13 @@ describe('useIgnoreList', () => {
 
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const { result } = renderHook(() => useIgnoreList());
-      
+
       await waitFor(() => {
         expect(result.current.ignoreList.length).toBeGreaterThan(0);
       });
 
       const { act } = await import('@testing-library/react');
-      
+
       act(() => {
         result.current.addIgnoreItem('test-item');
       });
@@ -394,7 +394,7 @@ describe('useIgnoreList', () => {
       });
 
       const { result } = renderHook(() => useIgnoreList());
-      
+
       await waitFor(() => {
         // Should fall back to defaults
         expect(result.current.ignoreList.length).toBe(DEFAULT_IGNORE_LIST.length);
@@ -409,12 +409,12 @@ describe('useIgnoreList', () => {
       await act(async () => {
         renderHook(() => useIgnoreList());
       });
-      
+
       // Wait for all effects to settle
       await act(async () => {
         await new Promise(resolve => setTimeout(resolve, 50));
       });
-      
+
       // POST should not be called with empty list (since server returns empty array, ignoreList stays empty)
       const postCalls = fetchMock.mock.calls.filter(call => call[1]?.method === 'POST');
       expect(postCalls.length).toBe(0);
@@ -425,7 +425,7 @@ describe('useIgnoreList', () => {
     it('handles regex with empty flags', async () => {
       localStorage.setItem('concatenate-ignore', JSON.stringify(['/pattern/']));
       const { result } = renderHook(() => useIgnoreList());
-      
+
       await waitFor(() => {
         expect(result.current.compiledIgnores.length).toBeGreaterThan(0);
       });
@@ -439,7 +439,7 @@ describe('useIgnoreList', () => {
     it('handles regex with multiple flags', async () => {
       localStorage.setItem('concatenate-ignore', JSON.stringify(['/test/gim']));
       const { result } = renderHook(() => useIgnoreList());
-      
+
       await waitFor(() => {
         expect(result.current.compiledIgnores.length).toBeGreaterThan(0);
       });
@@ -454,7 +454,7 @@ describe('useIgnoreList', () => {
     it('handles special regex characters in pattern body', async () => {
       localStorage.setItem('concatenate-ignore', JSON.stringify(['/\\d+\\.test$/']));
       const { result } = renderHook(() => useIgnoreList());
-      
+
       await waitFor(() => {
         expect(result.current.compiledIgnores.length).toBeGreaterThan(0);
       });
@@ -467,7 +467,7 @@ describe('useIgnoreList', () => {
 
     it('compiles ignores reactively when ignoreList changes', async () => {
       const { result } = renderHook(() => useIgnoreList());
-      
+
       await waitFor(() => {
         expect(result.current.ignoreList.length).toBeGreaterThan(0);
       });
@@ -475,7 +475,7 @@ describe('useIgnoreList', () => {
       const originalCompiledCount = result.current.compiledIgnores.length;
 
       const { act } = await import('@testing-library/react');
-      
+
       act(() => {
         result.current.addIgnoreItem('/new-regex/i');
       });
