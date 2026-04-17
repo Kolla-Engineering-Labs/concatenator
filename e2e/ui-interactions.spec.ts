@@ -166,31 +166,6 @@ test.describe('UI Interactions and Edge Cases', () => {
       }
     });
 
-    test('should close settings modal with Escape key', async ({ page, browserName }) => {
-      // Open settings
-      const settingsButton = page.locator('header button[title="Settings"]');
-      await settingsButton.waitFor({ state: 'visible', timeout: 5000 });
-      await jsClick(settingsButton);
-
-      // Modal should be open
-      const modal = page.locator('div').filter({ hasText: /^Settings$/ }).first();
-      await expect(modal).toBeVisible();
-
-      // Focus the modal container to ensure it receives keyboard events (needed for Firefox and WebKit)
-      const modalContainer = page.locator('[role="dialog"]').first();
-      await modalContainer.waitFor({ state: 'visible', timeout: 5000 });
-      await modalContainer.evaluate((el: HTMLElement) => el.focus());
-
-      // Press Escape
-      await page.keyboard.press('Escape');
-
-      // Wait for exit animation to complete (AnimatePresence uses 200ms duration, add buffer)
-      // WebKit needs slightly more time for animation completion
-      await page.waitForTimeout(browserName === 'webkit' ? 800 : 500);
-
-      // Modal should close
-      await expect(modal).not.toBeVisible();
-    });
   });
 
   test.describe('Responsive Behavior', () => {
@@ -420,12 +395,8 @@ test.describe('UI Interactions and Edge Cases', () => {
 
   test.describe('Accessibility', () => {
     test('should have proper button titles', async ({ page }) => {
-      // Settings button should have title
-      const settingsButton = page.locator('header button[title="Settings"]');
-      await expect(settingsButton).toBeVisible();
-
       // Theme button should be present
-      const themeButton = page.locator('header button').nth(1);
+      const themeButton = page.locator('header button');
       await expect(themeButton).toBeVisible();
     });
 
@@ -437,12 +408,22 @@ test.describe('UI Interactions and Edge Cases', () => {
       );
 
       // First, click on a focusable element to ensure document has focus
-      const settingsButton = page.locator('header button[title="Settings"]');
-      await settingsButton.waitFor({ state: 'visible', timeout: 5000 });
-      // Use JavaScript click for Firefox compatibility
-      await jsClick(settingsButton);
+      const themeButton = page.locator('header button');
+      await themeButton.waitFor({ state: 'visible', timeout: 5000 });
 
-      // Settings button should now be focused
+      // Use JavaScript click for Firefox compatibility
+      await jsClick(themeButton);
+
+      // Wait a bit for click to process
+      await page.waitForTimeout(100);
+
+      // Programmatically focus button to ensure it receives focus
+      await themeButton.evaluate((el: HTMLElement) => el.focus());
+
+      // Additional wait for focus to settle
+      await page.waitForTimeout(100);
+
+      // Theme button should now be focused
       let focusedElement = await page.evaluate(() => document.activeElement?.tagName);
       expect(focusedElement).toBeTruthy();
       expect(focusedElement).not.toBe('BODY');

@@ -12,7 +12,6 @@ import { FileView } from './components/FileView';
 
 // Lazy load components that aren't needed on initial render
 const IgnoreList = lazy(() => import('./components/IgnoreList').then(m => ({ default: m.IgnoreList })));
-const SettingsModal = lazy(() => import('./components/SettingsModal').then(m => ({ default: m.SettingsModal })));
 import { useIgnoreList } from './hooks/useIgnoreList';
 import { useFileProcessing } from './hooks/useFileProcessing';
 import { useFileTree } from './hooks/useFileTree';
@@ -48,7 +47,6 @@ export default function App() {
     const saved = localStorage.getItem('concatenator-max-files');
     return saved ? parseInt(saved, 10) : 10000;
   });
-  const [showSettings, setShowSettings] = useState(false);
   const [newIgnoreItem, setNewIgnoreItem] = useState('');
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set(['/', 'root']));
 
@@ -156,7 +154,6 @@ export default function App() {
       <Header
         isDarkMode={isDarkMode}
         setIsDarkMode={setIsDarkMode}
-        setShowSettings={setShowSettings}
       />
 
       <main id="main-content" className="max-w-4xl mx-auto px-6 py-8 space-y-8">
@@ -246,12 +243,6 @@ export default function App() {
         )}
       </main>
 
-      <Suspense fallback={null}>
-        <SettingsModal
-          show={showSettings}
-          onClose={() => setShowSettings(false)}
-        />
-      </Suspense>
 
       <Footer />
     </div>

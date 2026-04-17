@@ -192,7 +192,7 @@ test.describe('Max File Limit Feature', () => {
         await uploadHelper.setFilesOnInput(files);
 
         // Wait for files to be processed
-        await expect(page.getByText(/Selected Files.*501/)).toBeVisible({ timeout: 15000 });
+        await expect(page.getByText(/Selected Files.*\(501\)/)).toBeVisible({ timeout: 15000 });
 
         // Try to concatenate
         const concatenateButton = page.getByRole('button', { name: /Concatenate & Download/ });
@@ -226,7 +226,7 @@ test.describe('Max File Limit Feature', () => {
         await uploadHelper.setFilesOnInput(files);
 
         // Wait for files to be processed
-        await expect(page.getByText(/Selected Files.*500/)).toBeVisible({ timeout: 15000 });
+        await expect(page.getByText(/Selected Files.*\(500\)/)).toBeVisible({ timeout: 15000 });
 
         // Try to concatenate
         const concatenateButton = page.getByRole('button', { name: /Concatenate & Download/ });

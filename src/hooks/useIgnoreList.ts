@@ -32,7 +32,7 @@ export const useIgnoreList = () => {
           }
         }
       } catch (error) {
-        logger.error('Failed to fetch ignore list from server:', error);
+        logger.warn('Server ignore list unavailable, using localStorage fallback:', error);
       }
 
       // Fallback to localStorage if server fetch fails
