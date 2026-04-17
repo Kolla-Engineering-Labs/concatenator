@@ -2,6 +2,7 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { codecovVitePlugin } from '@codecov/vite-plugin';
+import { visualizer } from 'rollup-plugin-visualizer';
 import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import { config } from 'dotenv';
@@ -59,6 +60,12 @@ export default defineConfig(({ mode }) => {
           useGitHubOIDC: true,
         },
       }),
+      visualizer({
+        open: true,
+        filename: 'concatenator-bundle-stats.html',
+        gzipSize: true,
+        brotliSize: true,
+      }),
     ],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || ''),
@@ -80,6 +87,29 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       sourcemap: true, // Required for detailed bundle analysis
+      chunkSizeWarningLimit: 600,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            // 1. Move React and React-DOM (the biggest blue blocks)
+            if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
+              return 'vendor-react';
+            }
+            // 2. Move Lucide Icons (the purple/blue block on the left)
+            if (id.includes('node_modules/lucide-react')) {
+              return 'vendor-icons';
+            }
+            // 3. Move Framer Motion (the red/brown block)
+            if (id.includes('node_modules/framer-motion')) {
+              return 'vendor-motion';
+            }
+            // 4. Move heavy utils (the green block)
+            if (id.includes('html2canvas') || id.includes('dompurify')) {
+              return 'vendor-utils';
+            }
+          },
+        }
+      },
     },
   };
 });

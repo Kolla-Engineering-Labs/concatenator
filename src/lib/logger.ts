@@ -18,15 +18,24 @@ const DEFAULT_LEVEL: LogLevel = 'info';
 // Internal mutable state for testing
 let _testLevel: LogLevel | null = null;
 
+function isLogLevel(value: string): value is LogLevel {
+  return value in LEVELS;
+}
+
 function getCurrentLevel(): LogLevel {
   // Test override takes precedence
   if (_testLevel !== null) {
     return _testLevel;
   }
   // Then check environment variable
-  const envLevel = process.env.LOG_LEVEL as LogLevel;
-  if (envLevel && envLevel in LEVELS) {
-    return envLevel;
+  const envLevel = process.env.LOG_LEVEL;
+  if (envLevel) {
+    if (isLogLevel(envLevel)) {
+      return envLevel;
+    }
+    console.warn(
+      `[logger] Invalid LOG_LEVEL "${envLevel}". Falling back to default level "${DEFAULT_LEVEL}".`
+    );
   }
   return DEFAULT_LEVEL;
 }

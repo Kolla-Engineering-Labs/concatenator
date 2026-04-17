@@ -5,7 +5,6 @@
 
 import React, { useState, useRef, useCallback } from 'react';
 import JSZip from 'jszip';
-import { jsPDF } from 'jspdf';
 import { FileItem, AppMode, OutputFormat } from '../types';
 import { START_DELIMITER, END_DELIMITER, FILE_END_DELIMITER } from '../constants';
 import { logger } from '../lib/logger';
@@ -125,13 +124,38 @@ export const useFileProcessing = ({ appMode, compiledIgnores, maxFileLimit, isIg
 
           let path = content.substring(pathStart, pathEnd).trim();
 
-          let sanitizedPath = path.replace(/^[/\\]+/, '');
-          while (/^(?:\.\.[/\\])+/.test(sanitizedPath)) {
-            sanitizedPath = sanitizedPath.replace(/^(?:\.\.[/\\])+/, '');
+          // Comprehensive path traversal sanitization
+          let sanitizedPath = path
+            // Remove null bytes
+            .replace(/\x00/g, '')
+            // Normalize backslashes to forward slashes for security
+            .replace(/\\/g, '/')
+            // Remove leading slashes (absolute path prevention)
+            .replace(/^\/+/, '')
+            // Remove Windows drive letters (C:, D:, etc.)
+            .replace(/^[a-zA-Z]:\//, '')
+            // Remove UNC path prefixes (\\?\)
+            .replace(/^\\?\//, '');
+
+          // Resolve all ../ sequences throughout the path using stack-based normalization
+          const parts = sanitizedPath.split('/');
+          const safeParts: string[] = [];
+          for (const part of parts) {
+            if (part === '..') {
+              // Attempt to traverse up - pop the last safe directory if possible
+              // This prevents escaping the root while preserving valid relative navigation
+              if (safeParts.length > 0) {
+                safeParts.pop();
+              }
+              // If at root, ignore the .. (can't go above root)
+            } else if (part === '.' || part === '') {
+              // Skip current directory references and empty parts
+              continue;
+            } else {
+              safeParts.push(part);
+            }
           }
-          if (sanitizedPath.startsWith('..')) {
-            sanitizedPath = sanitizedPath.replace(/^\.\.+/, '');
-          }
+          sanitizedPath = safeParts.join('/');
 
           let fileContent = content.substring(contentStartRaw, fileEndIndex);
           fileContent = fileContent.replace(/^[\r\n]+|[\r\n]+$/g, '');
@@ -419,7 +443,7 @@ export const useFileProcessing = ({ appMode, compiledIgnores, maxFileLimit, isIg
     }
   }, [processUploadedFiles, setIsProcessing, maxFileLimit, isIgnored, isIgnoreListLoading]);
 
-  const handleConcatenate = useCallback((filteredFiles: FileItem[], outputFormat: OutputFormat = 'text') => {
+  const handleConcatenate = useCallback(async (filteredFiles: FileItem[], outputFormat: OutputFormat = 'text') => {
     if (filteredFiles.length === 0) return;
 
     if (filteredFiles.length > maxFileLimit) {
@@ -442,7 +466,8 @@ export const useFileProcessing = ({ appMode, compiledIgnores, maxFileLimit, isIg
     const fileList = filteredFiles.filter(f => f.kind === 'file');
 
     if (outputFormat === 'pdf') {
-      // Generate PDF
+      // Dynamically import jsPDF only when PDF is requested
+      const { default: jsPDF } = await import('jspdf');
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
       const margin = 10;

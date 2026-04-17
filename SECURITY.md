@@ -98,4 +98,4 @@ We thank the security researchers and community members who have responsibly dis
 
 ---
 
-Last updated: 2026
+Last updated: 2026-04-16

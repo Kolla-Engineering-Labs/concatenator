@@ -117,10 +117,10 @@ export const useIgnoreList = () => {
     });
   }, []);
 
-  const removeIgnoreItem = (item: string) => {
+  const removeIgnoreItem = useCallback((item: string) => {
     isUserModified.current = true;
     setIgnoreList(prev => prev.filter(i => i !== item));
-  };
+  }, []);
 
   return {
     ignoreList,

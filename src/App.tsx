@@ -3,14 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, lazy, Suspense } from 'react';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { ModeToggle } from './components/ModeToggle';
 import { UploadZone } from './components/UploadZone';
-import { IgnoreList } from './components/IgnoreList';
 import { FileView } from './components/FileView';
-import { SettingsModal } from './components/SettingsModal';
+
+// Lazy load components that aren't needed on initial render
+const IgnoreList = lazy(() => import('./components/IgnoreList').then(m => ({ default: m.IgnoreList })));
+const SettingsModal = lazy(() => import('./components/SettingsModal').then(m => ({ default: m.SettingsModal })));
 import { useIgnoreList } from './hooks/useIgnoreList';
 import { useFileProcessing } from './hooks/useFileProcessing';
 import { useFileTree } from './hooks/useFileTree';
@@ -217,18 +219,20 @@ export default function App() {
 
         {appMode === 'concatenate' && (
           <>
-            <IgnoreList
-              ignoreList={ignoreList}
-              isIgnoreListMinimized={isIgnoreListMinimized}
-              setIsIgnoreListMinimized={setIsIgnoreListMinimized}
-              newIgnoreItem={newIgnoreItem}
-              setNewIgnoreItem={setNewIgnoreItem}
-              addIgnoreItem={() => {
-                addIgnoreItem(newIgnoreItem);
-                setNewIgnoreItem('');
-              }}
-              removeIgnoreItem={removeIgnoreItem}
-            />
+            <Suspense fallback={<div className="h-20 animate-pulse bg-slate-100 dark:bg-slate-800 rounded-xl" />}>
+              <IgnoreList
+                ignoreList={ignoreList}
+                isIgnoreListMinimized={isIgnoreListMinimized}
+                setIsIgnoreListMinimized={setIsIgnoreListMinimized}
+                newIgnoreItem={newIgnoreItem}
+                setNewIgnoreItem={setNewIgnoreItem}
+                addIgnoreItem={() => {
+                  addIgnoreItem(newIgnoreItem);
+                  setNewIgnoreItem('');
+                }}
+                removeIgnoreItem={removeIgnoreItem}
+              />
+            </Suspense>
 
             <FileView
               files={files}
@@ -250,17 +254,19 @@ export default function App() {
         )}
       </main>
 
-      <SettingsModal
-        show={showSettings}
-        onClose={() => setShowSettings(false)}
-        apiKey={apiKey}
-        setApiKey={setApiKey}
-        openaiKey={openaiKey}
-        setOpenaiKey={setOpenaiKey}
-        anthropicKey={anthropicKey}
-        setAnthropicKey={setAnthropicKey}
-        onSave={handleSaveSettings}
-      />
+      <Suspense fallback={null}>
+        <SettingsModal
+          show={showSettings}
+          onClose={() => setShowSettings(false)}
+          apiKey={apiKey}
+          setApiKey={setApiKey}
+          openaiKey={openaiKey}
+          setOpenaiKey={setOpenaiKey}
+          anthropicKey={anthropicKey}
+          setAnthropicKey={setAnthropicKey}
+          onSave={handleSaveSettings}
+        />
+      </Suspense>
 
       <Footer />
     </div>
