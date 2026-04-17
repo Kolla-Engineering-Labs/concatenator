@@ -254,7 +254,7 @@ We aim for high test coverage on core logic. Coverage reports are generated auto
    - `src/components/*` — Any React component changes
    - Framer Motion animations — Motion/transition changes
    - File System Access API logic — Drag-and-drop, file picker interactions
-   - Mode toggles, output format changes, or settings modal updates
+   - Mode toggles, output format changes
 
 4. **Update documentation**:
    - Update `README.md` if adding new features

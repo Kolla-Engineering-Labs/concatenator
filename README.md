@@ -157,10 +157,6 @@ Concatenator uses a hierarchical approach for API key management to ensure flexi
 - Keys are never written to disk in the browser
 - Environment variables can still be used for server-side builds
 
-### Hierarchical Resolution
-1. **Session Input**: Keys entered in the **Settings Modal** are held in memory and take the highest priority for the current session.
-2. **Environment Fallback**: If no in-memory key is set, the app falls back to the `GEMINI_API_KEY`, `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY` defined in your environment.
-
 ### Configuration
 Create a `.env` file in the root directory and add your API keys:
 

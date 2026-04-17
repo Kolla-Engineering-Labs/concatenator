@@ -11,7 +11,6 @@ import { TreeItem } from '../src/types';
 
 describe('Header Component', () => {
   const mockSetIsDarkMode = vi.fn();
-  const mockSetShowSettings = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -22,47 +21,18 @@ describe('Header Component', () => {
       <Header
         isDarkMode={false}
         setIsDarkMode={mockSetIsDarkMode}
-        setShowSettings={mockSetShowSettings}
       />
     );
 
     expect(screen.getByText('Concatenator')).toBeInTheDocument();
   });
 
-  it('renders settings button', () => {
-    render(
-      <Header
-        isDarkMode={false}
-        setIsDarkMode={mockSetIsDarkMode}
-        setShowSettings={mockSetShowSettings}
-      />
-    );
-
-    const settingsButton = screen.getByTitle('Settings');
-    expect(settingsButton).toBeInTheDocument();
-  });
-
-  it('calls setShowSettings when settings button clicked', () => {
-    render(
-      <Header
-        isDarkMode={false}
-        setIsDarkMode={mockSetIsDarkMode}
-        setShowSettings={mockSetShowSettings}
-      />
-    );
-
-    const settingsButton = screen.getByTitle('Settings');
-    fireEvent.click(settingsButton);
-
-    expect(mockSetShowSettings).toHaveBeenCalledWith(true);
-  });
 
   it('shows moon icon in light mode', () => {
     render(
       <Header
         isDarkMode={false}
         setIsDarkMode={mockSetIsDarkMode}
-        setShowSettings={mockSetShowSettings}
       />
     );
 
@@ -75,7 +45,6 @@ describe('Header Component', () => {
       <Header
         isDarkMode={true}
         setIsDarkMode={mockSetIsDarkMode}
-        setShowSettings={mockSetShowSettings}
       />
     );
 
@@ -87,11 +56,10 @@ describe('Header Component', () => {
       <Header
         isDarkMode={false}
         setIsDarkMode={mockSetIsDarkMode}
-        setShowSettings={mockSetShowSettings}
       />
     );
 
-    const themeButton = screen.getByRole('button', { name: '' }); // Theme toggle has no text
+    const themeButton = screen.getByRole('button', { name: 'Switch to dark mode' });
     fireEvent.click(themeButton);
 
     expect(mockSetIsDarkMode).toHaveBeenCalledWith(true);
@@ -102,7 +70,6 @@ describe('Header Component', () => {
       <Header
         isDarkMode={false}
         setIsDarkMode={mockSetIsDarkMode}
-        setShowSettings={mockSetShowSettings}
       />
     );
 

@@ -330,7 +330,7 @@ test.describe('Concatenate Mode', () => {
 
       // Click theme toggle button (moon icon in light mode)
       // Use JavaScript click for Firefox compatibility
-      const themeButton = page.locator('header button').nth(1); // Second button in header (after settings)
+      const themeButton = page.locator('header button'); // First button in header
       await themeButton.waitFor({ state: 'visible', timeout: 5000 });
       await jsClick(themeButton);
 
