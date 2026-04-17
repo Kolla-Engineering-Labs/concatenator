@@ -55,7 +55,6 @@ graph LR
   - Dark Mode optimized for long coding sessions.
   - Automatic de-concatenation upon dropping a compatible `.txt` file.
   - Output format toggle (TEXT/PDF) with localStorage persistence.
-- **BYOK (Bring Your Own Key)**: Integrated settings to manage API keys for Gemini, OpenAI, and Anthropic. Keys are held **in-memory only** for the current session and are not persisted to browser storage.
 - **Hardware Safety Guardrails**: Configurable **Max File Limit** (default: 10,000 files) to prevent browser memory exhaustion.
 
 > [!WARNING]

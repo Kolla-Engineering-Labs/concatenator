@@ -456,20 +456,5 @@ test.describe('UI Interactions and Edge Cases', () => {
       expect(focusedElement).not.toBe('BODY');
     });
 
-    test('settings inputs should have labels', async ({ page }) => {
-      // Open settings using JavaScript click for Firefox compatibility
-      const settingsButton = page.locator('header button[title="Settings"]');
-      await settingsButton.waitFor({ state: 'visible', timeout: 5000 });
-      await jsClick(settingsButton);
-
-      // Check for labeled inputs
-      const geminiLabel = page.getByText('Gemini API Key');
-      const openaiLabel = page.getByText('OpenAI API Key');
-      const anthropicLabel = page.getByText('Anthropic API Key');
-
-      await expect(geminiLabel).toBeVisible();
-      await expect(openaiLabel).toBeVisible();
-      await expect(anthropicLabel).toBeVisible();
-    });
-  });
+      });
 });
