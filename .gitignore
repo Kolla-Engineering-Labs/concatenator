@@ -13,6 +13,8 @@ playwright-report/
 test-results/
 blob-report/
 test-output/
+concatenator-db/
+concatenator-bundle-stats.html
 
 # Worker-specific ignore files (parallel testing)
 .concatenate-ignore-worker-*

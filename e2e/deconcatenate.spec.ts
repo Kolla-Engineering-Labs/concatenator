@@ -456,6 +456,137 @@ test.describe('De-concatenate Mode', () => {
     });
   });
 
+  test.describe('Security - Path Traversal Protection', () => {
+    test('should sanitize path traversal attempts in de-concatenated ZIP', async ({ page }) => {
+      const uploadHelper = new FileUploadHelper(page);
+
+      // Create malicious concatenated file with various path traversal attempts
+      const maliciousFiles = [
+        { path: '../../../etc/passwd', content: 'should not escape root' },
+        { path: 'foo/bar/../../../../etc/hosts', content: 'mid-path traversal' },
+        { path: '/absolute/path/to/file.txt', content: 'absolute path attempt' },
+        { path: 'C:\\Windows\\System32\\secret.dll', content: 'windows path attempt' },
+        { path: 'valid/path/file.txt', content: 'valid file should work' },
+        { path: './../../../etc/shadow', content: 'relative prefix traversal' },
+        { path: 'deep/nested/../../../../../../etc/crontab', content: 'deep traversal' },
+      ];
+
+      const mockContent = createMockConcatenatedFile(maliciousFiles);
+
+      try {
+        // Wait for the download event
+        const [download] = await Promise.all([
+          page.waitForEvent('download', { timeout: 30000 }),
+          uploadHelper.uploadSingleFile('malicious-traversal.txt', mockContent),
+        ]);
+
+        // Verify it's a ZIP file
+        expect(download.suggestedFilename()).toMatch(/\.zip$/i);
+
+        const downloadPath = await download.path();
+        expect(downloadPath).toBeTruthy();
+
+        if (downloadPath) {
+          const zipContent = fs.readFileSync(downloadPath);
+          const zip = await JSZip.loadAsync(zipContent);
+
+          // Get all file paths from the ZIP
+          const zipFilePaths = Object.keys(zip.files).filter(name => !zip.files[name].dir);
+
+          // SECURITY: Verify no paths escape the intended directory structure
+          for (const filePath of zipFilePaths) {
+            // No absolute paths (Unix, Windows, UNC)
+            expect(filePath).not.toMatch(/^\//);
+            expect(filePath).not.toMatch(/^\\/);
+            expect(filePath).not.toMatch(/^[A-Za-z]:/);
+
+            // No path traversal sequences remaining (critical security check)
+            expect(filePath).not.toContain('..');
+
+            // No null bytes
+            expect(filePath).not.toMatch(/\x00/);
+          }
+
+          // Verify the valid file IS present and accessible
+          const validFile = zip.file('valid/path/file.txt');
+          expect(validFile).toBeTruthy();
+          if (validFile) {
+            const content = await validFile.async('text');
+            expect(content).toBe('valid file should work');
+          }
+
+          // Clean up
+          try {
+            let retries = 5;
+            while (retries > 0) {
+              try {
+                fs.unlinkSync(downloadPath);
+                break;
+              } catch (err: any) {
+                if (err.code === 'EBUSY' && retries > 1) {
+                  retries--;
+                  await new Promise(r => setTimeout(r, 100));
+                } else {
+                  throw err;
+                }
+              }
+            }
+          } catch (unlinkErr: unknown) {
+            logger.warn('[deconcatenate] Failed to clean up download file:', unlinkErr);
+          }
+        }
+      } finally {
+        uploadHelper.cleanup();
+      }
+    });
+
+    test('should handle null byte injection attempts safely', async ({ page }) => {
+      const uploadHelper = new FileUploadHelper(page);
+
+      // Null byte injection attempt to bypass extension checks
+      const maliciousFiles = [
+        { path: 'malicious.exe\x00.txt', content: 'null byte injection attempt' },
+        { path: 'script.js', content: 'normal script' },
+      ];
+
+      const mockContent = createMockConcatenatedFile(maliciousFiles);
+
+      try {
+        const [download] = await Promise.all([
+          page.waitForEvent('download', { timeout: 30000 }),
+          uploadHelper.uploadSingleFile('null-byte-attack.txt', mockContent),
+        ]);
+
+        const downloadPath = await download.path();
+        expect(downloadPath).toBeTruthy();
+
+        if (downloadPath) {
+          const zipContent = fs.readFileSync(downloadPath);
+          const zip = await JSZip.loadAsync(zipContent);
+
+          // Verify null bytes are stripped from filenames
+          const zipFilePaths = Object.keys(zip.files).filter(name => !zip.files[name].dir);
+          for (const filePath of zipFilePaths) {
+            expect(filePath).not.toMatch(/\x00/);
+            // Should not contain .exe extension after the null byte trick
+            expect(filePath.toLowerCase()).not.toMatch(/\.exe$/);
+          }
+
+          // Normal file should still work
+          const normalFile = zip.file('script.js');
+          expect(normalFile).toBeTruthy();
+
+          // Clean up
+          try {
+            fs.unlinkSync(downloadPath);
+          } catch {}
+        }
+      } finally {
+        uploadHelper.cleanup();
+      }
+    });
+  });
+
   test.describe('Error Handling', () => {
     test('should handle empty concatenated file', async ({ page }) => {
       const uploadHelper = new FileUploadHelper(page);
