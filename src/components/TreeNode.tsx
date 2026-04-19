@@ -20,11 +20,11 @@ interface TreeNodeProps {
 /**
  * A recursive component that renders a file tree structure.
  */
-export const TreeNode: React.FC<TreeNodeProps> = ({ 
-  node, 
-  depth = 0, 
-  expandedPaths, 
-  setExpandedPaths 
+export const TreeNode: React.FC<TreeNodeProps> = ({
+  node,
+  depth = 0,
+  expandedPaths,
+  setExpandedPaths
 }) => {
   const isExpanded = expandedPaths.has(node.path);
   const hasChildren = node.children && node.children.length > 0;
@@ -38,7 +38,7 @@ export const TreeNode: React.FC<TreeNodeProps> = ({
 
   return (
     <div className="select-none">
-      <div 
+      <div
         className={cn(
           "flex items-center py-1 px-2 rounded-md cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors",
           depth === 0 && "font-semibold text-slate-500"
@@ -58,11 +58,11 @@ export const TreeNode: React.FC<TreeNodeProps> = ({
             {getFileIcon(node.name, 'file')}
           </div>
         )}
-        <span className="text-sm truncate">
+        <span className="text-sm truncate ph-no-capture">
           {node.name}{node.kind === 'directory' && node.name !== 'Root' ? '/' : ''}
         </span>
       </div>
-      
+
       <AnimatePresence>
         {isExpanded && hasChildren && (
           <motion.div
@@ -73,9 +73,9 @@ export const TreeNode: React.FC<TreeNodeProps> = ({
           >
             {node.children?.map((child, index) => (
               <TreeNode
-                key={`${depth + 1}-${child.path}-${index}`} 
-                node={child} 
-                depth={depth + 1} 
+                key={`${depth + 1}-${child.path}-${index}`}
+                node={child}
+                depth={depth + 1}
                 expandedPaths={expandedPaths}
                 setExpandedPaths={setExpandedPaths}
               />
