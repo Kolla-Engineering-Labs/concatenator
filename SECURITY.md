@@ -1,5 +1,14 @@
 # 🛡️ Security Policy
 
+## Table of Contents
+
+- [Reporting a Vulnerability](#reporting-a-vulnerability)
+- [Security Best Practices for Users](#security-best-practices-for-users)
+- [Security-Related Configuration](#security-related-configuration)
+- [Known Security Considerations](#known-security-considerations)
+- [Security Updates](#security-updates)
+- [Acknowledgments](#acknowledgments)
+
 ## 🛡️ Reporting a Vulnerability
 
 We take the security of Concatenator seriously. If you believe you have found a security vulnerability, please report it to us as described below.

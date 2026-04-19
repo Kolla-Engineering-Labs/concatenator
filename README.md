@@ -7,6 +7,17 @@
 
 A professional, minimalist tool designed to streamline the process of merging multiple source files into a single, well-formatted text document and extracting them back. Concatenator is specifically optimized for developers who need to provide large amounts of context to Large Language Models (LLMs) or manage multi-file codebases in a single view.
 
+## Table of Contents
+
+- [Why Concatenator?](#why-concatenator)
+- [Key Features](#key-features)
+- [Tech Stack](#tech-stack)
+- [Development](#development)
+- [Installation & Setup](#installation--setup)
+- [Environment Variables](#environment-variables)
+- [Usage](#usage)
+- [Contribution](#contribution)
+
 ### 💡 Why Concatenator?
 Developers often struggle to provide full codebase context to LLMs due to file-count limits or token fragmentation. Concatenator streamlines this by bundling your project into a single, parseable file—optimizing context retention while providing a "safety net" to restore your files instantly.
 
@@ -38,8 +49,6 @@ graph LR
     style E fill:#d97706,color:#fff
     style F fill:#d97706,color:#fff
     style I fill:#059669,color:#fff
-
-    linkStyle 4,5 stroke:#059669,stroke-width:2px,stroke-dasharray: 5 5
 ```
 
 - **Multiple Output Formats**:
