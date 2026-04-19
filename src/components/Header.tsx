@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { Files, Sun, Moon } from 'lucide-react';
+import { ConcatenatorLogo } from './ConcatenatorLogo';
 
 interface HeaderProps {
   isDarkMode: boolean;
@@ -22,9 +23,7 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="sticky top-0 z-50 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
       <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-brand-500 rounded-xl shadow-lg shadow-brand-500/20">
-            <Files className="w-6 h-6 text-white" />
-          </div>
+          <ConcatenatorLogo className="h-12 w-auto" />
           <h1 className="text-xl font-display font-bold tracking-tight">Concatenator</h1>
         </div>
 
