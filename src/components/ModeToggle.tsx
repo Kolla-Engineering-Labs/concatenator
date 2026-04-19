@@ -16,10 +16,10 @@ interface ModeToggleProps {
 /**
  * A toggle switch to change between Concatenate and De-concatenate modes.
  */
-export const ModeToggle: React.FC<ModeToggleProps> = ({ 
-  appMode, 
-  setAppMode, 
-  onModeChange 
+export const ModeToggle: React.FC<ModeToggleProps> = ({
+  appMode,
+  setAppMode,
+  onModeChange
 }) => {
   return (
     <div className="flex p-1 bg-slate-200 dark:bg-slate-900 rounded-xl w-fit mx-auto">
@@ -27,8 +27,8 @@ export const ModeToggle: React.FC<ModeToggleProps> = ({
         onClick={() => { setAppMode('concatenate'); onModeChange(); }}
         className={cn(
           "px-6 py-2 rounded-lg text-sm font-medium transition-all",
-          appMode === 'concatenate' 
-            ? "bg-white dark:bg-slate-800 shadow-sm text-brand-600 dark:text-brand-400" 
+          appMode === 'concatenate'
+            ? "bg-white dark:bg-slate-800 shadow-sm text-brand-600 dark:text-brand-400"
             : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
         )}
       >
@@ -38,8 +38,8 @@ export const ModeToggle: React.FC<ModeToggleProps> = ({
         onClick={() => { setAppMode('deconcatenate'); onModeChange(); }}
         className={cn(
           "px-6 py-2 rounded-lg text-sm font-medium transition-all",
-          appMode === 'deconcatenate' 
-            ? "bg-white dark:bg-slate-800 shadow-sm text-brand-600 dark:text-brand-400" 
+          appMode === 'deconcatenate'
+            ? "bg-white dark:bg-slate-800 shadow-sm text-brand-600 dark:text-brand-400"
             : "text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
         )}
       >
