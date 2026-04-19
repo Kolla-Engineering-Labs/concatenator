@@ -4,6 +4,9 @@
  */
 
 import React, { useState, useMemo, useEffect, useCallback, lazy, Suspense } from 'react';
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
+import posthog from 'posthog-js';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { ModeToggle } from './components/ModeToggle';
@@ -164,7 +167,13 @@ export default function App() {
 
           <ModeToggle
             appMode={appMode}
-            setAppMode={setAppMode}
+            setAppMode={(newMode) => {
+              posthog.capture('mode_switched', {
+                target_mode: newMode,
+                previous_mode: appMode
+              });
+              setAppMode(newMode);
+            }}
             onModeChange={() => {
               setFiles([]);
               setImportError(null);
@@ -245,6 +254,8 @@ export default function App() {
 
 
       <Footer />
+      <Analytics />
+      <SpeedInsights />
     </div>
   );
 }
