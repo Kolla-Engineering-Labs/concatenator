@@ -140,11 +140,11 @@ export default function App() {
     } else {
       setFiles(prev => prev.filter(f => f.path !== file.path));
     }
-  }, []);
+  }, [setFiles]);
 
   const handleClearAll = useCallback(() => {
     setFiles([]);
-  }, []);
+  }, [setFiles]);
 
   return (
     <div className="min-h-screen font-sans transition-colors duration-300 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">

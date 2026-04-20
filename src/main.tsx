@@ -20,7 +20,7 @@ posthog.init(import.meta.env.VITE_POSTHOG_KEY, {
 });
 
 // if (import.meta.env.DEV) {
-  (window as any).posthog = posthog;
+  (window as Window & { posthog?: typeof posthog }).posthog = posthog;
 // }
 
 createRoot(document.getElementById('root')!).render(

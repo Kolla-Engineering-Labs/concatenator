@@ -46,7 +46,7 @@ export const useIgnoreList = () => {
               setIgnoreList(parsed.sort((a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base' })));
             }
           }
-        } catch (e) {
+        } catch {
           logger.error("Local storage 'concatenate-ignore' JSON is corrupted. Restoring default ignore list and overwriting old data.");
           window.alert("Your custom ignore list was corrupted and has been reset to defaults.");
           setIgnoreList([...DEFAULT_IGNORE_LIST].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })));
@@ -94,7 +94,7 @@ export const useIgnoreList = () => {
           const flags = pattern.slice(lastSlash + 1);
           try {
             return new RegExp(body, flags);
-          } catch (e) {
+          } catch {
             return pattern; // Fall back to literal match
           }
         }

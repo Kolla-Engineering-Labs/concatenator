@@ -3,12 +3,8 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import fs from "fs/promises";
 import { mkdirSync } from "fs";
-import { fileURLToPath } from "url";
 import { rateLimit } from "express-rate-limit";
 import { logger } from "./src/lib/logger.js";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
@@ -38,8 +34,8 @@ async function startServer() {
   // Ensure the temp_ignore_files directory exists
   try {
     mkdirSync(IGNORE_FILES_DIR, { recursive: true });
-  } catch (err) {
-    logger.error("Failed to create ignore files directory:", err);
+  } catch {
+    logger.error("Failed to create ignore files directory");
   }
 
   /**
@@ -88,7 +84,7 @@ async function startServer() {
     let ignoreFilePath: string;
     try {
       ignoreFilePath = getIgnoreFilePath(workerId);
-    } catch (err) {
+    } catch {
       return res.status(400).json({ error: "Invalid worker ID" });
     }
     try {
@@ -118,7 +114,7 @@ async function startServer() {
     let ignoreFilePath: string;
     try {
       ignoreFilePath = getIgnoreFilePath(workerId);
-    } catch (err) {
+    } catch {
       return res.status(400).json({ error: "Invalid worker ID" });
     }
     try {
@@ -138,18 +134,13 @@ async function startServer() {
   // Test-only endpoint to reset ignore list to defaults
   if (process.env.NODE_ENV !== "production") {
     app.delete("/api/ignore-list", async (req, res) => {
-      const workerId = req.headers["x-worker-id"] as string | undefined;
-      let ignoreFilePath: string;
       try {
-        ignoreFilePath = getIgnoreFilePath(workerId);
-      } catch (err) {
-        return res.status(400).json({ error: "Invalid worker ID" });
-      }
-      // Only allow deletion of worker-specific files (not the default)
-      if (ignoreFilePath === DEFAULT_IGNORE_FILE_PATH) {
-        return res.status(400).json({ error: "Cannot delete default ignore file" });
-      }
-      try {
+        const workerId = req.headers["x-worker-id"] as string | undefined;
+        const ignoreFilePath = getIgnoreFilePath(workerId);
+        // Only allow deletion of worker-specific files (not the default)
+        if (ignoreFilePath === DEFAULT_IGNORE_FILE_PATH) {
+          return res.status(400).json({ error: "Cannot delete default ignore file" });
+        }
         await fs.unlink(ignoreFilePath).catch(() => {});
         res.json({ success: true });
       } catch (error) {

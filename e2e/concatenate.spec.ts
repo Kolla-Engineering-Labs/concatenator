@@ -166,7 +166,7 @@ test.describe('Concatenate Mode', () => {
   });
 
   test.describe('Ignore List Management', () => {
-    test('should add ignore patterns', async ({ page, browserName }) => {
+    test('should add ignore patterns', async ({ page }) => {
       const uploadHelper = new FileUploadHelper(page);
 
       try {
@@ -218,7 +218,7 @@ test.describe('Concatenate Mode', () => {
       }
     });
 
-    test('should remove ignore patterns', async ({ page, browserName }) => {
+    test('should remove ignore patterns', async ({ page }) => {
       const uploadHelper = new FileUploadHelper(page);
 
       try {
@@ -278,7 +278,7 @@ test.describe('Concatenate Mode', () => {
       }
     });
 
-    test('should support regex ignore patterns', async ({ page, browserName }) => {
+    test('should support regex ignore patterns', async ({ page }) => {
       const uploadHelper = new FileUploadHelper(page);
 
       try {
@@ -304,11 +304,11 @@ test.describe('Concatenate Mode', () => {
         // Add regex pattern - wait for input to be ready
         const ignoreInput = page.getByPlaceholder('Add ignore pattern...');
         await ignoreInput.waitFor({ state: 'visible', timeout: 10000 });
-        await ignoreInput.fill('/\.spec\.ts$/');
+        await ignoreInput.fill('/\\.spec\\.ts$/');
         await ignoreInput.press('Enter');
 
         // Verify pattern added
-        await expect(page.getByText('/\.spec\.ts$/')).toBeVisible({ timeout: 10000 });
+        await expect(page.getByText('/\\.spec\\.ts$/')).toBeVisible({ timeout: 10000 });
 
         // Wait for network to be idle to ensure server save completes before asserting.
         await page.waitForLoadState('networkidle');

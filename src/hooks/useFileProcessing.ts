@@ -164,8 +164,8 @@ export const useFileProcessing = ({ appMode, compiledIgnores, maxFileLimit, isIg
 
           // Comprehensive path traversal sanitization
           let sanitizedPath = path
-            // Remove null bytes
-            .replace(/\x00/g, '')
+            // Remove null bytes (using char code to avoid ESLint control-regex error)
+            .replace(new RegExp(String.fromCharCode(0), 'g'), '')
             // Normalize backslashes to forward slashes for security
             .replace(/\\/g, '/')
             // Remove leading slashes (absolute path prevention)
@@ -270,7 +270,7 @@ export const useFileProcessing = ({ appMode, compiledIgnores, maxFileLimit, isIg
       if (cancelImportRef.current) break;
 
       const file = uploadedFiles[i];
-      const path = (file as any).webkitRelativePath || file.name;
+      const path = (file as { webkitRelativePath?: string }).webkitRelativePath || file.name;
 
       const content = await new Promise<string | ArrayBuffer | null>((resolve, reject) => {
         const reader = new FileReader();
@@ -386,9 +386,9 @@ export const useFileProcessing = ({ appMode, compiledIgnores, maxFileLimit, isIg
     const items = e.dataTransfer.items;
     if (!items) return;
 
-    const entries: any[] = [];
+    const entries: FileSystemEntry[] = [];
     for (let i = 0; i < items.length; i++) {
-      const entry = items[i].webkitGetAsEntry();
+      const entry = items[i].webkitGetAsEntry() as FileSystemEntry | null;
       if (entry) {
         entries.push(entry);
       }
@@ -405,28 +405,22 @@ export const useFileProcessing = ({ appMode, compiledIgnores, maxFileLimit, isIg
 
     const droppedFiles: File[] = [];
 
-    let skippedCount = 0;
-    let processedCount = 0;
-
-    const traverseEntry = async (entry: any, path: string = '', isRoot: boolean = false) => {
+    const traverseEntry = async (entry: FileSystemEntry, path = '') => {
       if (cancelImportRef.current) return;
 
       const fullPath = path + entry.name;
 
       // Skip directories (root or nested) that are explicitly blocked by ignore list
       if (entry.isDirectory && isIgnored(fullPath)) {
-        skippedCount++;
         return;
       }
 
       // Skip files that are explicitly blocked by ignore list
       if (entry.isFile && isIgnored(fullPath)) {
-        skippedCount++;
         return;
       }
 
-      if (entry.isFile) {
-        processedCount++;
+      if (entry.isFile && 'file' in entry) {
         // Check max file limit before adding (halt immediately when exceeded)
         if (droppedFiles.length >= maxFileLimit) {
           setImportError(`Import halted: The folder contains more than ${maxFileLimit} files. Please increase the Max Files limit or select a folder with fewer files.`);
@@ -436,7 +430,8 @@ export const useFileProcessing = ({ appMode, compiledIgnores, maxFileLimit, isIg
 
         setImportProgress(prev => ({ ...prev, total: prev.total + 1 }));
         const file = await new Promise<File>((resolve, reject) => {
-          entry.file((f: File) => resolve(f), (err: any) => reject(err));
+          const fileEntry = entry as FileSystemFileEntry;
+          fileEntry.file((f: File) => resolve(f), (err: Error) => reject(err));
         });
         if (cancelImportRef.current) return;
 
@@ -446,43 +441,43 @@ export const useFileProcessing = ({ appMode, compiledIgnores, maxFileLimit, isIg
           configurable: true
         });
         droppedFiles.push(file);
-      } else if (entry.isDirectory) {
+      } else if (entry.isDirectory && 'createReader' in entry) {
         let reader;
         try {
-          reader = entry.createReader();
+          reader = (entry as FileSystemDirectoryEntry).createReader();
         } catch (err) {
           logger.error('Failed to create directory reader:', err);
           return;
         }
-        const entriesBatch = await new Promise<any[]>((resolve) => {
-          const allEntries: any[] = [];
+        const entriesBatch = await new Promise<FileSystemEntry[]>((resolve) => {
+          const allEntries: FileSystemEntry[] = [];
           const readBatch = () => {
             if (cancelImportRef.current) {
               resolve([]);
               return;
             }
-            reader.readEntries((batch: any[]) => {
+            reader.readEntries((batch: FileSystemEntry[]) => {
               if (batch.length === 0) {
                 resolve(allEntries);
               } else {
                 allEntries.push(...batch);
                 readBatch();
               }
-            }, (_err: any) => resolve(allEntries));
+            }, () => resolve(allEntries));
           };
           readBatch();
         });
 
         for (const childEntry of entriesBatch) {
           if (cancelImportRef.current) break;
-          await traverseEntry(childEntry, fullPath + '/', false);
+          await traverseEntry(childEntry, fullPath + '/');
         }
       }
     };
 
     for (const entry of entries) {
       if (cancelImportRef.current) break;
-      await traverseEntry(entry, '', true);
+      await traverseEntry(entry, '');
     }
 
     // Check if user cancelled during traversal (Bug 2 fix)

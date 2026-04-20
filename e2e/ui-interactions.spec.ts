@@ -169,7 +169,7 @@ test.describe('UI Interactions and Edge Cases', () => {
   });
 
   test.describe('Responsive Behavior', () => {
-    test('should adapt layout on mobile viewport', async ({ page, context, browserName }) => {
+    test('should adapt layout on mobile viewport', async ({ page, browserName }) => {
       // Skip on Firefox and WebKit due to known Playwright setViewportSize timeout issues
       test.skip(
         browserName === 'firefox' || browserName === 'webkit',

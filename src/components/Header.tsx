@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { Files, Sun, Moon } from 'lucide-react';
+import { Sun, Moon } from 'lucide-react';
 import { ConcatenatorLogo } from './ConcatenatorLogo';
 
 interface HeaderProps {

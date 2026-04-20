@@ -13,7 +13,8 @@ describe('cn utility function', () => {
   });
 
   it('filters out falsy values', () => {
-    const result = cn('class1', false && 'class2', 'class3', null, undefined, 0, '');
+    const shouldShow = false;
+    const result = cn('class1', shouldShow && 'class2', 'class3', null, undefined, 0, '');
     expect(result).toBe('class1 class3');
   });
 

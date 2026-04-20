@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { test as baseTest, expect, type Page, type APIRequestContext } from '@playwright/test';
+import { test as baseTest, expect, type APIRequestContext } from '@playwright/test';
 
 type TestFixtures = {
   apiContext: APIRequestContext;
