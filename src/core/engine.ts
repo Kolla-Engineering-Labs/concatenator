@@ -6,9 +6,9 @@
 import { START_DELIMITER, END_DELIMITER, FILE_END_DELIMITER } from './constants'
 
 /**
- * Represents a single file extracted from concatenated content
+ * Represents a virtual file with path and content
  */
-export interface ExtractedFile {
+export interface VirtualFile {
   path: string
   content: string
 }
@@ -17,7 +17,7 @@ export interface ExtractedFile {
  * Result of parsing concatenated content
  */
 export interface DeconcatenateResult {
-  files: ExtractedFile[]
+  files: VirtualFile[]
   skippedPaths: string[]
   foundAny: boolean
 }
@@ -43,7 +43,7 @@ export interface ConcatenateInputFile {
  * @returns DeconcatenateResult with extracted files and skipped paths
  */
 export function deconcatenate(content: string): DeconcatenateResult {
-  const files: ExtractedFile[] = []
+  const files: VirtualFile[] = []
   const skippedPaths: string[] = []
   const addedPaths = new Set<string>()
 

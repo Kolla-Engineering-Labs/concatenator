@@ -16,6 +16,7 @@ import {
   concatenate,
   generateFileTimestamp,
 } from '../../../../core/engine'
+import { createZipFromVirtualFiles } from '../../../../drivers/zip-driver'
 import { logger } from '../../../../lib/logger'
 
 interface UseFileProcessingProps {
@@ -585,6 +586,41 @@ export const useFileProcessing = ({
     [setIsProcessing, maxFileLimit]
   )
 
+  const handleDownloadAsZip = useCallback(
+    async (filteredFiles: FileItem[]) => {
+      const fileList = filteredFiles.filter((f) => f.kind === 'file')
+
+      if (fileList.length === 0) return
+
+      setIsProcessing(true)
+
+      try {
+        const virtualFiles = fileList.map((f) => ({
+          path: f.path,
+          content: typeof f.content === 'string' ? f.content : '',
+        }))
+
+        const zipData = await createZipFromVirtualFiles(virtualFiles)
+        const blob = new Blob([zipData.buffer as ArrayBuffer], { type: 'application/zip' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        const fileTimestamp = generateFileTimestamp()
+        a.download = `concatenator-${fileTimestamp}.zip`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+      } catch (error) {
+        logger.error('Failed to create ZIP:', error)
+        setImportError('Failed to create ZIP archive')
+      } finally {
+        setIsProcessing(false)
+      }
+    },
+    [setIsProcessing]
+  )
+
   return {
     files,
     setFiles,
@@ -598,5 +634,6 @@ export const useFileProcessing = ({
     handleDrop,
     handleConcatenate,
     handleDeconcatenate,
+    handleDownloadAsZip,
   }
 }

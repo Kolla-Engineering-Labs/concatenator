@@ -93,6 +93,7 @@ export default function App() {
     handleFileUpload,
     handleDrop,
     handleConcatenate,
+    handleDownloadAsZip,
   } = useFileProcessing({
     appMode,
     compiledIgnores,
@@ -284,6 +285,7 @@ export default function App() {
               }
               onClearAll={handleClearAll}
               onIgnoreFile={addIgnoreItem}
+              onDownloadAsZip={() => handleDownloadAsZip?.(filteredFiles)}
               onRemoveFile={handleRemoveFile}
               outputFormat={outputFormat}
               setOutputFormat={setOutputFormat}
