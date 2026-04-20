@@ -21,3 +21,15 @@ export interface TreeItem {
 export type ViewMode = 'list' | 'tree'
 export type AppMode = 'concatenate' | 'deconcatenate'
 export type OutputFormat = 'text' | 'pdf'
+
+/**
+ * Result of validating a concatenated content string
+ */
+export interface ValidationResult {
+  isValid: boolean
+  sessionId: string | null
+  fileCount: number
+  detectedFiles: string[]
+  errors: string[]
+  warnings: string[]
+}

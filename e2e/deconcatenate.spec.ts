@@ -62,20 +62,23 @@ async function resetIgnoreList(apiContext: APIRequestContext): Promise<void> {
  * Format uses the app's actual delimiters from constants.ts
  */
 function createMockConcatenatedFile(
-  files: Array<{ path: string; content: string }>
+  files: Array<{ path: string; content: string }>,
+  sessionId: string = 'e2e001'
 ): string {
   const lines: string[] = []
 
   const now = new Date()
   const timestamp = now.toLocaleString()
 
+  // Manifest header with session ID
+  lines.push(`--- CONCATENATOR_SESSION_ID: ${sessionId} ---`)
   lines.push(`Concatenated on: ${timestamp}`)
   lines.push('')
 
   for (const file of files) {
-    lines.push(`<<<<< CONCATENATOR_FILE_START: ${file.path} >>>>>`)
+    lines.push(`<<<<< FILE_START: ${file.path} (ID: ${sessionId}) >>>>>`)
     lines.push(file.content)
-    lines.push('<<<<< CONCATENATOR_FILE_END >>>>>')
+    lines.push('<<<<< FILE_END >>>>>')
     lines.push('')
   }
 
@@ -779,11 +782,14 @@ ${Buffer.from([0x00, 0x01, 0x02, 0xff, 0xfe]).toString('base64')}
       const uploadHelper = new FileUploadHelper(page)
 
       // Create concatenated content where first file is missing end marker
-      const partialContent = `<<<<< CONCATENATOR_FILE_START: partial.txt >>>>>
+      const partialContent = `--- CONCATENATOR_SESSION_ID: e2e001 ---
+Concatenated on: 2024-01-01
+
+<<<<< FILE_START: partial.txt (ID: e2e001) >>>>>
 This content has no end delimiter
-<<<<< CONCATENATOR_FILE_START: valid.txt >>>>>
+<<<<< FILE_START: valid.txt (ID: e2e001) >>>>>
 This content is valid
-<<<<< CONCATENATOR_FILE_END >>>>>
+<<<<< FILE_END >>>>>
 `
 
       try {

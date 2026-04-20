@@ -15,7 +15,9 @@ import {
   deconcatenate,
   concatenate,
   generateFileTimestamp,
+  validateConcatenation,
 } from '../../../../core/engine'
+import type { ValidationResult } from '../../../../core/types'
 import { createZipFromVirtualFiles } from '../../../../drivers/zip-driver'
 import { logger } from '../../../../lib/logger'
 
@@ -40,6 +42,8 @@ export const useFileProcessing = ({
   const isProcessingRef = useRef(false)
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0 })
   const [importError, setImportError] = useState<string | null>(null)
+  const [validationResult, setValidationResult] =
+    useState<ValidationResult | null>(null)
   const cancelImportRef = useRef(false)
   const activeReaderRef = useRef<FileReader | null>(null)
   const setIsProcessing = useCallback((processing: boolean) => {
@@ -601,7 +605,9 @@ export const useFileProcessing = ({
         }))
 
         const zipData = await createZipFromVirtualFiles(virtualFiles)
-        const blob = new Blob([zipData.buffer as ArrayBuffer], { type: 'application/zip' })
+        const blob = new Blob([zipData.buffer as ArrayBuffer], {
+          type: 'application/zip',
+        })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
@@ -621,6 +627,23 @@ export const useFileProcessing = ({
     [setIsProcessing]
   )
 
+  /**
+   * Validate concatenated content before extraction
+   * Performs pre-flight check and updates validation state
+   */
+  const validateContent = useCallback((content: string): ValidationResult => {
+    const result = validateConcatenation(content)
+    setValidationResult(result)
+    return result
+  }, [])
+
+  /**
+   * Clear validation result
+   */
+  const clearValidation = useCallback(() => {
+    setValidationResult(null)
+  }, [])
+
   return {
     files,
     setFiles,
@@ -635,5 +658,8 @@ export const useFileProcessing = ({
     handleConcatenate,
     handleDeconcatenate,
     handleDownloadAsZip,
+    validationResult,
+    validateContent,
+    clearValidation,
   }
 }

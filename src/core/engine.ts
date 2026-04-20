@@ -10,6 +10,10 @@ import {
   MANIFEST_PREFIX,
   MANIFEST_SUFFIX,
 } from './constants'
+import type { ValidationResult } from './types'
+
+// Re-export types for convenience
+export type { ValidationResult } from './types'
 
 /**
  * Represents a virtual file with path and content
@@ -61,7 +65,10 @@ export function generateSessionId(): string {
  * @param files - Array of files to check against
  * @returns true if collision detected, false otherwise
  */
-function checkSessionIdCollision(sessionId: string, files: ConcatenateInputFile[]): boolean {
+function checkSessionIdCollision(
+  sessionId: string,
+  files: ConcatenateInputFile[]
+): boolean {
   // Build the patterns that would actually cause issues if they existed in source
   const manifestPattern = `${MANIFEST_PREFIX}${sessionId}${MANIFEST_SUFFIX}`
   const sessionMarkerCore = `(ID: ${sessionId})${END_DELIMITER}`
@@ -95,7 +102,9 @@ function generateCollisionFreeSessionId(files: ConcatenateInputFile[]): string {
   }
 
   if (attempts >= maxAttempts) {
-    throw new Error('Failed to generate collision-free session ID after 100 attempts')
+    throw new Error(
+      'Failed to generate collision-free session ID after 100 attempts'
+    )
   }
 
   return sessionId
@@ -178,7 +187,11 @@ export function deconcatenate(content: string): DeconcatenateResult {
   const fileEndDelimiter = FILE_END_DELIMITER
 
   // Find all potential file markers with their positions
-  const matches: Array<{ path: string; contentStart: number; fullMatchEnd: number }> = []
+  const matches: Array<{
+    path: string
+    contentStart: number
+    fullMatchEnd: number
+  }> = []
   let match
 
   while ((match = fileStartRegex.exec(content)) !== null) {
@@ -193,7 +206,14 @@ export function deconcatenate(content: string): DeconcatenateResult {
 
   for (let i = 0; i < matches.length; i++) {
     const { path, contentStart } = matches[i]
-    const nextMatchStart = i < matches.length - 1 ? matches[i + 1].fullMatchEnd - matches[i + 1].path.length - START_DELIMITER.length - END_DELIMITER.length - 10 /* approx */ : null
+    const nextMatchStart =
+      i < matches.length - 1
+        ? matches[i + 1].fullMatchEnd -
+          matches[i + 1].path.length -
+          START_DELIMITER.length -
+          END_DELIMITER.length -
+          10 /* approx */
+        : null
 
     // Find the end delimiter for this file
     const fileEndIndex = content.indexOf(fileEndDelimiter, contentStart)
@@ -392,7 +412,9 @@ export function concatenate(
 
   // Validate provided session ID doesn't collide
   if (sessionId && checkSessionIdCollision(sessionId, files)) {
-    throw new Error(`Provided session ID '${sessionId}' collides with file content`)
+    throw new Error(
+      `Provided session ID '${sessionId}' collides with file content`
+    )
   }
 
   // Manifest header with session ID
@@ -425,4 +447,162 @@ export function generateFileTimestamp(date: Date = new Date()): string {
   const SS = String(date.getSeconds()).padStart(2, '0')
 
   return `${YYYY}${MM}${DD}_${HH}${II}${SS}`
+}
+
+/**
+ * Validate a concatenated content string without extracting files
+ *
+ * Performs structural analysis to detect:
+ * - Valid/invalid manifest header
+ * - Session ID consistency
+ * - Balanced file markers (every START has an END)
+ * - Mismatched or corrupted markers
+ *
+ * @param input - The concatenated content string to validate
+ * @returns ValidationResult with detailed findings
+ */
+export function validateConcatenation(input: string): ValidationResult {
+  const errors: string[] = []
+  const warnings: string[] = []
+  const detectedFiles: string[] = []
+
+  // Extract session ID from manifest header
+  const sessionId = extractSessionId(input)
+
+  // Check if first line looks like a corrupted manifest (starts with --- but wrong content)
+  const firstLine = input.split('\n')[0] || ''
+  const looksLikeCorruptedManifest =
+    firstLine.startsWith('--- ') &&
+    !firstLine.includes(MANIFEST_PREFIX.trim()) &&
+    !sessionId
+
+  if (!sessionId) {
+    // Check for legacy format
+    const hasLegacyFormat =
+      input.includes('<<<<< FILE_START:') ||
+      input.includes('<<<<< CONCATENATOR_FILE_START:')
+    if (looksLikeCorruptedManifest) {
+      errors.push('Corrupted manifest header detected')
+    } else if (hasLegacyFormat) {
+      warnings.push(
+        'No session manifest found - using legacy format validation'
+      )
+    } else {
+      errors.push('No valid session manifest header found')
+    }
+  }
+
+  // Find all file start markers with their positions
+  const fileMarkers: Array<{
+    path: string
+    markerSessionId: string | null
+    startPos: number
+    endPos: number
+    hasMatchingEnd: boolean
+  }> = []
+
+  // Build regex to find all start markers (with or without session ID)
+  const escapedStart = START_DELIMITER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const escapedEnd = END_DELIMITER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+  // Pattern matches: START_DELIMITER + path + optional " (ID: xxx)" + END_DELIMITER
+  // Session ID can be any alphanumeric string
+  const startMarkerRegex = new RegExp(
+    `${escapedStart}(.+?)(?:\\s*\\(ID:\\s*([a-zA-Z0-9]+)\\s*\\))?${escapedEnd}`,
+    'gi'
+  )
+
+  let match
+  while ((match = startMarkerRegex.exec(input)) !== null) {
+    // match[1] contains: "path" or "path (ID: xxx)"
+    const rawPath = match[1].trim()
+    let path = rawPath
+    let markerSessionId: string | null = match[2] || null
+
+    // If no session ID captured by regex, check if it's embedded in the path
+    if (!markerSessionId) {
+      const sessionMatch = rawPath.match(/\s*\(ID:\s*([a-zA-Z0-9]+)\s*\)$/i)
+      if (sessionMatch) {
+        markerSessionId = sessionMatch[1]
+        path = rawPath.substring(0, rawPath.indexOf('(ID:')).trim()
+      }
+    }
+
+    const startPos = match.index
+    const endPos = match.index + match[0].length
+
+    fileMarkers.push({
+      path,
+      markerSessionId,
+      startPos,
+      endPos,
+      hasMatchingEnd: false, // Will be determined below
+    })
+  }
+
+  // Check each file marker for matching end marker
+  for (let i = 0; i < fileMarkers.length; i++) {
+    const marker = fileMarkers[i]
+    const nextMarkerStart =
+      i < fileMarkers.length - 1 ? fileMarkers[i + 1].startPos : input.length
+
+    // Look for end marker between this start and next start (or end of content)
+    const contentAfterStart = input.substring(marker.endPos, nextMarkerStart)
+    const hasEndMarker = contentAfterStart.includes(FILE_END_DELIMITER)
+
+    marker.hasMatchingEnd = hasEndMarker
+
+    if (!hasEndMarker) {
+      errors.push(`Missing end marker for file: ${marker.path}`)
+    }
+
+    // Check session ID consistency if we have a manifest session ID
+    if (
+      sessionId &&
+      marker.markerSessionId &&
+      marker.markerSessionId !== sessionId
+    ) {
+      errors.push(
+        `Session ID mismatch in marker for ${marker.path}: expected ${sessionId}, found ${marker.markerSessionId}`
+      )
+    }
+
+    // Check for empty file warning
+    if (hasEndMarker) {
+      const endIndex = contentAfterStart.indexOf(FILE_END_DELIMITER)
+      const content = contentAfterStart.substring(0, endIndex).trim()
+      if (content.length === 0) {
+        warnings.push(`Empty file detected: ${marker.path}`)
+      }
+    }
+
+    detectedFiles.push(marker.path)
+  }
+
+  // Count orphaned end markers (end markers without preceding start)
+  const endMarkerCount = (input.match(/<<<<< FILE_END >>>>>/g) || []).length
+  const startMarkerCount = fileMarkers.length
+
+  if (endMarkerCount > startMarkerCount) {
+    const orphanedCount = endMarkerCount - startMarkerCount
+    errors.push(
+      `${orphanedCount} orphaned end marker(s) found without matching start markers`
+    )
+  }
+
+  // Determine overall validity
+  // Valid if: no errors AND (has session-based markers OR valid legacy format)
+  // Invalid if: has errors OR (no sessionId AND no valid markers)
+  const hasValidMarkers =
+    fileMarkers.length > 0 && fileMarkers.some((m) => m.hasMatchingEnd)
+  const isValid = errors.length === 0 && hasValidMarkers
+
+  return {
+    isValid,
+    sessionId,
+    fileCount: fileMarkers.filter((m) => m.hasMatchingEnd).length,
+    detectedFiles,
+    errors,
+    warnings,
+  }
 }

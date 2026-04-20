@@ -188,7 +188,9 @@ export const FileView: React.FC<FileViewProps> = ({
 
         <button
           onClick={onDownloadAsZip}
-          disabled={filteredFiles.length === 0 || isProcessing || !onDownloadAsZip}
+          disabled={
+            filteredFiles.length === 0 || isProcessing || !onDownloadAsZip
+          }
           className="px-4 py-2 flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-brand-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           title="Download as ZIP"
         >

@@ -268,13 +268,16 @@ test.describe('File Upload via File Chooser', () => {
     })
 
     // Create a mock concatenated file using the actual app format
-    const concatenatedContent = `<<<<< CONCATENATOR_FILE_START: hello.js >>>>>
-console.log("Hello");
-<<<<< CONCATENATOR_FILE_END >>>>>
+    const concatenatedContent = `--- CONCATENATOR_SESSION_ID: e2e001 ---
+Concatenated on: 2024-01-01
 
-<<<<< CONCATENATOR_FILE_START: world.js >>>>>
+<<<<< FILE_START: hello.js (ID: e2e001) >>>>>
+console.log("Hello");
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: world.js (ID: e2e001) >>>>>
 console.log("World");
-<<<<< CONCATENATOR_FILE_END >>>>>
+<<<<< FILE_END >>>>>
 `
 
     // Wait for the input to be re-rendered without webkitdirectory

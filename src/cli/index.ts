@@ -4,16 +4,33 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { readdirSync, readFileSync, statSync, writeFileSync, mkdirSync, existsSync } from 'fs'
+import {
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+  mkdirSync,
+  existsSync,
+} from 'fs'
 import { join, relative, dirname } from 'path'
-import { concatenate, deconcatenate, type VirtualFile } from '../core/engine.ts'
+import {
+  concatenate,
+  deconcatenate,
+  validateConcatenation,
+  type VirtualFile,
+  type ValidationResult,
+} from '../core/engine.ts'
 import { createZipFromVirtualFiles } from '../drivers/zip-driver.ts'
 import { logger } from '../lib/logger.ts'
 
 /**
  * Recursively collect all files from a directory
  */
-function collectFiles(dir: string, baseDir: string, files: Array<{ path: string; content: string }> = []): Array<{ path: string; content: string }> {
+function collectFiles(
+  dir: string,
+  baseDir: string,
+  files: Array<{ path: string; content: string }> = []
+): Array<{ path: string; content: string }> {
   const entries = readdirSync(dir, { withFileTypes: true })
 
   for (const entry of entries) {
@@ -52,24 +69,97 @@ function reconstructFiles(files: VirtualFile[], outputDir: string): void {
 }
 
 /**
+ * Format validation result for CLI output
+ * Displays a professional summary with colors (if supported)
+ */
+function formatValidationReport(
+  result: ValidationResult,
+  filePath: string
+): void {
+  logger.info(`[DRY RUN] Validating: ${filePath}`)
+  logger.info('')
+
+  // Session ID
+  if (result.sessionId) {
+    logger.info(`✓ Valid session manifest found: ID ${result.sessionId}`)
+  } else {
+    logger.warn('⚠ No session manifest found (legacy format detected)')
+  }
+
+  logger.info('')
+
+  // File summary
+  logger.info(`Marker Analysis:`)
+  logger.info(`  Detected files: ${result.detectedFiles.length}`)
+  logger.info(`  Extractable files: ${result.fileCount}`)
+
+  // Warnings
+  if (result.warnings.length > 0) {
+    logger.info('')
+    logger.warn(`Warnings (${result.warnings.length}):`)
+    for (const warning of result.warnings) {
+      logger.warn(`  ⚠ ${warning}`)
+    }
+  }
+
+  // Errors
+  if (result.errors.length > 0) {
+    logger.info('')
+    logger.error(`Errors (${result.errors.length}):`)
+    for (const error of result.errors) {
+      logger.error(`  ✗ ${error}`)
+    }
+  }
+
+  // File list
+  if (result.detectedFiles.length > 0) {
+    logger.info('')
+    logger.info(`Detected Files (${result.detectedFiles.length}):`)
+    for (const filePath of result.detectedFiles) {
+      const hasError = result.errors.some((e) => e.includes(filePath))
+      if (hasError) {
+        logger.error(`  ✗ ${filePath}`)
+      } else {
+        logger.info(`  ✓ ${filePath}`)
+      }
+    }
+  }
+
+  // Final summary
+  logger.info('')
+  if (result.isValid) {
+    logger.info(
+      `✓ Validation passed: ${result.fileCount} file(s) ready for extraction`
+    )
+  } else {
+    logger.error(
+      `✗ Validation failed: ${result.errors.length} error(s) must be resolved`
+    )
+    process.exit(1)
+  }
+}
+
+/**
  * CLI entry point
  */
 async function main(): Promise<void> {
   const args = process.argv.slice(2)
   const isUndo = args.includes('--undo') || args.includes('-u')
-  const inputPath = args.find(arg => !arg.startsWith('-')) || '.'
+  const inputPath = args.find((arg) => !arg.startsWith('-')) || '.'
 
   if (args.includes('--help') || args.includes('-h')) {
     logger.info(`Usage: concatenator [directory]
        concatenator --undo <concatenated-file> [output-directory]
        concatenator --undo --zip <concatenated-file> [output-zip]
+       concatenator --undo --dry-run <concatenated-file>
 
 Concatenates all text files in a directory recursively, or
 reconstructs files from a concatenated file.
 
 Options:
-  --undo, -u   De-concatenate: extract files from concatenated output
-  --zip, -z    Create ZIP archive instead of exploding files (use with --undo)
+  --undo, -u    De-concatenate: extract files from concatenated output
+  --zip, -z     Create ZIP archive instead of exploding files (use with --undo)
+  --dry-run, -d Validate markers without extracting files (use with --undo)
 
 Arguments:
   directory           Path to directory to concatenate (default: .)
@@ -81,16 +171,18 @@ Examples:
   concatenator ./src > output.txt
   concatenator --undo output.txt ./restored
   concatenator --undo --zip output.txt restored.zip
+  concatenator --undo --dry-run output.txt
   npx concatenator ./my-project | tee output.txt`)
     process.exit(0)
   }
 
   // Handle deconcatenate mode
   if (isUndo) {
-    const filePath = args.find(arg => !arg.startsWith('-'))
-    const nonFlagArgs = args.filter(arg => !arg.startsWith('-'))
+    const filePath = args.find((arg) => !arg.startsWith('-'))
+    const nonFlagArgs = args.filter((arg) => !arg.startsWith('-'))
     const outputPath = nonFlagArgs[1]
     const isZipMode = args.includes('--zip') || args.includes('-z')
+    const isDryRun = args.includes('--dry-run') || args.includes('-d')
 
     if (!filePath) {
       logger.error('Error: No input file specified for --undo')
@@ -106,14 +198,20 @@ Examples:
         process.exit(1)
       }
 
-      if (isZipMode) {
+      if (isDryRun) {
+        // Dry run mode: validate and report only
+        const validationResult = validateConcatenation(content)
+        formatValidationReport(validationResult, filePath)
+      } else if (isZipMode) {
         // Zip bundling mode
         const zipPath = outputPath || 'output.zip'
         const zipData = await createZipFromVirtualFiles(result.files)
         writeFileSync(zipPath, zipData)
 
         if (result.skippedPaths.length > 0) {
-          logger.warn(`Skipped ${result.skippedPaths.length} file(s) with missing end markers: ${result.skippedPaths.join(', ')}`)
+          logger.warn(
+            `Skipped ${result.skippedPaths.length} file(s) with missing end markers: ${result.skippedPaths.join(', ')}`
+          )
         }
 
         logger.info(`Created ${zipPath} with ${result.files.length} file(s)`)
@@ -123,7 +221,9 @@ Examples:
         reconstructFiles(result.files, outputDir)
 
         if (result.skippedPaths.length > 0) {
-          logger.warn(`Skipped ${result.skippedPaths.length} file(s) with missing end markers: ${result.skippedPaths.join(', ')}`)
+          logger.warn(
+            `Skipped ${result.skippedPaths.length} file(s) with missing end markers: ${result.skippedPaths.join(', ')}`
+          )
         }
 
         logger.info(`Restored ${result.files.length} file(s) to ${outputDir}`)
@@ -132,7 +232,9 @@ Examples:
         }
       }
     } catch (error) {
-      logger.error(`Error: ${error instanceof Error ? error.message : String(error)}`)
+      logger.error(
+        `Error: ${error instanceof Error ? error.message : String(error)}`
+      )
       process.exit(1)
     }
     return
@@ -158,7 +260,9 @@ Examples:
     const result = concatenate(files)
     process.stdout.write(result)
   } catch (error) {
-    logger.error(`Error: ${error instanceof Error ? error.message : String(error)}`)
+    logger.error(
+      `Error: ${error instanceof Error ? error.message : String(error)}`
+    )
     process.exit(1)
   }
 }

@@ -41,10 +41,14 @@ describe('engine', () => {
       expect(result).toContain('Concatenated on: 2024-01-01')
 
       // Check session-specific markers
-      expect(result).toMatch(/<<<<< FILE_START: file1\.txt \(ID: [0-9a-f]{6}\) >>>>>/)
+      expect(result).toMatch(
+        /<<<<< FILE_START: file1\.txt \(ID: [0-9a-f]{6}\) >>>>>/
+      )
       expect(result).toContain('Hello')
       expect(result).toContain('<<<<< FILE_END >>>>>')
-      expect(result).toMatch(/<<<<< FILE_START: file2\.txt \(ID: [0-9a-f]{6}\) >>>>>/)
+      expect(result).toMatch(
+        /<<<<< FILE_START: file2\.txt \(ID: [0-9a-f]{6}\) >>>>>/
+      )
       expect(result).toContain('World')
     })
 
@@ -58,7 +62,10 @@ describe('engine', () => {
 
     it('throws error when session ID manifest header collides with content', () => {
       const files = [
-        { path: 'test.txt', content: '--- CONCATENATOR_SESSION_ID: abc123 ---' },
+        {
+          path: 'test.txt',
+          content: '--- CONCATENATOR_SESSION_ID: abc123 ---',
+        },
       ]
       expect(() => concatenate(files, '2024-01-01', 'abc123')).toThrow(
         "Provided session ID 'abc123' collides with file content"
@@ -67,7 +74,9 @@ describe('engine', () => {
 
     it('throws error when session ID marker core collides with content', () => {
       // The marker core pattern (ID: {sessionId}){END_DELIMITER} would cause parsing issues
-      const files = [{ path: 'test.txt', content: 'some (ID: abc123) >>>>> text' }]
+      const files = [
+        { path: 'test.txt', content: 'some (ID: abc123) >>>>> text' },
+      ]
       expect(() => concatenate(files, '2024-01-01', 'abc123')).toThrow(
         "Provided session ID 'abc123' collides with file content"
       )
@@ -75,7 +84,9 @@ describe('engine', () => {
 
     it('does not throw for raw session ID appearing in content (only checks complete patterns)', () => {
       // Raw session ID in content is fine - only the complete manifest/marker patterns matter
-      const files = [{ path: 'test.txt', content: 'This contains abc123 and more text' }]
+      const files = [
+        { path: 'test.txt', content: 'This contains abc123 and more text' },
+      ]
       // Should not throw because abc123 doesn't appear in a problematic pattern
       const result = concatenate(files, '2024-01-01', 'abc123')
       expect(result).toContain('--- CONCATENATOR_SESSION_ID: abc123 ---')
@@ -106,7 +117,8 @@ describe('engine', () => {
     })
 
     it('handles malformed content gracefully', () => {
-      const malformed = '--- CONCATENATOR_SESSION_ID: abc123 ---\n\n<<<<< FILE_START: file.txt (ID: abc123) >>>>>missing end marker'
+      const malformed =
+        '--- CONCATENATOR_SESSION_ID: abc123 ---\n\n<<<<< FILE_START: file.txt (ID: abc123) >>>>>missing end marker'
       const result = deconcatenate(malformed)
       expect(result.foundAny).toBe(false)
       expect(result.skippedPaths).toContain('file.txt')
@@ -116,8 +128,14 @@ describe('engine', () => {
       // This simulates concatenating the concatenator's own source code
       // which contains the old delimiter strings in constants
       const files = [
-        { path: 'src/constants.ts', content: "const START_DELIMITER = '<<<<< FILE_START: '" },
-        { path: 'src/engine.ts', content: 'function deconcatenate() { /* uses markers */ }' },
+        {
+          path: 'src/constants.ts',
+          content: "const START_DELIMITER = '<<<<< FILE_START: '",
+        },
+        {
+          path: 'src/engine.ts',
+          content: 'function deconcatenate() { /* uses markers */ }',
+        },
       ]
 
       // Create a new session-based concatenation
@@ -134,10 +152,10 @@ describe('engine', () => {
       // Should only extract the real files from our session, ignore the fake old-format one
       expect(result.foundAny).toBe(true)
       expect(result.files).toHaveLength(2)
-      expect(result.files.map(f => f.path)).toContain('src/constants.ts')
-      expect(result.files.map(f => f.path)).toContain('src/engine.ts')
+      expect(result.files.map((f) => f.path)).toContain('src/constants.ts')
+      expect(result.files.map((f) => f.path)).toContain('src/engine.ts')
       // fake.txt should not appear because it's not in our session
-      expect(result.files.map(f => f.path)).not.toContain('fake.txt')
+      expect(result.files.map((f) => f.path)).not.toContain('fake.txt')
     })
 
     it('handles backwards compatibility with legacy format', () => {
@@ -160,8 +178,14 @@ legacy content
   describe('round-trip', () => {
     it('preserves file content through concatenate and deconcatenate', () => {
       const originalFiles = [
-        { path: 'src/utils.ts', content: 'export const add = (a: number, b: number) => a + b' },
-        { path: 'src/main.ts', content: 'import { add } from "./utils"\n\nconsole.log(add(2, 3))' },
+        {
+          path: 'src/utils.ts',
+          content: 'export const add = (a: number, b: number) => a + b',
+        },
+        {
+          path: 'src/main.ts',
+          content: 'import { add } from "./utils"\n\nconsole.log(add(2, 3))',
+        },
         { path: 'README.md', content: '# My Project\n\nA sample project.' },
       ]
 
@@ -178,7 +202,7 @@ legacy content
 
       // Match paths and content
       for (const original of originalFiles) {
-        const extracted = result.files.find(f => f.path === original.path)
+        const extracted = result.files.find((f) => f.path === original.path)
         expect(extracted).toBeDefined()
         expect(extracted!.content).toBe(original.content)
       }
@@ -194,12 +218,17 @@ legacy content
       const result = deconcatenate(concatenated)
 
       expect(result.files).toHaveLength(2)
-      expect(result.files.map(f => f.path).sort()).toEqual(['deep/nested/path/file.txt', 'root.txt'].sort())
+      expect(result.files.map((f) => f.path).sort()).toEqual(
+        ['deep/nested/path/file.txt', 'root.txt'].sort()
+      )
     })
 
     it('handles special characters in content', () => {
       const originalFiles = [
-        { path: 'special.txt', content: 'Special <>&"\' chars and unicode: 🎉 日本語' },
+        {
+          path: 'special.txt',
+          content: 'Special <>&"\' chars and unicode: 🎉 日本語',
+        },
         { path: 'code.txt', content: 'function test() {\n  return "test";\n}' },
       ]
 
