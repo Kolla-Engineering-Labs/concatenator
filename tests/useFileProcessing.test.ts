@@ -349,6 +349,37 @@ describe('useFileProcessing', () => {
       // File 2 is correctly parsed since its boundaries are perfectly valid.
       expect(mockFile).toHaveBeenCalledTimes(1);
       expect(mockFile).toHaveBeenCalledWith('src/file2.js', 'Content 2');
+
+      // Warning should be set indicating files were skipped
+      expect(result.current.importError).toContain('skipped due to missing end markers');
+      expect(result.current.importError).toContain('src/file1.js');
+    });
+
+    it('warns user when multiple files are skipped with truncated list (Edge Case 25b)', async () => {
+      const { result } = renderHook(() => useFileProcessing({ appMode: 'deconcatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
+
+      // Create content with 4 files missing end delimiters, and 1 valid file at the end
+      const concatenatedContent =
+        `${START_DELIMITER}src/file1.js${END_DELIMITER}\nContent 1\n` +
+        `${START_DELIMITER}src/file2.js${END_DELIMITER}\nContent 2\n` +
+        `${START_DELIMITER}src/file3.js${END_DELIMITER}\nContent 3\n` +
+        `${START_DELIMITER}src/file4.js${END_DELIMITER}\nContent 4\n` +
+        `${START_DELIMITER}src/valid.js${END_DELIMITER}\nValid content\n${FILE_END_DELIMITER}\n\n`;
+
+      const mockFiles = [{ name: 'concat.txt', path: 'concat.txt', kind: 'file' as const, content: concatenatedContent, size: 1000 }];
+
+      await act(async () => { await result.current.handleDeconcatenate(mockFiles); });
+
+      // Only the last file should be extracted
+      expect(mockFile).toHaveBeenCalledTimes(1);
+      expect(mockFile).toHaveBeenCalledWith('src/valid.js', 'Valid content');
+
+      // Warning should show first 3 files and "1 more"
+      expect(result.current.importError).toContain('4 file(s) were skipped');
+      expect(result.current.importError).toContain('src/file1.js');
+      expect(result.current.importError).toContain('src/file2.js');
+      expect(result.current.importError).toContain('src/file3.js');
+      expect(result.current.importError).toContain('and 1 more');
     });
 
     it('fails to extract files if start delimiters are completely missing (Edge Case 26)', async () => {
