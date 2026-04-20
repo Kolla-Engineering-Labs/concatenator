@@ -21,7 +21,7 @@ async function resetIgnoreList(apiContext: APIRequestContext): Promise<void> {
     '/^\\.concatenate-ignore-worker-\\d+$/',
     '/\\.class$/', '/\\.exe$/',
     '/\\.jar$/', '/\\.log$/', '/\\.o$/', '/\\.obj$/', '/\\.swp$/', '/^__.*cache__$/',
-    '/^\\..*_cache$/', 'bin', 'build', 'desktop.ini', 'dist', 'LICENSE', 'node_modules',
+    '/^\\..*_cache$/', 'bin', 'build', 'desktop.ini', 'dist', 'node_modules',
     'obj', 'package-lock.json', 'ruff_output.txt', 'target', 'Thumbs.db', 'vendor', 'venv'
   ];
   const response = await apiContext.post('/api/ignore-list', {
@@ -650,6 +650,55 @@ ${Buffer.from([0x00, 0x01, 0x02, 0xFF, 0xFE]).toString('base64')}
 
         // Should show error for invalid format
         await expect(page.getByText(/No concatenated files were found/i)).toBeVisible({ timeout: 10000 });
+      } finally {
+        uploadHelper.cleanup();
+      }
+    });
+
+    test('should warn when some files have missing end markers but extract valid ones', async ({ page }) => {
+      const uploadHelper = new FileUploadHelper(page);
+
+      // Create concatenated content where first file is missing end marker
+      const partialContent = `<<<<< CONCATENATOR_FILE_START: partial.txt >>>>>
+This content has no end delimiter
+<<<<< CONCATENATOR_FILE_START: valid.txt >>>>>
+This content is valid
+<<<<< CONCATENATOR_FILE_END >>>>>
+`;
+
+      try {
+        // Wait for the download event
+        const [download] = await Promise.all([
+          page.waitForEvent('download', { timeout: 30000 }),
+          uploadHelper.uploadSingleFile('partial.txt', partialContent),
+        ]);
+
+        // Verify ZIP was downloaded (valid file should still be extracted)
+        expect(download.suggestedFilename()).toMatch(/\.zip$/i);
+
+        const downloadPath = await download.path();
+        expect(downloadPath).toBeTruthy();
+
+        if (downloadPath) {
+          const zipContent = fs.readFileSync(downloadPath);
+          const zip = await JSZip.loadAsync(zipContent);
+
+          // Only valid.txt should be in the ZIP
+          const validFile = zip.file('valid.txt');
+          expect(validFile).toBeTruthy();
+
+          // partial.txt should NOT be in the ZIP
+          const partialFile = zip.file('partial.txt');
+          expect(partialFile).toBeFalsy();
+
+          // Clean up
+          try {
+            fs.unlinkSync(downloadPath);
+          } catch {}
+        }
+
+        // Warning should be visible about skipped files
+        await expect(page.getByText(/skipped due to missing end markers/i)).toBeVisible({ timeout: 10000 });
       } finally {
         uploadHelper.cleanup();
       }

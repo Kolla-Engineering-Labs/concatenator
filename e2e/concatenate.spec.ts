@@ -26,7 +26,7 @@ async function resetIgnoreList(apiContext: APIRequestContext): Promise<void> {
     '/^\\.concatenate-ignore-worker-\\d+$/',
     '/\\.class$/', '/\\.exe$/',
     '/\\.jar$/', '/\\.log$/', '/\\.o$/', '/\\.obj$/', '/\\.swp$/', '/^__.*cache__$/',
-    '/^\\..*_cache$/', 'bin', 'build', 'desktop.ini', 'dist', 'LICENSE', 'node_modules',
+    '/^\\..*_cache$/', 'bin', 'build', 'desktop.ini', 'dist', 'node_modules',
     'obj', 'package-lock.json', 'ruff_output.txt', 'target', 'Thumbs.db', 'vendor', 'venv'
   ];
   const response = await apiContext.post('/api/ignore-list', {
