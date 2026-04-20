@@ -684,7 +684,7 @@ describe('useFileProcessing', () => {
     it('processes deep directory trees up to internal stack limitations without crashing', async () => {
       const { result } = renderHook(() => useFileProcessing({ appMode: 'concatenate', compiledIgnores: [], maxFileLimit: 10000, isIgnoreListLoading: false }));
 
-      let depthLimit = 100;
+      const depthLimit = 100;
       let currentDepth = 0;
 
       // Create a recursive directory structure

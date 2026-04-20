@@ -136,9 +136,9 @@ export const useFileProcessing = ({ appMode, compiledIgnores, maxFileLimit, isIg
           const nextStartDelimiter = content.indexOf(START_DELIMITER, pathStart);
 
           const contentStartRaw = pathEnd + END_DELIMITER.length;
-          let fileEndIndex = content.indexOf(FILE_END_DELIMITER, contentStartRaw);
+          const fileEndIndex = content.indexOf(FILE_END_DELIMITER, contentStartRaw);
 
-          let path = content.substring(pathStart, pathEnd).trim();
+          const path = content.substring(pathStart, pathEnd).trim();
 
           /**
            * Partial File Detection
