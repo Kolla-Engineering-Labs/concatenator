@@ -1,8 +1,11 @@
 {
-  "name": "react-example",
+  "name": "Concatenator",
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "bin": {
+    "concatenator": "./src/cli/index.ts"
+  },
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build",
