@@ -49,6 +49,7 @@ Concatenator implements an **"in-memory only"** storage policy for all API keys:
 4. **Report any suspected key exposure** immediately to your API provider
 
 ### 📂 File System Security
+
 - **No silent file access**: All file operations require explicit user interaction (drag-and-drop or file picker)
 - **No persistent permissions**: The browser does not retain file system permissions between sessions
 - **Path Traversal Protection**: All paths are sanitized and verified to stay within the user-granted scope
@@ -59,10 +60,10 @@ Concatenator implements an **"in-memory only"** storage policy for all API keys:
 
 The production server implements rate limiting to prevent abuse:
 
-| Endpoint | Limit | Window |
-|----------|-------|--------|
-| `/api/ignore-list` | 100 requests | 15 minutes |
-| Static files | 1000 requests | 1 minute |
+| Endpoint           | Limit         | Window     |
+| ------------------ | ------------- | ---------- |
+| `/api/ignore-list` | 100 requests  | 15 minutes |
+| Static files       | 1000 requests | 1 minute   |
 
 These limits are disabled in development mode for testing purposes.
 

@@ -24,17 +24,20 @@ Thank you for your interest in contributing to Concatenator! This document provi
 ### ⚙️ Initial Setup
 
 1. **Fork and clone the repository**:
+
    ```bash
    git clone https://github.com/Kolla-Engineering-Labs/concatenator.git
    cd concatenator
    ```
 
 2. **Install dependencies**:
+
    ```bash
    npm install
    ```
 
 3. **Set up environment variables**:
+
    ```bash
    cp .env.example .env
    # Edit .env and add your API keys (optional for basic development)
@@ -48,17 +51,17 @@ Thank you for your interest in contributing to Concatenator! This document provi
 
 ### ⌨️ Available Scripts
 
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start the development server with hot reload |
-| `npm run build` | Build the production bundle |
-| `npm run preview` | Preview the production build locally |
-| `npm run lint` | Run TypeScript type checking |
-| `npm test` | Run unit tests with Vitest |
-| `npm run test:coverage` | Run unit tests with coverage report |
-| `npm run test:e2e` | Run E2E tests with Playwright |
-| `npm run test:e2e:ui` | Run E2E tests with Playwright UI mode |
-| `npm run test:e2e:debug` | Run E2E tests in debug mode |
+| Command                   | Description                                    |
+| ------------------------- | ---------------------------------------------- |
+| `npm run dev`             | Start the development server with hot reload   |
+| `npm run build`           | Build the production bundle                    |
+| `npm run preview`         | Preview the production build locally           |
+| `npm run lint`            | Run TypeScript type checking                   |
+| `npm test`                | Run unit tests with Vitest                     |
+| `npm run test:coverage`   | Run unit tests with coverage report            |
+| `npm run test:e2e`        | Run E2E tests with Playwright                  |
+| `npm run test:e2e:ui`     | Run E2E tests with Playwright UI mode          |
+| `npm run test:e2e:debug`  | Run E2E tests in debug mode                    |
 | `npm run test:e2e:headed` | Run E2E tests in headed mode (visible browser) |
 
 ---
@@ -152,24 +155,26 @@ We use **Vitest** for unit testing. Unit tests focus on:
 **Location**: `tests/` directory
 
 **Running unit tests**:
+
 ```bash
 npm test              # Run once
 npm run test:coverage # Run with coverage report
 ```
 
 **Writing unit tests**:
+
 ```typescript
-import { describe, it, expect } from 'vitest';
-import { parseConcatenatedContent } from '../src/lib/parser';
+import { describe, it, expect } from 'vitest'
+import { parseConcatenatedContent } from '../src/lib/parser'
 
 describe('parseConcatenatedContent', () => {
   it('should extract files from concatenated content', () => {
-    const content = '--- FILE: test.js ---\nconst x = 1;';
-    const result = parseConcatenatedContent(content);
-    expect(result).toHaveLength(1);
-    expect(result[0].path).toBe('test.js');
-  });
-});
+    const content = '--- FILE: test.js ---\nconst x = 1;'
+    const result = parseConcatenatedContent(content)
+    expect(result).toHaveLength(1)
+    expect(result[0].path).toBe('test.js')
+  })
+})
 ```
 
 ### 🎭 E2E Tests (Playwright)
@@ -183,6 +188,7 @@ We use **Playwright** for end-to-end testing. E2E tests focus on:
 **Location**: `e2e/` directory
 
 **Running E2E tests**:
+
 ```bash
 npm run test:e2e          # Headless mode (CI)
 npm run test:e2e:ui       # Interactive UI mode
@@ -191,21 +197,23 @@ npm run test:e2e:debug    # Debug mode with step-through
 ```
 
 **Important notes for E2E tests**:
+
 - Tests use worker-specific `.concatenate-ignore` files to ensure isolation
 - The `x-worker-id` header is used to route requests to the correct ignore file
 - File System Access API requires Chrome/Edge browsers (Playwright's Chromium is used)
 
 **Writing E2E tests**:
+
 ```typescript
-import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test'
 
 test('user can concatenate files', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/')
   await page.getByTestId('drop-zone').dispatchEvent('drop', {
-    dataTransfer: { files: [mockFile] }
-  });
-  await expect(page.getByText('1 file selected')).toBeVisible();
-});
+    dataTransfer: { files: [mockFile] },
+  })
+  await expect(page.getByText('1 file selected')).toBeVisible()
+})
 ```
 
 ### Test Coverage
@@ -224,6 +232,7 @@ We aim for high test coverage on core logic. Coverage reports are generated auto
 ### 🛤️ Workflow
 
 1. **Create a feature branch**:
+
    ```bash
    git checkout -b feature/your-feature-name
    # or
@@ -244,6 +253,7 @@ We aim for high test coverage on core logic. Coverage reports are generated auto
    - Write clear commit messages
 
 3. **Run quality checks**:
+
    ```bash
    npm run lint        # TypeScript type checking
    npm test            # Unit tests
@@ -321,6 +331,7 @@ Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`
 See [conventionalcommits.org](https://www.conventionalcommits.org/en/v1.0.0/#summary) for the full specification.
 
 Examples:
+
 ```
 feat(parser): add support for binary file detection
 fix(ui): resolve dark mode flicker on initial load
@@ -336,20 +347,26 @@ All contributors are expected to adhere to our [Code of Conduct](./CODE_OF_CONDU
 ## Questions & Reporting Issues
 
 ### ❓ General Questions
+
 - Open a [GitHub Discussion](https://github.com/Kolla-Engineering-Labs/concatenator/discussions)
 
 ### 🐞 Bug Reports (Non-Security)
+
 For functional bugs, crashes, or unexpected behavior:
+
 - Use the [Bug Report template](https://github.com/Kolla-Engineering-Labs/concatenator/issues/new?template=bug_report.md)
 - Provide browser version, steps to reproduce, and log levels
 
 ### 🔒 Security Vulnerabilities
+
 **⚠️ Critical**: Do not report security vulnerabilities via public GitHub Issues.
+
 - Use GitHub's **Private Vulnerability Reporting** (Security tab → "Report a vulnerability")
 - Or visit: `https://github.com/Kolla-Engineering-Labs/concatenator/security/advisories/new`
 - See [SECURITY.md](./SECURITY.md) for our full security policy
 
 ### Feature Requests
+
 - Use the [Feature Request template](https://github.com/Kolla-Engineering-Labs/concatenator/issues/new?template=feature_request.md)
 
 ---

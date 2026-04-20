@@ -1,18 +1,18 @@
 ---
 name: Bug Report
 description: Report a bug to help us improve Concatenator
-title: "[BUG] "
-labels: ["bug"]
+title: '[BUG] '
+labels: ['bug']
 assignees: []
 ---
 
 ## Bug Description
 
-> *A clear and concise description of what the bug is*
+> _A clear and concise description of what the bug is_
 
 ## Steps to Reproduce
 
-> *Provide detailed steps to reproduce the bug*
+> _Provide detailed steps to reproduce the bug_
 
 1. Go to '...'
 2. Click on '...'
@@ -21,19 +21,19 @@ assignees: []
 
 ## Expected Behavior
 
-> *A clear and concise description of what you expected to happen*
+> _A clear and concise description of what you expected to happen_
 
 ## Actual Behavior
 
-> *A clear and concise description of what actually happened*
+> _A clear and concise description of what actually happened_
 
 ## Screenshots / Logs
 
-> *If applicable, add screenshots or log output to help explain the problem*
+> _If applicable, add screenshots or log output to help explain the problem_
 
 ### Log Level
 
-> *What log level was set when the issue occurred? Check the browser console or your .env file*
+> _What log level was set when the issue occurred? Check the browser console or your .env file_
 
 - [ ] `debug` (verbose logging enabled)
 - [ ] `info` (default logging level)
@@ -42,7 +42,7 @@ assignees: []
 
 ### Console Output
 
-> *Paste relevant console logs here (if any)*
+> _Paste relevant console logs here (if any)_
 
 ```
 [Paste console output here]
@@ -52,13 +52,14 @@ assignees: []
 
 ### Browser
 
-> *Concatenator relies on the File System Access API. Browser version is critical for bug reports.*
+> _Concatenator relies on the File System Access API. Browser version is critical for bug reports._
 
 - **Browser**: <!-- e.g., Chrome, Edge, Firefox, Safari -->
 - **Version**: <!-- e.g., 124.0.6367.60 -->
 - **OS**: <!-- e.g., Windows 11, macOS 14, Ubuntu 22.04 -->
 
 To find your browser version:
+
 - **Chrome/Edge**: `chrome://version` or `edge://version` in the address bar
 - **Firefox**: Menu (≡) → Help → About Firefox
 - **Safari**: Safari menu → About Safari
@@ -71,7 +72,7 @@ To find your browser version:
 
 ## File Details
 
-> *Since Concatenator processes files, these details help diagnose issues*
+> _Since Concatenator processes files, these details help diagnose issues_
 
 - **File Type**: <!-- e.g., .txt, .js, .ts, mixed directory -->
 - **Approximate File Count**: <!-- Number of files being processed -->
@@ -80,14 +81,14 @@ To find your browser version:
 
 ## Mode
 
-> *Which Concatenator mode were you using?*
+> _Which Concatenator mode were you using?_
 
 - [ ] Concatenate (merging files into one)
 - [ ] De-concatenate (extracting from .txt file)
 
 ## Ignore List / Configuration
 
-> *Were you using any custom ignore patterns?*
+> _Were you using any custom ignore patterns?_
 
 - [ ] Default ignore list only
 - [ ] Custom ignore patterns (please list below)
@@ -100,11 +101,11 @@ To find your browser version:
 
 ## Additional Context
 
-> *Add any other context about the problem here*
+> _Add any other context about the problem here_
 
 ## Checklist
 
-> *Please verify the following before submitting*
+> _Please verify the following before submitting_
 
 - [ ] I have searched existing issues to ensure this bug has not already been reported
 - [ ] I have provided clear steps to reproduce the issue

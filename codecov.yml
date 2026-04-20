@@ -1,5 +1,5 @@
 comment:
-  layout: "diff, flags, files"
+  layout: 'diff, flags, files'
   behavior: default
   require_changes: false
   require_base: false
@@ -11,11 +11,11 @@ coverage:
     project:
       default:
         # 'auto' sets the target to the current coverage of your main branch
-        target: auto 
+        target: auto
         # Allows a 1% drop without any warning
-        threshold: 1% 
+        threshold: 1%
         # This prevents Codecov from failing your GitHub CI check
-        informational: true 
+        informational: true
     patch:
       default:
         # Only tracks coverage on the specific lines you changed in the PR

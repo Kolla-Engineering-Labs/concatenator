@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { defineConfig, devices } from '@playwright/test';
-import * as os from 'os';
+import { defineConfig, devices } from '@playwright/test'
+import * as os from 'os'
 
 /**
  * Playwright configuration for E2E testing the Concatenator app.
@@ -118,4 +118,4 @@ export default defineConfig({
     stdout: 'pipe',
     stderr: 'pipe',
   },
-});
+})

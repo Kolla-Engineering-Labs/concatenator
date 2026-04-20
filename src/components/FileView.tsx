@@ -3,29 +3,38 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
-import { Files, List, Network, FileCode, Ban, X, Download, Trash2 } from 'lucide-react';
-import { cn } from '../lib/utils';
-import { FileItem, TreeItem, ViewMode, OutputFormat } from '../types';
-import { getFileIcon } from '../lib/fileIcons';
-import { TreeNode } from './TreeNode';
-import { OutputFormatToggle } from './OutputFormatToggle';
+import React from 'react'
+import {
+  Files,
+  List,
+  Network,
+  FileCode,
+  Ban,
+  X,
+  Download,
+  Trash2,
+} from 'lucide-react'
+import { cn } from '../lib/utils'
+import { FileItem, TreeItem, ViewMode, OutputFormat } from '../types'
+import { getFileIcon } from '../lib/fileIcons'
+import { TreeNode } from './TreeNode'
+import { OutputFormatToggle } from './OutputFormatToggle'
 
 interface FileViewProps {
-  files: FileItem[];
-  filteredFiles: FileItem[];
-  viewMode: ViewMode;
-  setViewMode: (mode: ViewMode) => void;
-  fileTree: TreeItem;
-  expandedPaths: Set<string>;
-  setExpandedPaths: (paths: Set<string>) => void;
-  isProcessing: boolean;
-  onConcatenate: () => void;
-  onClearAll: () => void;
-  onIgnoreFile: (name: string) => void;
-  onRemoveFile: (file: FileItem) => void;
-  outputFormat: OutputFormat;
-  setOutputFormat: (format: OutputFormat) => void;
+  files: FileItem[]
+  filteredFiles: FileItem[]
+  viewMode: ViewMode
+  setViewMode: (mode: ViewMode) => void
+  fileTree: TreeItem
+  expandedPaths: Set<string>
+  setExpandedPaths: (paths: Set<string>) => void
+  isProcessing: boolean
+  onConcatenate: () => void
+  onClearAll: () => void
+  onIgnoreFile: (name: string) => void
+  onRemoveFile: (file: FileItem) => void
+  outputFormat: OutputFormat
+  setOutputFormat: (format: OutputFormat) => void
 }
 
 /**
@@ -54,7 +63,9 @@ export const FileView: React.FC<FileViewProps> = ({
           <Files className="w-4 h-4" />
           <h2 className="text-sm font-semibold uppercase tracking-wider ph-no-capture">
             Selected Files
-            <span className="ml-2 tabular-nums opacity-60">({filteredFiles.filter(f => f.kind === 'file').length})</span>
+            <span className="ml-2 tabular-nums opacity-60">
+              ({filteredFiles.filter((f) => f.kind === 'file').length})
+            </span>
           </h2>
         </div>
 
@@ -63,8 +74,10 @@ export const FileView: React.FC<FileViewProps> = ({
             onClick={() => setViewMode('list')}
             aria-label="List view"
             className={cn(
-              "p-1.5 rounded-md transition-all",
-              viewMode === 'list' ? "bg-white dark:bg-slate-800 shadow-sm text-brand-500" : "text-slate-400"
+              'p-1.5 rounded-md transition-all',
+              viewMode === 'list'
+                ? 'bg-white dark:bg-slate-800 shadow-sm text-brand-500'
+                : 'text-slate-400'
             )}
           >
             <List className="w-4 h-4" />
@@ -73,8 +86,10 @@ export const FileView: React.FC<FileViewProps> = ({
             onClick={() => setViewMode('tree')}
             aria-label="Tree view"
             className={cn(
-              "p-1.5 rounded-md transition-all",
-              viewMode === 'tree' ? "bg-white dark:bg-slate-800 shadow-sm text-brand-500" : "text-slate-400"
+              'p-1.5 rounded-md transition-all',
+              viewMode === 'tree'
+                ? 'bg-white dark:bg-slate-800 shadow-sm text-brand-500'
+                : 'text-slate-400'
             )}
           >
             <Network className="w-4 h-4" />
@@ -92,41 +107,46 @@ export const FileView: React.FC<FileViewProps> = ({
           <div className="p-2">
             {viewMode === 'list' ? (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
-                {filteredFiles.filter(f => f.kind === 'file').map((file, index) => (
-                  <div
-                    key={`${file.path}-${index}`}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all group min-w-0"
-                  >
-                    {getFileIcon(file.name, file.kind)}
-                    <div className="flex flex-col min-w-0 flex-1 ph-no-capture">
-                      <span className="text-sm font-medium truncate leading-tight">
-                        {file.name}
-                      </span>
-                      <span
-                        className="text-[10px] text-slate-400 truncate leading-tight cursor-help"
-                        title={file.path}
-                      >
-                        {file.path.substring(0, file.path.lastIndexOf('/') + 1) || './'}
-                      </span>
+                {filteredFiles
+                  .filter((f) => f.kind === 'file')
+                  .map((file, index) => (
+                    <div
+                      key={`${file.path}-${index}`}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all group min-w-0"
+                    >
+                      {getFileIcon(file.name, file.kind)}
+                      <div className="flex flex-col min-w-0 flex-1 ph-no-capture">
+                        <span className="text-sm font-medium truncate leading-tight">
+                          {file.name}
+                        </span>
+                        <span
+                          className="text-[10px] text-slate-400 truncate leading-tight cursor-help"
+                          title={file.path}
+                        >
+                          {file.path.substring(
+                            0,
+                            file.path.lastIndexOf('/') + 1
+                          ) || './'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => onIgnoreFile(file.name)}
+                          className="p-1 text-slate-400 hover:text-brand-500 transition-all"
+                          title={`Ignore ${file.name}`}
+                        >
+                          <Ban className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => onRemoveFile(file)}
+                          className="p-1 text-slate-400 hover:text-red-500 transition-all"
+                          title={`Remove ${file.name}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        onClick={() => onIgnoreFile(file.name)}
-                        className="p-1 text-slate-400 hover:text-brand-500 transition-all"
-                        title={`Ignore ${file.name}`}
-                      >
-                        <Ban className="w-3 h-3" />
-                      </button>
-                      <button
-                        onClick={() => onRemoveFile(file)}
-                        className="p-1 text-slate-400 hover:text-red-500 transition-all"
-                        title={`Remove ${file.name}`}
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             ) : (
               <TreeNode
@@ -169,5 +189,5 @@ export const FileView: React.FC<FileViewProps> = ({
         </button>
       </div>
     </div>
-  );
-};
+  )
+}

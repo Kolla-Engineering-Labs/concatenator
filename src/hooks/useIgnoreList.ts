@@ -3,130 +3,155 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { DEFAULT_IGNORE_LIST } from '../constants';
-import { logger } from '../lib/logger';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { DEFAULT_IGNORE_LIST } from '../constants'
+import { logger } from '../lib/logger'
 
 /**
  * Custom hook to manage the ignore list state, including persistence to localStorage and server.
  */
 export const useIgnoreList = () => {
-  const [ignoreList, setIgnoreList] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const isUserModified = useRef(false);
+  const [ignoreList, setIgnoreList] = useState<string[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const isUserModified = useRef(false)
 
   // Fetch ignore list from server on mount
   useEffect(() => {
     const fetchIgnoreList = async () => {
       try {
-        const response = await fetch('/api/ignore-list');
+        const response = await fetch('/api/ignore-list')
         if (response.ok) {
-          const list = await response.json();
+          const list = await response.json()
           if (Array.isArray(list)) {
             // Don't overwrite if user has already modified the list
             if (!isUserModified.current) {
-              setIgnoreList(list.sort((a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base' })));
+              setIgnoreList(
+                list.sort((a: string, b: string) =>
+                  a.localeCompare(b, undefined, { sensitivity: 'base' })
+                )
+              )
             }
-            setIsLoading(false);
-            return;
+            setIsLoading(false)
+            return
           }
         }
       } catch (error) {
-        logger.warn('Server ignore list unavailable, using localStorage fallback:', error);
+        logger.warn(
+          'Server ignore list unavailable, using localStorage fallback:',
+          error
+        )
       }
 
       // Fallback to localStorage if server fetch fails
-      const saved = localStorage.getItem('concatenate-ignore');
+      const saved = localStorage.getItem('concatenate-ignore')
       if (saved) {
         try {
-          const parsed = JSON.parse(saved);
+          const parsed = JSON.parse(saved)
           if (Array.isArray(parsed)) {
             // Don't overwrite if user has already modified the list
             if (!isUserModified.current) {
-              setIgnoreList(parsed.sort((a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: 'base' })));
+              setIgnoreList(
+                parsed.sort((a: string, b: string) =>
+                  a.localeCompare(b, undefined, { sensitivity: 'base' })
+                )
+              )
             }
           }
-        } catch (e) {
-          logger.error("Local storage 'concatenate-ignore' JSON is corrupted. Restoring default ignore list and overwriting old data.");
-          window.alert("Your custom ignore list was corrupted and has been reset to defaults.");
-          setIgnoreList([...DEFAULT_IGNORE_LIST].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })));
+        } catch {
+          logger.error(
+            "Local storage 'concatenate-ignore' JSON is corrupted. Restoring default ignore list and overwriting old data."
+          )
+          window.alert(
+            'Your custom ignore list was corrupted and has been reset to defaults.'
+          )
+          setIgnoreList(
+            [...DEFAULT_IGNORE_LIST].sort((a, b) =>
+              a.localeCompare(b, undefined, { sensitivity: 'base' })
+            )
+          )
         }
       } else {
         // Only set defaults if user hasn't modified and no saved data exists
         if (!isUserModified.current) {
-          setIgnoreList([...DEFAULT_IGNORE_LIST].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' })));
+          setIgnoreList(
+            [...DEFAULT_IGNORE_LIST].sort((a, b) =>
+              a.localeCompare(b, undefined, { sensitivity: 'base' })
+            )
+          )
         }
       }
-      setIsLoading(false);
-    };
+      setIsLoading(false)
+    }
 
-    fetchIgnoreList();
-  }, []);
+    fetchIgnoreList()
+  }, [])
 
   // Save ignore list to server and localStorage when it changes
   useEffect(() => {
-    if (ignoreList.length === 0) return;
-    if (!isUserModified.current) return;
+    if (ignoreList.length === 0) return
+    if (!isUserModified.current) return
 
-    localStorage.setItem('concatenate-ignore', JSON.stringify(ignoreList));
+    localStorage.setItem('concatenate-ignore', JSON.stringify(ignoreList))
 
     const saveToServer = async () => {
       try {
         await fetch('/api/ignore-list', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(ignoreList)
-        });
+          body: JSON.stringify(ignoreList),
+        })
       } catch (error) {
-        logger.error('Failed to save ignore list to server:', error);
+        logger.error('Failed to save ignore list to server:', error)
       }
-    };
+    }
 
-    saveToServer();
-  }, [ignoreList]);
+    saveToServer()
+  }, [ignoreList])
 
   const compiledIgnores = useMemo(() => {
-    return ignoreList.map(pattern => {
+    return ignoreList.map((pattern) => {
       if (pattern.startsWith('/')) {
-        const lastSlash = pattern.lastIndexOf('/');
+        const lastSlash = pattern.lastIndexOf('/')
         if (lastSlash > 0) {
-          const body = pattern.slice(1, lastSlash);
-          const flags = pattern.slice(lastSlash + 1);
+          const body = pattern.slice(1, lastSlash)
+          const flags = pattern.slice(lastSlash + 1)
           try {
-            return new RegExp(body, flags);
-          } catch (e) {
-            return pattern; // Fall back to literal match
+            return new RegExp(body, flags)
+          } catch {
+            return pattern // Fall back to literal match
           }
         }
       }
-      return pattern; // String matches are exact and case-sensitive now
-    });
-  }, [ignoreList]);
+      return pattern // String matches are exact and case-sensitive now
+    })
+  }, [ignoreList])
 
   const addIgnoreItem = useCallback((item: string) => {
-    const trimmed = item.trim();
-    if (!trimmed) return;
+    const trimmed = item.trim()
+    if (!trimmed) return
 
-    isUserModified.current = true;
-    setIgnoreList(prev => {
+    isUserModified.current = true
+    setIgnoreList((prev) => {
       if (prev.includes(trimmed)) {
-        return prev;
+        return prev
       }
-      const next = [...prev, trimmed].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
-      return next;
-    });
-  }, []);
+      const next = [...prev, trimmed].sort((a, b) =>
+        a.localeCompare(b, undefined, { sensitivity: 'base' })
+      )
+      return next
+    })
+  }, [])
 
   const removeIgnoreItem = useCallback((item: string) => {
-    isUserModified.current = true;
-    setIgnoreList(prev => prev.filter(i => i !== item));
-  }, []);
+    isUserModified.current = true
+    setIgnoreList((prev) => prev.filter((i) => i !== item))
+  }, [])
 
   return {
     ignoreList,
     compiledIgnores,
     isLoading,
     addIgnoreItem,
-    removeIgnoreItem
-  };
-};
+    removeIgnoreItem,
+  }
+}

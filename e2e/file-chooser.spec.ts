@@ -3,11 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { test, expect } from './fixtures';
-import { SIMPLE_PROJECT, REACT_PROJECT } from './fixtures/test-data';
-import { logger } from '../src/lib/logger';
-import type { Page, APIRequestContext, Locator } from '@playwright/test';
-
+import { test, expect } from './fixtures'
+import { SIMPLE_PROJECT, REACT_PROJECT } from './fixtures/test-data'
+import { logger } from '../src/lib/logger'
+import type { Page, APIRequestContext, Locator } from '@playwright/test'
 
 /**
  * Helper to upload files to a webkitdirectory input.
@@ -31,47 +30,56 @@ async function setFilesForWebkitDirectory(
   files: Array<{ name: string; content: string; relativePath: string }>
 ): Promise<() => void> {
   // Wait for page to be fully loaded and stable
-  await page.waitForLoadState('domcontentloaded');
+  await page.waitForLoadState('domcontentloaded')
 
   // Wait for the webkitdirectory input to be present in the DOM.
-  const fileInputWithAttr = page.locator('input[type="file"][webkitdirectory]');
-  await fileInputWithAttr.waitFor({ state: 'attached' });
+  const fileInputWithAttr = page.locator('input[type="file"][webkitdirectory]')
+  await fileInputWithAttr.waitFor({ state: 'attached' })
 
   // Build buffer-based payload. The relativePath field sets file.webkitRelativePath.
-  const payload = files.map(f => ({
+  const payload = files.map((f) => ({
     name: f.name,
     mimeType: 'application/octet-stream',
     buffer: Buffer.from(f.content),
     relativePath: f.relativePath,
-  }));
+  }))
 
   // Resolve a bare locator (no [webkitdirectory] filter) BEFORE stripping the attribute.
   // Playwright re-evaluates locators lazily — if we call setInputFiles() on a locator
   // that includes [webkitdirectory] in its CSS selector, and we already removed the
   // attribute, the element no longer matches and the call times out on WebKit.
-  const fileInput = page.locator('input[type="file"]').first();
+  const fileInput = page.locator('input[type="file"]').first()
 
   // Momentarily remove webkitdirectory so Playwright lets us pass buffer payloads,
   // then restore it so the input remains semantically correct after this call.
-  await fileInput.evaluate((el: HTMLInputElement) => el.removeAttribute('webkitdirectory'));
+  await fileInput.evaluate((el: HTMLInputElement) =>
+    el.removeAttribute('webkitdirectory')
+  )
   try {
-    await fileInput.setInputFiles(payload);
+    await fileInput.setInputFiles(payload)
   } finally {
     // Restore the attribute. On WebKit/Mobile Safari the browser context may
     // have been recycled by the time we get here (e.g. the file-input change
     // triggered a navigation or the process was restarted). Swallow those
     // errors — the restore is cosmetic and does not affect test correctness.
     try {
-      await fileInput.evaluate((el: HTMLInputElement) => el.setAttribute('webkitdirectory', ''));
+      await fileInput.evaluate((el: HTMLInputElement) =>
+        el.setAttribute('webkitdirectory', '')
+      )
     } catch (restoreErr: unknown) {
       // Log — don't fail — attribute restore is cosmetic. On WebKit the browser
       // context may have been recycled by the file-input change event.
-      logger.warn('[file-chooser] webkitdirectory restore failed (likely WebKit context recycle):', restoreErr);
+      logger.warn(
+        '[file-chooser] webkitdirectory restore failed (likely WebKit context recycle):',
+        restoreErr
+      )
     }
   }
 
   // No temp directory was created, so cleanup is a no-op.
-  return () => { /* no-op */ };
+  return () => {
+    /* no-op */
+  }
 }
 
 /**
@@ -80,19 +88,44 @@ async function setFilesForWebkitDirectory(
 async function resetIgnoreList(apiContext: APIRequestContext): Promise<void> {
   const defaultIgnoreList = [
     '.concatenate-ignore',
-    '.DS_Store', '.env', '.expo', '.git', '.gradle', '.next',
-    '.secrets', '.terraform', '.vagrant', '.vscode',
+    '.DS_Store',
+    '.env',
+    '.expo',
+    '.git',
+    '.gradle',
+    '.next',
+    '.secrets',
+    '.terraform',
+    '.vagrant',
+    '.vscode',
     '/^\\.concatenate-ignore-worker-\\d+$/',
-    '/\\.class$/', '/\\.exe$/',
-    '/\\.jar$/', '/\\.log$/', '/\\.o$/', '/\\.obj$/', '/\\.swp$/', '/^__.*cache__$/',
-    '/^\\..*_cache$/', 'bin', 'build', 'desktop.ini', 'dist', 'node_modules',
-    'obj', 'package-lock.json', 'ruff_output.txt', 'target', 'Thumbs.db', 'vendor', 'venv'
-  ];
+    '/\\.class$/',
+    '/\\.exe$/',
+    '/\\.jar$/',
+    '/\\.log$/',
+    '/\\.o$/',
+    '/\\.obj$/',
+    '/\\.swp$/',
+    '/^__.*cache__$/',
+    '/^\\..*_cache$/',
+    'bin',
+    'build',
+    'desktop.ini',
+    'dist',
+    'node_modules',
+    'obj',
+    'package-lock.json',
+    'ruff_output.txt',
+    'target',
+    'Thumbs.db',
+    'vendor',
+    'venv',
+  ]
   const response = await apiContext.post('/api/ignore-list', {
     data: defaultIgnoreList,
-  });
+  })
   if (!response.ok()) {
-    throw new Error(`Failed to reset ignore list — HTTP ${response.status()}`);
+    throw new Error(`Failed to reset ignore list — HTTP ${response.status()}`)
   }
 }
 
@@ -100,7 +133,7 @@ async function resetIgnoreList(apiContext: APIRequestContext): Promise<void> {
  * Helper function to click an element using JavaScript for better Firefox compatibility
  */
 async function jsClick(locator: Locator): Promise<void> {
-  await locator.evaluate((el: HTMLElement) => el.click());
+  await locator.evaluate((el: HTMLElement) => el.click())
 }
 
 /**
@@ -112,37 +145,45 @@ test.describe('File Upload via File Chooser', () => {
   test.beforeEach(async ({ page, apiContext }) => {
     // Clear localStorage before navigation
     await page.addInitScript(() => {
-      localStorage.removeItem('concatenate-ignore');
-      localStorage.removeItem('concatenate-view-mode');
-      localStorage.removeItem('concatenate-dark-mode');
-    });
+      localStorage.removeItem('concatenate-ignore')
+      localStorage.removeItem('concatenate-view-mode')
+      localStorage.removeItem('concatenate-dark-mode')
+    })
 
     // Reset server-side ignore list BEFORE navigation so client fetches correct state.
     // Uses worker-specific ignore file via X-Worker-Id header from apiContext fixture.
-    await resetIgnoreList(apiContext);
+    await resetIgnoreList(apiContext)
 
     // Use 'domcontentloaded' for faster Firefox navigation
-    await page.goto('/', { waitUntil: 'domcontentloaded' });
-  });
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+  })
 
   test('should upload single file via file chooser', async ({ page }) => {
     // Use helper to set a single file with proper webkitRelativePath
     const cleanup = await setFilesForWebkitDirectory(page, [
-      { name: 'hello.js', content: 'console.log("Hello, World!");', relativePath: 'test/hello.js' }
-    ]);
+      {
+        name: 'hello.js',
+        content: 'console.log("Hello, World!");',
+        relativePath: 'test/hello.js',
+      },
+    ])
 
     try {
       // Wait for processing to complete
-      await expect(page.getByText(/Reading Files/)).not.toBeVisible({ timeout: 10000 });
+      await expect(page.getByText(/Reading Files/)).not.toBeVisible({
+        timeout: 10000,
+      })
 
       // Verify file appears in the list
-      const fileList = page.locator('.grid').first();
-      await expect(fileList.getByText('hello.js', { exact: true })).toBeVisible();
-      await expect(page.getByText(/Selected Files.*1/)).toBeVisible();
+      const fileList = page.locator('.grid').first()
+      await expect(
+        fileList.getByText('hello.js', { exact: true })
+      ).toBeVisible()
+      await expect(page.getByText(/Selected Files.*1/)).toBeVisible()
     } finally {
-      cleanup();
+      cleanup()
     }
-  });
+  })
 
   test('should upload multiple files via file chooser', async ({ page }) => {
     // Use helper to set files with proper webkitRelativePath
@@ -150,57 +191,81 @@ test.describe('File Upload via File Chooser', () => {
       { name: 'a.js', content: 'const a = 1;', relativePath: 'test/a.js' },
       { name: 'b.js', content: 'const b = 2;', relativePath: 'test/b.js' },
       { name: 'c.js', content: 'const c = 3;', relativePath: 'test/c.js' },
-    ];
+    ]
 
-    const cleanup = await setFilesForWebkitDirectory(page, fileContents);
+    const cleanup = await setFilesForWebkitDirectory(page, fileContents)
 
     try {
       // Wait for processing to complete
-      await expect(page.getByText(/Reading Files/)).not.toBeVisible({ timeout: 10000 });
+      await expect(page.getByText(/Reading Files/)).not.toBeVisible({
+        timeout: 10000,
+      })
 
       // Verify all files appear
-      const fileList = page.locator('.grid').first();
+      const fileList = page.locator('.grid').first()
       for (const { name } of fileContents) {
-        await expect(fileList.getByText(name, { exact: true })).toBeVisible();
+        await expect(fileList.getByText(name, { exact: true })).toBeVisible()
       }
 
-      await expect(page.getByText(/Selected Files.*3/)).toBeVisible();
+      await expect(page.getByText(/Selected Files.*3/)).toBeVisible()
     } finally {
-      cleanup();
+      cleanup()
     }
-  });
+  })
 
   test('should upload files with directory structure', async ({ page }) => {
     // Use helper to set files with proper webkitRelativePath for nested structure
     const structure = [
-      { name: 'index.js', content: 'export default {};', relativePath: 'project/src/index.js' },
-      { name: 'helpers.js', content: 'export const help = () => {};', relativePath: 'project/src/utils/helpers.js' },
-      { name: 'index.test.js', content: 'test("index");', relativePath: 'project/tests/index.test.js' },
-    ];
+      {
+        name: 'index.js',
+        content: 'export default {};',
+        relativePath: 'project/src/index.js',
+      },
+      {
+        name: 'helpers.js',
+        content: 'export const help = () => {};',
+        relativePath: 'project/src/utils/helpers.js',
+      },
+      {
+        name: 'index.test.js',
+        content: 'test("index");',
+        relativePath: 'project/tests/index.test.js',
+      },
+    ]
 
-    const cleanup = await setFilesForWebkitDirectory(page, structure);
+    const cleanup = await setFilesForWebkitDirectory(page, structure)
 
     try {
       // Wait for processing to complete
-      await expect(page.getByText(/Reading Files/)).not.toBeVisible({ timeout: 10000 });
+      await expect(page.getByText(/Reading Files/)).not.toBeVisible({
+        timeout: 10000,
+      })
 
       // Verify files appear
-      const fileList = page.locator('.grid').first();
-      await expect(fileList.getByText('index.js', { exact: true })).toBeVisible();
-      await expect(fileList.getByText('helpers.js', { exact: true })).toBeVisible();
-      await expect(fileList.getByText('index.test.js', { exact: true })).toBeVisible();
+      const fileList = page.locator('.grid').first()
+      await expect(
+        fileList.getByText('index.js', { exact: true })
+      ).toBeVisible()
+      await expect(
+        fileList.getByText('helpers.js', { exact: true })
+      ).toBeVisible()
+      await expect(
+        fileList.getByText('index.test.js', { exact: true })
+      ).toBeVisible()
     } finally {
-      cleanup();
+      cleanup()
     }
-  });
+  })
 
   test('should handle de-concatenate file upload', async ({ page }) => {
     // Switch to de-concatenate mode using JavaScript click for Firefox compatibility
-    const deconcatButton = page.getByRole('button', { name: 'De-concatenate' });
-    await deconcatButton.waitFor({ state: 'visible', timeout: 10000 });
-    await jsClick(deconcatButton);
+    const deconcatButton = page.getByRole('button', { name: 'De-concatenate' })
+    await deconcatButton.waitFor({ state: 'visible', timeout: 10000 })
+    await jsClick(deconcatButton)
     // Wait for mode switch to complete
-    await expect(deconcatButton).toHaveClass(/bg-white|dark:bg-slate-800/, { timeout: 10000 });
+    await expect(deconcatButton).toHaveClass(/bg-white|dark:bg-slate-800/, {
+      timeout: 10000,
+    })
 
     // Create a mock concatenated file using the actual app format
     const concatenatedContent = `<<<<< CONCATENATOR_FILE_START: hello.js >>>>>
@@ -210,11 +275,11 @@ console.log("Hello");
 <<<<< CONCATENATOR_FILE_START: world.js >>>>>
 console.log("World");
 <<<<< CONCATENATOR_FILE_END >>>>>
-`;
+`
 
     // Wait for the input to be re-rendered without webkitdirectory
-    const fileInput = page.locator('input[type="file"]:not([webkitdirectory])');
-    await fileInput.waitFor({ state: 'attached' });
+    const fileInput = page.locator('input[type="file"]:not([webkitdirectory])')
+    await fileInput.waitFor({ state: 'attached' })
 
     // Wait for download event as successful de-concatenation triggers ZIP download
     const [download] = await Promise.all([
@@ -222,92 +287,108 @@ console.log("World");
       fileInput.setInputFiles({
         name: 'bundle.txt',
         buffer: Buffer.from(concatenatedContent),
-        mimeType: 'text/plain'
-      })
-    ]);
+        mimeType: 'text/plain',
+      }),
+    ])
 
     // Verify it's a ZIP file
-    expect(download.suggestedFilename()).toMatch(/\.zip$/i);
+    expect(download.suggestedFilename()).toMatch(/\.zip$/i)
 
     // Clean up download
-    await download.delete();
-  });
+    await download.delete()
+  })
 
-  test('should reject non-txt files in de-concatenate mode', async ({ page }) => {
+  test('should reject non-txt files in de-concatenate mode', async ({
+    page,
+  }) => {
     // Switch to de-concatenate mode using JavaScript click for Firefox compatibility
-    const deconcatButton = page.getByRole('button', { name: 'De-concatenate' });
-    await deconcatButton.waitFor({ state: 'visible', timeout: 10000 });
-    await jsClick(deconcatButton);
+    const deconcatButton = page.getByRole('button', { name: 'De-concatenate' })
+    await deconcatButton.waitFor({ state: 'visible', timeout: 10000 })
+    await jsClick(deconcatButton)
     // Wait for mode switch to complete
-    await expect(deconcatButton).toHaveClass(/bg-white|dark:bg-slate-800/, { timeout: 10000 });
+    await expect(deconcatButton).toHaveClass(/bg-white|dark:bg-slate-800/, {
+      timeout: 10000,
+    })
 
     // Wait for the input to be re-rendered without webkitdirectory
-    const fileInput = page.locator('input[type="file"]:not([webkitdirectory])');
-    await fileInput.waitFor({ state: 'attached' });
+    const fileInput = page.locator('input[type="file"]:not([webkitdirectory])')
+    await fileInput.waitFor({ state: 'attached' })
     // For de-concatenate mode, use buffer since webkitdirectory is not set
     await fileInput.setInputFiles({
       name: 'data.json',
       buffer: Buffer.from('{"key": "value"}'),
-      mimeType: 'application/json'
-    });
+      mimeType: 'application/json',
+    })
 
     // May show error or warning for non-txt file, or may just not process
     // The app behavior may vary - just verify no crash
-    await expect(page.getByRole('heading', { name: 'Concatenator' })).toBeVisible();
-  });
-});
+    await expect(
+      page.getByRole('heading', { name: 'Concatenator' })
+    ).toBeVisible()
+  })
+})
 
 test.describe.serial('File Upload with Test Fixtures', () => {
   test.beforeEach(async ({ page }) => {
     // Use 'domcontentloaded' for faster Firefox navigation
-    await page.goto('/', { waitUntil: 'domcontentloaded' });
-  });
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
+  })
 
   test('should upload simple project fixture', async ({ page }) => {
     // Use helper to upload fixture files
-    const files = SIMPLE_PROJECT.map(f => ({
+    const files = SIMPLE_PROJECT.map((f) => ({
       name: f.name,
       content: f.content,
-      relativePath: f.path
-    }));
+      relativePath: f.path,
+    }))
 
-    const cleanup = await setFilesForWebkitDirectory(page, files);
+    const cleanup = await setFilesForWebkitDirectory(page, files)
 
     try {
       // Wait for processing to complete
-      await expect(page.getByText(/Reading Files/)).not.toBeVisible({ timeout: 10000 });
+      await expect(page.getByText(/Reading Files/)).not.toBeVisible({
+        timeout: 10000,
+      })
 
       // Verify all fixture files are present
-      const fileList = page.locator('.grid').first();
+      const fileList = page.locator('.grid').first()
       for (const file of SIMPLE_PROJECT) {
-        await expect(fileList.getByText(file.name, { exact: true })).toBeVisible();
+        await expect(
+          fileList.getByText(file.name, { exact: true })
+        ).toBeVisible()
       }
     } finally {
-      cleanup();
+      cleanup()
     }
-  });
+  })
 
   test('should upload React project fixture', async ({ page }) => {
     // Use helper to upload fixture files
-    const files = REACT_PROJECT.map(f => ({
+    const files = REACT_PROJECT.map((f) => ({
       name: f.name,
       content: f.content,
-      relativePath: f.path
-    }));
+      relativePath: f.path,
+    }))
 
-    const cleanup = await setFilesForWebkitDirectory(page, files);
+    const cleanup = await setFilesForWebkitDirectory(page, files)
 
     try {
       // Wait for processing to complete
-      await expect(page.getByText(/Reading Files/)).not.toBeVisible({ timeout: 10000 });
+      await expect(page.getByText(/Reading Files/)).not.toBeVisible({
+        timeout: 10000,
+      })
 
       // Verify React project files
-      const fileList = page.locator('.grid').first();
-      await expect(fileList.getByText('App.tsx', { exact: true })).toBeVisible();
-      await expect(fileList.getByText('Button.tsx', { exact: true })).toBeVisible();
-      await expect(fileList.getByText('package.json', { exact: true })).toBeVisible();
+      const fileList = page.locator('.grid').first()
+      await expect(fileList.getByText('App.tsx', { exact: true })).toBeVisible()
+      await expect(
+        fileList.getByText('Button.tsx', { exact: true })
+      ).toBeVisible()
+      await expect(
+        fileList.getByText('package.json', { exact: true })
+      ).toBeVisible()
     } finally {
-      cleanup();
+      cleanup()
     }
-  });
-});
+  })
+})

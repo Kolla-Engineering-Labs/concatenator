@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.1] - 2026-04-20
 
 ### Added
+
 - **De-concatenation Error Handling**: Warning messages when files are skipped due to missing end markers (e.g., LLM hallucinations or deletions). Console logging for all skipped files with their paths.
 - **Duplicate Path Handling**: De-concatenation now gracefully handles duplicate file paths by appending counter suffixes (e.g., `file(1).js`, `file(2).js`) to prevent ZIP library errors.
 - **Documentation**: Added error handling documentation explaining parser behavior for corrupted/missing markers during de-concatenation.
@@ -15,9 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Hidden File Documentation**: Clarified that hidden files (dotfiles) are included by default and explained how to exclude them via the ignore list.
 
 ### Changed
+
 - **Default Ignore List**: Removed `LICENSE` from default ignore list to allow importing license files.
 
 ### Added
+
 - Initial open-source documentation suite:
   - `CONTRIBUTING.md` — Development setup, testing guidelines, and PR process
   - `CODE_OF_CONDUCT.md` — Contributor Covenant v2.1
@@ -29,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `CHANGELOG.md` — This file
 
 ### Security
+
 - Documented "in-memory only" API key storage policy
 - Added path traversal protection details
 - Specified GitHub Private Vulnerability Reporting workflow
@@ -36,6 +40,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2026-04-15
 
 ### Added
+
 - Initial release of Concatenator
 - **Full-Circle File Management**: Merge directory structures into LLM-ready **.txt** or **.pdf** files, with the ability to instantly reconstruct and download the entire file tree as a **ZIP archive** from a single **Concatenator .txt file**
 - **Smart Ignore System**: Regex and string-based file exclusion with persistent sync

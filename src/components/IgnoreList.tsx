@@ -3,18 +3,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Settings2, Maximize2, Minimize2, X, Plus } from 'lucide-react';
+import React from 'react'
+import { motion, AnimatePresence } from 'motion/react'
+import { Settings2, Maximize2, Minimize2, X, Plus } from 'lucide-react'
 
 interface IgnoreListProps {
-  ignoreList: string[];
-  isIgnoreListMinimized: boolean;
-  setIsIgnoreListMinimized: (minimized: boolean) => void;
-  newIgnoreItem: string;
-  setNewIgnoreItem: (item: string) => void;
-  addIgnoreItem: () => void;
-  removeIgnoreItem: (item: string) => void;
+  ignoreList: string[]
+  isIgnoreListMinimized: boolean
+  setIsIgnoreListMinimized: (minimized: boolean) => void
+  newIgnoreItem: string
+  setNewIgnoreItem: (item: string) => void
+  addIgnoreItem: () => void
+  removeIgnoreItem: (item: string) => void
 }
 
 /**
@@ -34,23 +34,35 @@ export const IgnoreList: React.FC<IgnoreListProps> = ({
       <div className="flex items-center justify-between h-9">
         <div className="flex items-center gap-2 text-slate-500">
           <Settings2 className="w-4 h-4" />
-          <h2 className="text-sm font-semibold uppercase tracking-wider">Ignore List</h2>
+          <h2 className="text-sm font-semibold uppercase tracking-wider">
+            Ignore List
+          </h2>
           {!isIgnoreListMinimized && (
-            <span className="text-xs text-slate-400 font-normal normal-case hidden sm:inline">(files/folders matching these names will be skipped)</span>
+            <span className="text-xs text-slate-400 font-normal normal-case hidden sm:inline">
+              (files/folders matching these names will be skipped)
+            </span>
           )}
         </div>
         <button
           onClick={() => setIsIgnoreListMinimized(!isIgnoreListMinimized)}
           className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors text-slate-400 hover:text-brand-500"
-          title={isIgnoreListMinimized ? "Expand ignore list" : "Minimize ignore list"}
+          title={
+            isIgnoreListMinimized
+              ? 'Expand ignore list'
+              : 'Minimize ignore list'
+          }
         >
-          {isIgnoreListMinimized ? <Maximize2 className="w-4 h-4" /> : <Minimize2 className="w-4 h-4" />}
+          {isIgnoreListMinimized ? (
+            <Maximize2 className="w-4 h-4" />
+          ) : (
+            <Minimize2 className="w-4 h-4" />
+          )}
         </button>
       </div>
-      
+
       <AnimatePresence>
         {!isIgnoreListMinimized && (
-          <motion.div 
+          <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
@@ -80,7 +92,7 @@ export const IgnoreList: React.FC<IgnoreListProps> = ({
                     </motion.div>
                   ))}
                 </AnimatePresence>
-                
+
                 <div className="relative flex-grow min-w-[150px] max-w-xs">
                   <input
                     type="text"
@@ -88,20 +100,34 @@ export const IgnoreList: React.FC<IgnoreListProps> = ({
                     onChange={(e) => setNewIgnoreItem(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
-                        e.preventDefault();
-                        addIgnoreItem();
+                        e.preventDefault()
+                        addIgnoreItem()
                       }
                     }}
                     placeholder="Add ignore pattern..."
                     className="w-full bg-transparent border-none focus:ring-0 text-sm py-1 px-2 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500"
                   />
                   <div className="absolute top-full left-0 mt-1 text-[10px] text-slate-400 whitespace-nowrap">
-                    {newIgnoreItem.includes('*') && !newIgnoreItem.startsWith('/') ? (
+                    {newIgnoreItem.includes('*') &&
+                    !newIgnoreItem.startsWith('/') ? (
                       <span className="text-brand-500 dark:text-brand-400 font-medium">
-                        Tip: For wildcards, use regex: <code className="bg-brand-50 dark:bg-brand-900/20 px-1 rounded">/{newIgnoreItem.replace(/\*/g, '.*')}/</code>
+                        Tip: For wildcards, use regex:{' '}
+                        <code className="bg-brand-50 dark:bg-brand-900/20 px-1 rounded">
+                          /{newIgnoreItem.replace(/\*/g, '.*')}/
+                        </code>
                       </span>
                     ) : (
-                      <>Tip: Use <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">/pattern/</code> for regex (e.g. <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">/\.test\.ts$/</code>)</>
+                      <>
+                        Tip: Use{' '}
+                        <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">
+                          /pattern/
+                        </code>{' '}
+                        for regex (e.g.{' '}
+                        <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">
+                          /\.test\.ts$/
+                        </code>
+                        )
+                      </>
                     )}
                   </div>
                   {newIgnoreItem && (
@@ -119,5 +145,5 @@ export const IgnoreList: React.FC<IgnoreListProps> = ({
         )}
       </AnimatePresence>
     </div>
-  );
-};
+  )
+}
