@@ -11,6 +11,7 @@ import {
   writeFileSync,
   mkdirSync,
   existsSync,
+  writeFileSync as fsWriteFileSync,
 } from 'fs'
 import { join, relative, dirname } from 'path'
 import {
@@ -242,6 +243,8 @@ Examples:
 
   // Concatenate mode (default)
   const targetDir = inputPath
+  const nonFlagArgs = args.filter((arg) => !arg.startsWith('-'))
+  const outputFile = nonFlagArgs[1] // Optional output file path
 
   try {
     const stats = statSync(targetDir)
@@ -258,7 +261,13 @@ Examples:
     }
 
     const result = concatenate(files)
-    process.stdout.write(result)
+
+    if (outputFile) {
+      fsWriteFileSync(outputFile, result)
+      logger.info(`Concatenated ${files.length} file(s) to ${outputFile}`)
+    } else {
+      process.stdout.write(result)
+    }
   } catch (error) {
     logger.error(
       `Error: ${error instanceof Error ? error.message : String(error)}`
