@@ -103,6 +103,9 @@ export const useFileProcessing = ({ appMode, compiledIgnores, maxFileLimit, isIg
         let foundInThisFile = false;
         const content = fileItem.content as string;
 
+        // Track added paths to prevent duplicates in ZIP (some libraries error on duplicates)
+        const addedPaths = new Set<string>();
+
         let searchIndex = 0;
 
         /**
@@ -196,7 +199,21 @@ export const useFileProcessing = ({ appMode, compiledIgnores, maxFileLimit, isIg
           fileContent = fileContent.replace(/^[\r\n]+|[\r\n]+$/g, '');
 
           if (sanitizedPath) {
-            zip.file(sanitizedPath, fileContent);
+            // Handle duplicate paths by appending a counter suffix (e.g., file(1).js)
+            let finalPath = sanitizedPath;
+            let counter = 1;
+            const lastDotIndex = sanitizedPath.lastIndexOf('.');
+            const hasExtension = lastDotIndex > sanitizedPath.lastIndexOf('/');
+            const baseName = hasExtension ? sanitizedPath.slice(0, lastDotIndex) : sanitizedPath;
+            const extension = hasExtension ? sanitizedPath.slice(lastDotIndex) : '';
+
+            while (addedPaths.has(finalPath)) {
+              finalPath = `${baseName}(${counter})${extension}`;
+              counter++;
+            }
+
+            addedPaths.add(finalPath);
+            zip.file(finalPath, fileContent);
             foundInThisFile = true;
             foundAnyTotal = true;
           }
