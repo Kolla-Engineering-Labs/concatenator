@@ -1,12 +1,11 @@
 interface ConcatenatorLogoProps {
-  className?: string;
+  className?: string
 }
 
 export function ConcatenatorLogo({ className }: ConcatenatorLogoProps) {
   return (
     <svg viewBox="0 0 100 109" className={className}>
       <g transform="translate(0,109) scale(0.1,-0.1)">
-
         {/* Main C */}
         <path
           className="fill-current text-slate-800 dark:text-slate-200"
@@ -99,8 +98,7 @@ l25 -19 -23 -46 c-19 -40 -25 -45 -46 -39 -18 4 -28 0 -37 -14 -12 -19 -15
           d="M-102 8 c0 -2 -7 -6 -15 -10 -8 -3 -15 -1 -15 4 0 6 7 10 15 10 8 0 15 -2 15
 -4z"
         />
-
       </g>
     </svg>
-  );
+  )
 }

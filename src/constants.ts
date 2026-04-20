@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export const START_DELIMITER = '<<<<< CONCATENATOR_FILE_START: ';
-export const END_DELIMITER = ' >>>>>';
-export const FILE_END_DELIMITER = '<<<<< CONCATENATOR_FILE_END >>>>>';
+export const START_DELIMITER = '<<<<< CONCATENATOR_FILE_START: '
+export const END_DELIMITER = ' >>>>>'
+export const FILE_END_DELIMITER = '<<<<< CONCATENATOR_FILE_END >>>>>'
 
 export const DEFAULT_IGNORE_LIST = [
   '.concatenate-ignore',
@@ -40,5 +40,5 @@ export const DEFAULT_IGNORE_LIST = [
   'target',
   'Thumbs.db',
   'vendor',
-  'venv'
-];
+  'venv',
+]

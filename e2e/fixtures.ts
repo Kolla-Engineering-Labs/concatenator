@@ -3,11 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { test as baseTest, expect, type APIRequestContext } from '@playwright/test';
+import {
+  test as baseTest,
+  expect,
+  type APIRequestContext,
+} from '@playwright/test'
 
 type TestFixtures = {
-  apiContext: APIRequestContext;
-};
+  apiContext: APIRequestContext
+}
 
 /**
  * Generate a worker-specific ID for test isolation.
@@ -15,7 +19,7 @@ type TestFixtures = {
  * Returns just the numeric index (e.g., "0", "1") for security simplicity.
  */
 function getWorkerId(workerIndex: number): string {
-  return String(workerIndex);
+  return String(workerIndex)
 }
 
 /**
@@ -29,33 +33,33 @@ function getWorkerId(workerIndex: number): string {
 export const test = baseTest.extend<TestFixtures>({
   // Test-scoped fixture: provides API context with worker ID header
   apiContext: async ({ playwright, baseURL }, use, testInfo) => {
-    const workerId = getWorkerId(testInfo.workerIndex);
+    const workerId = getWorkerId(testInfo.workerIndex)
     const apiContext = await playwright.request.newContext({
       baseURL,
       extraHTTPHeaders: {
         'X-Worker-Id': workerId,
       },
-    });
+    })
 
-    await use(apiContext);
+    await use(apiContext)
 
     // Cleanup: close the context
-    await apiContext.dispose();
+    await apiContext.dispose()
   },
 
   // Override page fixture to add worker ID header
   page: async ({ page }, use, testInfo) => {
-    const workerId = getWorkerId(testInfo.workerIndex);
+    const workerId = getWorkerId(testInfo.workerIndex)
     // Add X-Worker-Id header to all requests from the page
     await page.setExtraHTTPHeaders({
       'X-Worker-Id': workerId,
-    });
+    })
 
-    await use(page);
+    await use(page)
   },
-});
+})
 
-export { expect };
+export { expect }
 
 /**
  * Default ignore list items for resetting the ignore list in tests.
@@ -63,14 +67,39 @@ export { expect };
  */
 export const DEFAULT_IGNORE_LIST = [
   '.concatenate-ignore',
-  '.DS_Store', '.env', '.expo', '.git', '.gradle', '.next',
-  '.secrets', '.terraform', '.vagrant', '.vscode',
+  '.DS_Store',
+  '.env',
+  '.expo',
+  '.git',
+  '.gradle',
+  '.next',
+  '.secrets',
+  '.terraform',
+  '.vagrant',
+  '.vscode',
   '/^\\.concatenate-ignore-worker-\\d+$/',
-  '/\\.class$/', '/\\.exe$/',
-  '/\\.jar$/', '/\\.log$/', '/\\.o$/', '/\\.obj$/', '/\\.swp$/', '/^__.*cache__$/',
-  '/^\\..*_cache$/', 'bin', 'build', 'desktop.ini', 'dist', 'node_modules',
-  'obj', 'package-lock.json', 'ruff_output.txt', 'target', 'Thumbs.db', 'vendor', 'venv'
-];
+  '/\\.class$/',
+  '/\\.exe$/',
+  '/\\.jar$/',
+  '/\\.log$/',
+  '/\\.o$/',
+  '/\\.obj$/',
+  '/\\.swp$/',
+  '/^__.*cache__$/',
+  '/^\\..*_cache$/',
+  'bin',
+  'build',
+  'desktop.ini',
+  'dist',
+  'node_modules',
+  'obj',
+  'package-lock.json',
+  'ruff_output.txt',
+  'target',
+  'Thumbs.db',
+  'vendor',
+  'venv',
+]
 
 /**
  * Helper to reset the ignore list via API using the worker-specific context.
@@ -78,37 +107,43 @@ export const DEFAULT_IGNORE_LIST = [
  *
  * @param apiContext - The API request context with worker ID header
  */
-export async function resetIgnoreList(apiContext: APIRequestContext): Promise<void> {
-  const maxRetries = 3;
-  const baseDelay = 100;
+export async function resetIgnoreList(
+  apiContext: APIRequestContext
+): Promise<void> {
+  const maxRetries = 3
+  const baseDelay = 100
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       const response = await apiContext.post('/api/ignore-list', {
         data: DEFAULT_IGNORE_LIST,
-      });
+        timeout: 10000,
+      })
 
       if (response.ok()) {
-        return;
+        return
       }
 
       // If server error (5xx), retry
       if (response.status() >= 500 && attempt < maxRetries - 1) {
-        await new Promise(r => setTimeout(r, baseDelay * (attempt + 1)));
-        continue;
+        await new Promise((r) => setTimeout(r, baseDelay * (attempt + 1)))
+        continue
       }
 
-      throw new Error(`Failed to reset ignore list — HTTP ${response.status()}`);
+      throw new Error(`Failed to reset ignore list — HTTP ${response.status()}`)
     } catch (error) {
-      // Retry on network errors
-      if (attempt < maxRetries - 1 && (
+      // Retry on network errors (including WebKit-specific "socket hang up")
+      if (
+        attempt < maxRetries - 1 &&
         error instanceof Error &&
-        (error.message.includes('ECONNRESET') || error.message.includes('ETIMEDOUT'))
-      )) {
-        await new Promise(r => setTimeout(r, baseDelay * (attempt + 1)));
-        continue;
+        (error.message.includes('ECONNRESET') ||
+          error.message.includes('ETIMEDOUT') ||
+          error.message.includes('socket hang up'))
+      ) {
+        await new Promise((r) => setTimeout(r, baseDelay * (attempt + 1) * 2))
+        continue
       }
-      throw error;
+      throw error
     }
   }
 }

@@ -3,56 +3,66 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo, useEffect, useCallback, lazy, Suspense } from 'react';
-import { Analytics } from '@vercel/analytics/react';
-import { SpeedInsights } from '@vercel/speed-insights/react';
-import posthog from 'posthog-js';
-import { Header } from './components/Header';
-import { Footer } from './components/Footer';
-import { ModeToggle } from './components/ModeToggle';
-import { UploadZone } from './components/UploadZone';
-import { FileView } from './components/FileView';
+import React, {
+  useState,
+  useMemo,
+  useEffect,
+  useCallback,
+  lazy,
+  Suspense,
+} from 'react'
+import { Analytics } from '@vercel/analytics/react'
+import { SpeedInsights } from '@vercel/speed-insights/react'
+import posthog from 'posthog-js'
+import { Header } from './components/Header'
+import { Footer } from './components/Footer'
+import { ModeToggle } from './components/ModeToggle'
+import { UploadZone } from './components/UploadZone'
+import { FileView } from './components/FileView'
 
 // Lazy load components that aren't needed on initial render
-const IgnoreList = lazy(() => import('./components/IgnoreList').then(m => ({ default: m.IgnoreList })));
-import { useIgnoreList } from './hooks/useIgnoreList';
-import { useFileProcessing } from './hooks/useFileProcessing';
-import { useFileTree } from './hooks/useFileTree';
-import { ViewMode, AppMode, FileItem, TreeItem, OutputFormat } from './types';
+const IgnoreList = lazy(() =>
+  import('./components/IgnoreList').then((m) => ({ default: m.IgnoreList }))
+)
+import { useIgnoreList } from './hooks/useIgnoreList'
+import { useFileProcessing } from './hooks/useFileProcessing'
+import { useFileTree } from './hooks/useFileTree'
+import { ViewMode, AppMode, FileItem, TreeItem, OutputFormat } from './types'
 
 /**
  * The main application component that orchestrates the file concatenation and de-concatenation workflow.
  */
 export default function App() {
   // --- UI State ---
-  const [appMode, setAppMode] = useState<AppMode>('concatenate');
+  const [appMode, setAppMode] = useState<AppMode>('concatenate')
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    const saved = localStorage.getItem('concatenate-view-mode');
-    return (saved as ViewMode) || 'list';
-  });
+    const saved = localStorage.getItem('concatenate-view-mode')
+    return (saved as ViewMode) || 'list'
+  })
   const [isDarkMode, setIsDarkMode] = useState(() => {
-    const saved = localStorage.getItem('concatenate-dark-mode');
-    return saved === 'true';
-  });
+    const saved = localStorage.getItem('concatenate-dark-mode')
+    return saved === 'true'
+  })
   const [isDropzoneMinimized, setIsDropzoneMinimized] = useState(() => {
-    const saved = localStorage.getItem('concatenate-dropzone-minimized');
-    return saved === 'true';
-  });
+    const saved = localStorage.getItem('concatenate-dropzone-minimized')
+    return saved === 'true'
+  })
   const [isIgnoreListMinimized, setIsIgnoreListMinimized] = useState(() => {
-    const saved = localStorage.getItem('concatenate-ignore-minimized');
-    return saved === 'true';
-  });
+    const saved = localStorage.getItem('concatenate-ignore-minimized')
+    return saved === 'true'
+  })
   const [outputFormat, setOutputFormat] = useState<OutputFormat>(() => {
-    const saved = localStorage.getItem('concatenate-output-format');
-    return (saved as OutputFormat) || 'text';
-  });
+    const saved = localStorage.getItem('concatenate-output-format')
+    return (saved as OutputFormat) || 'text'
+  })
   const [maxFileLimit, setMaxFileLimit] = useState<number>(() => {
-    const saved = localStorage.getItem('concatenator-max-files');
-    return saved ? parseInt(saved, 10) : 10000;
-  });
-  const [newIgnoreItem, setNewIgnoreItem] = useState('');
-  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set(['/', 'root']));
-
+    const saved = localStorage.getItem('concatenator-max-files')
+    return saved ? parseInt(saved, 10) : 10000
+  })
+  const [newIgnoreItem, setNewIgnoreItem] = useState('')
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(
+    new Set(['/', 'root'])
+  )
 
   // --- Custom Hooks ---
   const {
@@ -60,8 +70,8 @@ export default function App() {
     compiledIgnores,
     isLoading: isIgnoreListLoading,
     addIgnoreItem,
-    removeIgnoreItem
-  } = useIgnoreList();
+    removeIgnoreItem,
+  } = useIgnoreList()
 
   const {
     files,
@@ -75,76 +85,94 @@ export default function App() {
     handleFileUpload,
     handleDrop,
     handleConcatenate,
-  } = useFileProcessing({ appMode, compiledIgnores, maxFileLimit, isIgnoreListLoading });
+  } = useFileProcessing({
+    appMode,
+    compiledIgnores,
+    maxFileLimit,
+    isIgnoreListLoading,
+  })
 
   // --- Derived State ---
   const filteredFiles = useMemo(() => {
-    return files.filter(file => !isIgnored(file.path)).sort((a, b) => {
-      if (a.kind === 'directory' && b.kind === 'file') return -1;
-      if (a.kind === 'file' && b.kind === 'directory') return 1;
-      return a.path.localeCompare(b.path);
-    });
-  }, [files, isIgnored]);
+    return files
+      .filter((file) => !isIgnored(file.path))
+      .sort((a, b) => {
+        if (a.kind === 'directory' && b.kind === 'file') return -1
+        if (a.kind === 'file' && b.kind === 'directory') return 1
+        return a.path.localeCompare(b.path)
+      })
+  }, [files, isIgnored])
 
-  const fileTree = useFileTree(filteredFiles);
+  const fileTree = useFileTree(filteredFiles)
 
   // --- Effects ---
   useEffect(() => {
-    localStorage.setItem('concatenate-view-mode', viewMode);
-  }, [viewMode]);
+    localStorage.setItem('concatenate-view-mode', viewMode)
+  }, [viewMode])
 
   useEffect(() => {
-    localStorage.setItem('concatenate-dark-mode', isDarkMode.toString());
+    localStorage.setItem('concatenate-dark-mode', isDarkMode.toString())
     if (isDarkMode) {
-      document.documentElement.classList.add('dark');
+      document.documentElement.classList.add('dark')
     } else {
-      document.documentElement.classList.remove('dark');
+      document.documentElement.classList.remove('dark')
     }
-  }, [isDarkMode]);
+  }, [isDarkMode])
 
   useEffect(() => {
-    localStorage.setItem('concatenate-dropzone-minimized', isDropzoneMinimized.toString());
-  }, [isDropzoneMinimized]);
+    localStorage.setItem(
+      'concatenate-dropzone-minimized',
+      isDropzoneMinimized.toString()
+    )
+  }, [isDropzoneMinimized])
 
   useEffect(() => {
-    localStorage.setItem('concatenate-ignore-minimized', isIgnoreListMinimized.toString());
-  }, [isIgnoreListMinimized]);
+    localStorage.setItem(
+      'concatenate-ignore-minimized',
+      isIgnoreListMinimized.toString()
+    )
+  }, [isIgnoreListMinimized])
 
   useEffect(() => {
-    localStorage.setItem('concatenate-output-format', outputFormat);
-  }, [outputFormat]);
+    localStorage.setItem('concatenate-output-format', outputFormat)
+  }, [outputFormat])
 
   useEffect(() => {
-    localStorage.setItem('concatenator-max-files', maxFileLimit.toString());
-  }, [maxFileLimit]);
+    localStorage.setItem('concatenator-max-files', maxFileLimit.toString())
+  }, [maxFileLimit])
 
   useEffect(() => {
-    setExpandedPaths(prev => {
-      const next = new Set(prev);
+    setExpandedPaths((prev) => {
+      const next = new Set(prev)
       const addDirectoryPaths = (node: TreeItem) => {
         if (node.kind === 'directory') {
-          next.add(node.path);
-          node.children?.forEach(addDirectoryPaths);
+          next.add(node.path)
+          node.children?.forEach(addDirectoryPaths)
         }
-      };
-      addDirectoryPaths(fileTree);
-      return next;
-    });
-  }, [fileTree]);
+      }
+      addDirectoryPaths(fileTree)
+      return next
+    })
+  }, [fileTree])
 
   // --- Handlers ---
-  const handleRemoveFile = useCallback((file: FileItem) => {
-    if (file.kind === 'directory') {
-      const prefix = file.path + '/';
-      setFiles(prev => prev.filter(f => f.path !== file.path && !f.path.startsWith(prefix)));
-    } else {
-      setFiles(prev => prev.filter(f => f.path !== file.path));
-    }
-  }, [setFiles]);
+  const handleRemoveFile = useCallback(
+    (file: FileItem) => {
+      if (file.kind === 'directory') {
+        const prefix = file.path + '/'
+        setFiles((prev) =>
+          prev.filter((f) => f.path !== file.path && !f.path.startsWith(prefix))
+        )
+      } else {
+        setFiles((prev) => prev.filter((f) => f.path !== file.path))
+      }
+    },
+    [setFiles]
+  )
 
   const handleClearAll = useCallback(() => {
-    setFiles([]);
-  }, [setFiles]);
+    setFiles([])
+  }, [setFiles])
 
   return (
     <div className="min-h-screen font-sans transition-colors duration-300 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100">
@@ -154,35 +182,33 @@ export default function App() {
       >
         Skip to main content
       </a>
-      <Header
-        isDarkMode={isDarkMode}
-        setIsDarkMode={setIsDarkMode}
-      />
+      <Header isDarkMode={isDarkMode} setIsDarkMode={setIsDarkMode} />
 
       <main id="main-content" className="max-w-4xl mx-auto px-6 py-8 space-y-8">
         <div className="flex items-center justify-between">
-          {appMode === 'concatenate' && (
-            <div className="flex-1"></div>
-          )}
+          {appMode === 'concatenate' && <div className="flex-1"></div>}
 
           <ModeToggle
             appMode={appMode}
             setAppMode={(newMode) => {
               posthog.capture('mode_switched', {
                 target_mode: newMode,
-                previous_mode: appMode
-              });
-              setAppMode(newMode);
+                previous_mode: appMode,
+              })
+              setAppMode(newMode)
             }}
             onModeChange={() => {
-              setFiles([]);
-              setImportError(null);
+              setFiles([])
+              setImportError(null)
             }}
           />
 
           {appMode === 'concatenate' && (
             <div className="flex-1 flex items-center justify-end gap-2">
-              <label htmlFor="max-file-limit" className="text-sm text-slate-600 dark:text-slate-400">
+              <label
+                htmlFor="max-file-limit"
+                className="text-sm text-slate-600 dark:text-slate-400"
+              >
                 Max Files:
               </label>
               <select
@@ -217,7 +243,11 @@ export default function App() {
 
         {appMode === 'concatenate' && (
           <>
-            <Suspense fallback={<div className="h-20 animate-pulse bg-slate-100 dark:bg-slate-800 rounded-xl" />}>
+            <Suspense
+              fallback={
+                <div className="h-20 animate-pulse bg-slate-100 dark:bg-slate-800 rounded-xl" />
+              }
+            >
               <IgnoreList
                 ignoreList={ignoreList}
                 isIgnoreListMinimized={isIgnoreListMinimized}
@@ -225,8 +255,8 @@ export default function App() {
                 newIgnoreItem={newIgnoreItem}
                 setNewIgnoreItem={setNewIgnoreItem}
                 addIgnoreItem={() => {
-                  addIgnoreItem(newIgnoreItem);
-                  setNewIgnoreItem('');
+                  addIgnoreItem(newIgnoreItem)
+                  setNewIgnoreItem('')
                 }}
                 removeIgnoreItem={removeIgnoreItem}
               />
@@ -241,7 +271,9 @@ export default function App() {
               expandedPaths={expandedPaths}
               setExpandedPaths={setExpandedPaths}
               isProcessing={isProcessing}
-              onConcatenate={() => handleConcatenate(filteredFiles, outputFormat)}
+              onConcatenate={() =>
+                handleConcatenate(filteredFiles, outputFormat)
+              }
               onClearAll={handleClearAll}
               onIgnoreFile={addIgnoreItem}
               onRemoveFile={handleRemoveFile}
@@ -252,10 +284,9 @@ export default function App() {
         )}
       </main>
 
-
       <Footer />
       <Analytics />
       <SpeedInsights />
     </div>
-  );
+  )
 }

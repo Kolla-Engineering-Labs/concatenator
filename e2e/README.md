@@ -20,26 +20,31 @@ e2e/
 ## Running Tests
 
 ### Run all E2E tests
+
 ```bash
 npm run test:e2e
 ```
 
 ### Run tests with UI mode (for debugging)
+
 ```bash
 npm run test:e2e:ui
 ```
 
 ### Run tests in headed mode (see browser)
+
 ```bash
 npm run test:e2e:headed
 ```
 
 ### Run specific test file
+
 ```bash
 npx playwright test concatenate.spec.ts
 ```
 
 ### Run tests in debug mode
+
 ```bash
 npm run test:e2e:debug
 ```

@@ -1,10 +1,13 @@
 # Pull Request
 
 ## 📝 Summary
-> *Provide a brief summary of the changes in 1-2 sentences*
+
+> _Provide a brief summary of the changes in 1-2 sentences_
 
 ## 🛠️ Type of Change
-> *Mark the relevant option(s) with an [x]*
+
+> _Mark the relevant option(s) with an [x]_
+
 - [ ] Bug fix (non-breaking change which fixes an issue)
 - [ ] New feature (non-breaking change which adds functionality)
 - [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
@@ -16,33 +19,40 @@
 - [ ] Other (please describe):
 
 ## 🔗 Related Issue(s)
-> *Use "Fixes #123" to auto-close an issue on merge.*
+
+> _Use "Fixes #123" to auto-close an issue on merge._
 
 Fixes #
 
-> *Use "Related to #123" for context without closing.*
+> _Use "Related to #123" for context without closing._
 
 Related to #
 
 ## 📖 Description
-> *Describe the changes in detail. Explain the "what" and "why", not just the "how".*
+
+> _Describe the changes in detail. Explain the "what" and "why", not just the "how"._
 
 ### Changes Made
+
 -
 -
 
 ### Architecture Notes
-> *If your changes affect the architecture, explain how they align with our Clean Architecture and Decoupled Logic principles.*
+
+> _If your changes affect the architecture, explain how they align with our Clean Architecture and Decoupled Logic principles._
 
 ## 🧪 Testing
-> *Describe the testing you've done. Check all that apply and provide details.*
+
+> _Describe the testing you've done. Check all that apply and provide details._
 
 ### Unit Tests
+
 - [ ] Added/updated unit tests for new/modified logic
 - [ ] All unit tests pass (`npm test`)
 - [ ] No tests needed (explain why):
 
 ### E2E Tests
+
 - [ ] Added/updated E2E tests for UI changes
 - [ ] All E2E tests pass (`npm run test:e2e`)
 - [ ] Tested manually in the following browsers:
@@ -52,7 +62,8 @@ Related to #
 - [ ] No E2E tests needed (Select only for: Documentation, Refactors without UI impact, or Internal logic with 100% Unit Test coverage)
 
 ### Manual Testing
-> *Describe any manual testing you performed*
+
+> _Describe any manual testing you performed_
 
 Test scenarios:
 
@@ -60,6 +71,7 @@ Test scenarios:
 2.
 
 ## ✅ Checklist
+
 - [ ] My code follows the project's code style (TypeScript strict mode)
 - [ ] I have performed a self-review of my code
 - [ ] I have commented my code, particularly in hard-to-understand areas
@@ -68,6 +80,7 @@ Test scenarios:
 - [ ] I have added tests that prove my fix is effective or that my feature works
 
 ## 🛡️ Security Considerations
+
 > [!CAUTION]
 > **Security Audit Required**: If your changes involve file handling, API keys, or user data, you **must** complete the checklist below. 🔑
 
@@ -75,16 +88,19 @@ Test scenarios:
 - [ ] My changes affect security-sensitive code (describe):
 
 ### Security Checklist (if applicable)
+
 - [ ] No new paths are constructed from user input without sanitization
 - [ ] No API keys are persisted to browser storage (localStorage/sessionStorage)
 - [ ] Rate limiting is maintained for new endpoints
 - [ ] Path traversal protection is maintained for file operations
 
 ## 📸 Screenshots / Screen Recordings
-> *For UI changes, provide before/after screenshots or screen recordings*
+
+> _For UI changes, provide before/after screenshots or screen recordings_
 
 ## 🚩 Reviewer Guidance
-> *Help reviewers focus their attention. What specific areas need the most scrutiny?*
+
+> _Help reviewers focus their attention. What specific areas need the most scrutiny?_
 
 Areas that need careful review:
 
@@ -92,4 +108,5 @@ Areas that need careful review:
 2.
 
 ---
+
 Thank you for contributing to Concatenator! 🚀

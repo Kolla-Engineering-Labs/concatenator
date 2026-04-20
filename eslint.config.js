@@ -27,10 +27,17 @@ export default tseslint.config(
   },
   // Test files - allow explicit any and unused vars
   {
-    files: ['**/*.test.{ts,tsx}', '**/tests/**/*.{ts,tsx}', '**/e2e/**/*.{ts,tsx}'],
+    files: [
+      '**/*.test.{ts,tsx}',
+      '**/tests/**/*.{ts,tsx}',
+      '**/e2e/**/*.{ts,tsx}',
+    ],
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
       'no-control-regex': 'off',
       'no-empty': 'off',
     },
@@ -40,7 +47,10 @@ export default tseslint.config(
     files: ['**/e2e/fixtures.ts'],
     rules: {
       'react-hooks/rules-of-hooks': 'off',
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_' },
+      ],
     },
-  },
+  }
 )

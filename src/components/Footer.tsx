@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React from 'react'
 
 /**
  * The application footer.
@@ -16,25 +16,43 @@ export const Footer: React.FC = () => {
           Minimalist File Concatenator &nbsp;•&nbsp; Built with React & Tailwind
         </p>
         <p>
-        <span
-          className="text-xs text-slate-400 cursor-help"
-          title="Your data never leaves this device. Clearing your browser cache will reset the app."
-        >
-          Storage: Local Only
-        </span>
-        <span className="text-sm text-slate-400">&nbsp; • &nbsp;</span>
-         <a href="https://github.com/Kolla-Engineering-Labs/concatenator#Apache-2.0-1-ov-file" target="_blank" rel="noopener noreferrer" className="text-xs text-slate-400 hover:text-brand-500 transition-colors">
-          Apache 2.0
-         </a>
-        <span className="text-sm text-slate-400">&nbsp; • &nbsp;</span>
-         <a href="https://posthog.com" target="_blank" rel="noopener noreferrer" className="text-xs text-slate-400 hover:text-brand-500 transition-colors">
-          Usage Analytics: Privacy-Preserving & Anonymous via PostHog
-         </a>
-         </p>
+          <span
+            className="text-xs text-slate-400 cursor-help"
+            title="Your data never leaves this device. Clearing your browser cache will reset the app."
+          >
+            Storage: Local Only
+          </span>
+          <span className="text-sm text-slate-400">&nbsp; • &nbsp;</span>
+          <a
+            href="https://github.com/Kolla-Engineering-Labs/concatenator#Apache-2.0-1-ov-file"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-slate-400 hover:text-brand-500 transition-colors"
+          >
+            Apache 2.0
+          </a>
+          <span className="text-sm text-slate-400">&nbsp; • &nbsp;</span>
+          <a
+            href="https://posthog.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-slate-400 hover:text-brand-500 transition-colors"
+          >
+            Usage Analytics: Privacy-Preserving & Anonymous via PostHog
+          </a>
+        </p>
         <p className="text-xs text-slate-400">
-          © 2026 <a href="https://github.com/Kolla-Engineering-Labs/concatenator" target="_blank" rel="noopener noreferrer" className="hover:text-brand-500 transition-colors">Kolla Engineering Labs</a>
+          © 2026{' '}
+          <a
+            href="https://github.com/Kolla-Engineering-Labs/concatenator"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-brand-500 transition-colors"
+          >
+            Kolla Engineering Labs
+          </a>
         </p>
       </div>
     </footer>
-  );
-};
+  )
+}

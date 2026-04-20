@@ -1,7 +1,9 @@
 # 📥 Quickstart Guide
+
 Get up and running with Concatenator in **3 minutes**.
 
 ## 🛠️ Prerequisites
+
 - [Node.js](https://nodejs.org) (v18 or later)
 - A modern browser (**Chrome/Edge recommended** for full File System Access API support)
 
@@ -27,11 +29,12 @@ The app will open at `http://localhost:3000`.
 ## 🚀 Quick Usage (1-Minute Guide)
 
 ### 1. Concatenate Files
-*   **Drag & Drop**: Drop your project folder onto the upload zone.
-*   **Filter**: Review the file tree. Use the **Ignore List** to filter out unwanted noise (e.g., `node_modules`, `.git`, or build artifacts).
-*   **Export**: Choose your format and click **"Concatenate & Download."**
-    *   **Select `.txt`**: Best for Claude, GPT-4o, and general data recovery.
-    *   **Select `.pdf`**: Recommended for **Google Gemini** or archiving.
+
+- **Drag & Drop**: Drop your project folder onto the upload zone.
+- **Filter**: Review the file tree. Use the **Ignore List** to filter out unwanted noise (e.g., `node_modules`, `.git`, or build artifacts).
+- **Export**: Choose your format and click **"Concatenate & Download."**
+  - **Select `.txt`**: Best for Claude, GPT-4o, and general data recovery.
+  - **Select `.pdf`**: Recommended for **Google Gemini** or archiving.
 
 > [!TIP]
 > **LLM "Cheat Code":** While most LLMs handle text perfectly, **Google Gemini** can occasionally struggle with massive raw `.txt` uploads. Using the **PDF Export** allows Gemini to use superior native document processing for better context retention. 💡
@@ -39,9 +42,10 @@ The app will open at `http://localhost:3000`.
 ---
 
 ### 2. De-concatenate Files (TXT Only)
-*   **Switch Mode**: Toggle the application to **"De-concatenate"** mode.
-*   **Upload**: Drop a previously generated **Concatenator .txt file**.
-*   **Recover**: The ZIP archive is generated automatically for download.
+
+- **Switch Mode**: Toggle the application to **"De-concatenate"** mode.
+- **Upload**: Drop a previously generated **Concatenator .txt file**.
+- **Recover**: The ZIP archive is generated automatically for download.
 
 > [!NOTE]
 > PDF exports are intended for final consumption; they do not support de-concatenation.

@@ -1,34 +1,34 @@
 ---
 name: Feature Request
 description: Suggest a new feature or enhancement for Concatenator
-title: "[FEATURE] "
-labels: ["enhancement"]
+title: '[FEATURE] '
+labels: ['enhancement']
 assignees: []
 ---
 
 ## Feature Summary
 
-> *A clear and concise description of what feature you want*
+> _A clear and concise description of what feature you want_
 
 ## Problem Statement
 
-> *Is your feature request related to a problem? Please describe*
+> _Is your feature request related to a problem? Please describe_
 
 A clear and concise description of what the problem is. Ex. "I'm frustrated when [...]"
 
 ## Proposed Solution
 
-> *Describe the solution you'd like*
+> _Describe the solution you'd like_
 
 A clear and concise description of what you want to happen.
 
 ## Alternative Solutions
 
-> *Describe any alternative solutions or features you've considered*
+> _Describe any alternative solutions or features you've considered_
 
 ## Use Case
 
-> *Describe the use case for this feature. Who would benefit and how?*
+> _Describe the use case for this feature. Who would benefit and how?_
 
 ### Target Users
 
@@ -39,15 +39,15 @@ A clear and concise description of what you want to happen.
 
 ## Implementation Notes
 
-> *If you have ideas on how this could be implemented, share them here*
+> _If you have ideas on how this could be implemented, share them here_
 
 ### UI/UX Considerations
 
-> *If this feature involves UI changes, describe how it should look/feel*
+> _If this feature involves UI changes, describe how it should look/feel_
 
 ### Technical Considerations
 
-> *Any technical constraints or requirements?*
+> _Any technical constraints or requirements?_
 
 - **File System Access API Impact**: <!-- Does this require new API capabilities? -->
 - **Performance Considerations**: <!-- Could this affect performance with large file sets? -->
@@ -57,7 +57,7 @@ A clear and concise description of what you want to happen.
 
 ### Primary Browser
 
-> *Which browser would you primarily use this feature with?*
+> _Which browser would you primarily use this feature with?_
 
 - **Browser**: <!-- e.g., Chrome, Edge, Firefox, Safari -->
 - **Version**: <!-- e.g., 124.0.6367.60 -->
@@ -66,11 +66,11 @@ Note: Concatenator relies on the File System Access API, which has varying suppo
 
 ### Current Workarounds
 
-> *Are you currently working around the lack of this feature? How?*
+> _Are you currently working around the lack of this feature? How?_
 
 ## Similar Tools or Examples
 
-> *Are there features in other apps (e.g., VS Code extensions, CLI tools) that we should look at for reference?*
+> _Are there features in other apps (e.g., VS Code extensions, CLI tools) that we should look at for reference?_
 
 - Tool/Feature: [Describe here]
 
@@ -82,11 +82,11 @@ Note: Concatenator relies on the File System Access API, which has varying suppo
 
 ## Additional Context
 
-> *Add any other context, screenshots, or mockups about the feature request here*
+> _Add any other context, screenshots, or mockups about the feature request here_
 
 ## Checklist
 
-> *Please verify the following before submitting*
+> _Please verify the following before submitting_
 
 - [ ] I have searched existing issues to ensure this feature has not already been requested
 - [ ] This feature aligns with Concatenator's purpose (file concatenation/de-concatenation for LLM context)
