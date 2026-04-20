@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { 
-  START_DELIMITER, 
-  END_DELIMITER, 
-  FILE_END_DELIMITER, 
-  DEFAULT_IGNORE_LIST 
+import {
+  START_DELIMITER,
+  END_DELIMITER,
+  FILE_END_DELIMITER,
+  DEFAULT_IGNORE_LIST
 } from '../src/constants';
 
 describe('Constants', () => {
@@ -103,7 +103,7 @@ describe('Constants', () => {
 
     it('contains common binary extensions as regex patterns', () => {
       // Regex patterns start and end with /
-      const binaryPatterns = DEFAULT_IGNORE_LIST.filter(item => 
+      const binaryPatterns = DEFAULT_IGNORE_LIST.filter(item =>
         item.startsWith('/') && item.endsWith('/')
       );
       expect(binaryPatterns.length).toBeGreaterThan(0);
@@ -119,8 +119,8 @@ describe('Constants', () => {
       expect(DEFAULT_IGNORE_LIST).toContain('desktop.ini');
     });
 
-    it('contains license file', () => {
-      expect(DEFAULT_IGNORE_LIST).toContain('LICENSE');
+    it('does not contain license file', () => {
+      expect(DEFAULT_IGNORE_LIST).not.toContain('LICENSE');
     });
 
     it('has no duplicate entries', () => {
@@ -137,14 +137,14 @@ describe('Constants', () => {
     });
 
     it('contains cache-related patterns', () => {
-      const cachePatterns = DEFAULT_IGNORE_LIST.filter(item => 
+      const cachePatterns = DEFAULT_IGNORE_LIST.filter(item =>
         item.toLowerCase().includes('cache')
       );
       expect(cachePatterns.length).toBeGreaterThan(0);
     });
 
     it('contains compiled object patterns', () => {
-      const objectPatterns = DEFAULT_IGNORE_LIST.filter(item => 
+      const objectPatterns = DEFAULT_IGNORE_LIST.filter(item =>
         item.includes('.o') || item.includes('.obj') || item.includes('.class')
       );
       expect(objectPatterns.length).toBeGreaterThan(0);
@@ -155,7 +155,7 @@ describe('Constants', () => {
     });
 
     it('correctly escapes dots in regex patterns', () => {
-      const dotPatterns = DEFAULT_IGNORE_LIST.filter(item => 
+      const dotPatterns = DEFAULT_IGNORE_LIST.filter(item =>
         item.startsWith('/') && item.includes('.')
       );
       // All dot patterns should have escaped dots

@@ -33,7 +33,6 @@ export const DEFAULT_IGNORE_LIST = [
   'build',
   'desktop.ini',
   'dist',
-  'LICENSE',
   'node_modules',
   'obj',
   'package-lock.json',
