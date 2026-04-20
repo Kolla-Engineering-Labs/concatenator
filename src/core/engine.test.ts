@@ -4,28 +4,86 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { concatenate, deconcatenate, sanitizePath, dedupePath } from './engine'
+import {
+  concatenate,
+  deconcatenate,
+  sanitizePath,
+  dedupePath,
+  generateSessionId,
+} from './engine'
 
 describe('engine', () => {
+  describe('generateSessionId', () => {
+    it('generates a 6-character hex string', () => {
+      const id = generateSessionId()
+      expect(id).toMatch(/^[0-9a-f]{6}$/)
+    })
+
+    it('generates different IDs on each call', () => {
+      const ids = new Set<string>()
+      for (let i = 0; i < 10; i++) {
+        ids.add(generateSessionId())
+      }
+      expect(ids.size).toBe(10)
+    })
+  })
+
   describe('concatenate', () => {
-    it('concatenates files with delimiters', () => {
+    it('concatenates files with session-based manifest header', () => {
       const files = [
         { path: 'file1.txt', content: 'Hello' },
         { path: 'file2.txt', content: 'World' },
       ]
       const result = concatenate(files, '2024-01-01')
 
+      // Check manifest header
+      expect(result).toMatch(/--- CONCATENATOR_SESSION_ID: [0-9a-f]{6} ---/)
       expect(result).toContain('Concatenated on: 2024-01-01')
-      expect(result).toContain('<<<<< CONCATENATOR_FILE_START: file1.txt >>>>>')
+
+      // Check session-specific markers
+      expect(result).toMatch(/<<<<< FILE_START: file1\.txt \(ID: [0-9a-f]{6}\) >>>>>/)
       expect(result).toContain('Hello')
-      expect(result).toContain('<<<<< CONCATENATOR_FILE_END >>>>>')
-      expect(result).toContain('<<<<< CONCATENATOR_FILE_START: file2.txt >>>>>')
+      expect(result).toContain('<<<<< FILE_END >>>>>')
+      expect(result).toMatch(/<<<<< FILE_START: file2\.txt \(ID: [0-9a-f]{6}\) >>>>>/)
       expect(result).toContain('World')
+    })
+
+    it('uses provided session ID when given', () => {
+      const files = [{ path: 'test.txt', content: 'content' }]
+      const result = concatenate(files, '2024-01-01', 'abc123')
+
+      expect(result).toContain('--- CONCATENATOR_SESSION_ID: abc123 ---')
+      expect(result).toContain('<<<<< FILE_START: test.txt (ID: abc123) >>>>>')
+    })
+
+    it('throws error when session ID manifest header collides with content', () => {
+      const files = [
+        { path: 'test.txt', content: '--- CONCATENATOR_SESSION_ID: abc123 ---' },
+      ]
+      expect(() => concatenate(files, '2024-01-01', 'abc123')).toThrow(
+        "Provided session ID 'abc123' collides with file content"
+      )
+    })
+
+    it('throws error when session ID marker core collides with content', () => {
+      // The marker core pattern (ID: {sessionId}){END_DELIMITER} would cause parsing issues
+      const files = [{ path: 'test.txt', content: 'some (ID: abc123) >>>>> text' }]
+      expect(() => concatenate(files, '2024-01-01', 'abc123')).toThrow(
+        "Provided session ID 'abc123' collides with file content"
+      )
+    })
+
+    it('does not throw for raw session ID appearing in content (only checks complete patterns)', () => {
+      // Raw session ID in content is fine - only the complete manifest/marker patterns matter
+      const files = [{ path: 'test.txt', content: 'This contains abc123 and more text' }]
+      // Should not throw because abc123 doesn't appear in a problematic pattern
+      const result = concatenate(files, '2024-01-01', 'abc123')
+      expect(result).toContain('--- CONCATENATOR_SESSION_ID: abc123 ---')
     })
   })
 
   describe('deconcatenate', () => {
-    it('extracts files from concatenated content', () => {
+    it('extracts files from session-based concatenated content', () => {
       const files = [
         { path: 'file1.txt', content: 'Hello' },
         { path: 'file2.txt', content: 'World' },
@@ -48,10 +106,54 @@ describe('engine', () => {
     })
 
     it('handles malformed content gracefully', () => {
-      const malformed = '<<<<< CONCATENATOR_FILE_START: file.txt >>>>>missing end marker'
+      const malformed = '--- CONCATENATOR_SESSION_ID: abc123 ---\n\n<<<<< FILE_START: file.txt (ID: abc123) >>>>>missing end marker'
       const result = deconcatenate(malformed)
       expect(result.foundAny).toBe(false)
       expect(result.skippedPaths).toContain('file.txt')
+    })
+
+    it('ignores foreign/legacy delimiters (self-hosting test)', () => {
+      // This simulates concatenating the concatenator's own source code
+      // which contains the old delimiter strings in constants
+      const files = [
+        { path: 'src/constants.ts', content: "const START_DELIMITER = '<<<<< FILE_START: '" },
+        { path: 'src/engine.ts', content: 'function deconcatenate() { /* uses markers */ }' },
+      ]
+
+      // Create a new session-based concatenation
+      const concatenated = concatenate(files, '2024-01-01', 'xyz789')
+
+      // Add some fake old-format delimiters in the middle (simulating self-hosting paradox)
+      const poisonedContent = concatenated.replace(
+        '<<<<< FILE_START: src/engine.ts (ID: xyz789) >>>>>',
+        '<<<<< FILE_START: src/engine.ts (ID: xyz789) >>>>>\n<<<<< FILE_START: fake.txt >>>>>fake content<<<<< FILE_END >>>>>\n'
+      )
+
+      const result = deconcatenate(poisonedContent)
+
+      // Should only extract the real files from our session, ignore the fake old-format one
+      expect(result.foundAny).toBe(true)
+      expect(result.files).toHaveLength(2)
+      expect(result.files.map(f => f.path)).toContain('src/constants.ts')
+      expect(result.files.map(f => f.path)).toContain('src/engine.ts')
+      // fake.txt should not appear because it's not in our session
+      expect(result.files.map(f => f.path)).not.toContain('fake.txt')
+    })
+
+    it('handles backwards compatibility with legacy format', () => {
+      // Old format without manifest header
+      const legacyContent = `Concatenated on: 2024-01-01
+
+<<<<< FILE_START: legacy.txt >>>>>
+legacy content
+<<<<< FILE_END >>>>>
+`
+      const result = deconcatenate(legacyContent)
+
+      expect(result.foundAny).toBe(true)
+      expect(result.files).toHaveLength(1)
+      expect(result.files[0].path).toBe('legacy.txt')
+      expect(result.files[0].content).toBe('legacy content')
     })
   })
 
