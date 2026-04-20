@@ -85,6 +85,10 @@ export default defineConfig(({ mode }) => {
         ignored: ['**/.concatenate-ignore'],
       },
     },
+    preview: {
+      port: 4173,
+      strictPort: true,
+    },
     build: {
       sourcemap: true, // Required for detailed bundle analysis
       chunkSizeWarningLimit: 600,

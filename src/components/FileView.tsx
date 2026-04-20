@@ -52,7 +52,7 @@ export const FileView: React.FC<FileViewProps> = ({
       <div className="flex items-center justify-between h-9">
         <div className="flex items-center gap-2 text-slate-500">
           <Files className="w-4 h-4" />
-          <h2 className="text-sm font-semibold uppercase tracking-wider">
+          <h2 className="text-sm font-semibold uppercase tracking-wider ph-no-capture">
             Selected Files
             <span className="ml-2 tabular-nums opacity-60">({filteredFiles.filter(f => f.kind === 'file').length})</span>
           </h2>
@@ -98,7 +98,7 @@ export const FileView: React.FC<FileViewProps> = ({
                     className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all group min-w-0"
                   >
                     {getFileIcon(file.name, file.kind)}
-                    <div className="flex flex-col min-w-0 flex-1">
+                    <div className="flex flex-col min-w-0 flex-1 ph-no-capture">
                       <span className="text-sm font-medium truncate leading-tight">
                         {file.name}
                       </span>

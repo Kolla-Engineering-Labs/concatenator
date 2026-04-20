@@ -1,0 +1,10 @@
+User-agent: *
+Crawl-delay: 10
+Allow: /
+
+# Specifically for aggressive AI Bots
+User-agent: GPTBot
+Crawl-delay: 20
+
+User-agent: CCBot
+Disallow: /

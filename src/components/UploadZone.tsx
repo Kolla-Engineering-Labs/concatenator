@@ -43,7 +43,7 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
   };
 
   return (
-    <div 
+    <div
       className="relative group"
       onDrop={handleDrop}
       onDragOver={handleDragOver}
@@ -70,7 +70,7 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
             </div>
             <div className="flex items-center gap-4">
               <div className="h-3 flex-grow bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-                <motion.div 
+                <motion.div
                   className="h-full bg-brand-500"
                   initial={{ width: 0 }}
                   animate={{ width: importProgress.total > 0 ? `${(importProgress.current / importProgress.total) * 100}%` : '100%' }}
@@ -109,16 +109,16 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
             importError ? "border-red-300 bg-red-50/30 dark:border-red-900/50 dark:bg-red-900/10" : "border-slate-300 dark:border-slate-700"
           )}>
             {importError ? (
-              <div className="flex flex-col items-center gap-2 text-center max-w-md relative z-20">
+              <div className="flex flex-col items-center gap-2 text-center max-w-md relative z-20 ph-no-capture">
                 <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-full text-red-600 dark:text-red-400">
                   <Ban className="w-6 h-6" />
                 </div>
                 <p className="text-sm font-medium text-red-600 dark:text-red-400">{importError}</p>
-                <button 
-                  onClick={(e) => { 
+                <button
+                  onClick={(e) => {
                     e.preventDefault();
-                    e.stopPropagation(); 
-                    setImportError(null); 
+                    e.stopPropagation();
+                    setImportError(null);
                   }}
                   className="text-xs text-slate-500 hover:text-brand-500 underline cursor-pointer p-2"
                 >
@@ -133,7 +133,7 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
                 )}>
                   <Upload className={cn("text-slate-400 group-hover:text-brand-500", isDropzoneMinimized ? "w-4 h-4" : "w-8 h-8")} />
                 </div>
-                <div className="text-center">
+                <div className="text-center ph-no-capture">
                   <p className={cn("font-medium", isDropzoneMinimized ? "text-sm" : "text-lg")}>
                     {isDropzoneMinimized ? 'Drop here' : (appMode === 'concatenate' ? 'Drop folder or files here' : 'Drop concatenated .txt file here')}
                   </p>
@@ -150,7 +150,7 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
               multiple
               {...(appMode === 'concatenate' ? { webkitdirectory: "" } : {})}
               onChange={handleFileUpload}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 ph-no-capture"
               disabled={isProcessing}
               title=""
             />
