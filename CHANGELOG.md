@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **De-concatenation Error Handling**: Warning messages when files are skipped due to missing end markers (e.g., LLM hallucinations or deletions). Console logging for all skipped files with their paths.
 - **Documentation**: Added error handling documentation explaining parser behavior for corrupted/missing markers during de-concatenation.
 - **API Transparency**: Documented File System Access API usage with explicit user permission control — directory access granted per-session through native browser picker dialogs.
+- **Hidden File Documentation**: Clarified that hidden files (dotfiles) are included by default and explained how to exclude them via the ignore list.
 
 ### Changed
 - **Default Ignore List**: Removed `LICENSE` from default ignore list to allow importing license files.

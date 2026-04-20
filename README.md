@@ -65,6 +65,8 @@ graph LR
   - Automatic de-concatenation upon dropping a compatible `.txt` file.
   - Output format toggle (TEXT/PDF) with localStorage persistence.
 - **Hardware Safety Guardrails**: Configurable **Max File Limit** (default: 10,000 files) to prevent browser memory exhaustion.
+- **Privacy-First File Access**: Uses the **File System Access API** with explicit user control — directory permissions are granted per-session through native browser picker dialogs. No persistent background access.
+- **Hidden File Handling**: Hidden files and directories (those starting with `.`) are not automatically excluded. Common hidden items (`.git`, `.env`, `.vscode`, etc.) are pre-configured in the default ignore list. You can add custom patterns to exclude additional hidden files.
 
 > [!WARNING]
 > **Hardware Safety**: Dragging massive directories without proper ignore patterns can temporarily freeze the browser thread. Always verify your **Max File Limit** settings before large imports. 🛡️
@@ -190,6 +192,21 @@ LOG_LEVEL=info
 6. Click **Concatenate & Download**. The output will be a timestamped file (e.g., `concatenator-20260410_123045.txt` or `concatenator-20260410_123045.pdf`).
 
 **Note**: The Max File Limit applies to both import and concatenation. If you attempt to drag-and-drop or concatenate more files than the selected limit, the operation will be halted and a warning displayed to prevent browser crashes.
+
+#### Hidden Files & Dotfiles
+
+By default, **hidden files are included** in imports. The File System Access API returns all directory entries, including those starting with `.`.
+
+**Pre-configured exclusions** (via default ignore list):
+- Version control: `.git`
+- Environment/config: `.env`, `.vscode`, `.secrets`
+- Build artifacts: `.next`, `.gradle`, `.expo`, `.terraform`
+- System files: `.DS_Store`
+- Cache patterns: `/^\\..*_cache$/` (matches `.pytest_cache`, `.eslint_cache`, etc.)
+
+**To exclude additional hidden files**, add patterns to your ignore list:
+- Literal match: `.myconfig` (excludes `.myconfig` file or directory)
+- Regex pattern: `/^\\.custom-.*/` (excludes all files starting with `.custom-`)
 
 ### De-concatenating Files
 1. Switch the mode to **De-concatenate**.
