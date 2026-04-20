@@ -6,8 +6,8 @@
 import React from 'react'
 import { motion } from 'motion/react'
 import { Maximize2, Minimize2, X, Ban, Upload } from 'lucide-react'
-import { cn } from '../lib/utils'
-import { AppMode } from '../types'
+import { cn } from '../../../../lib/utils'
+import { AppMode } from '../../../../core/types'
 
 interface UploadZoneProps {
   isProcessing: boolean

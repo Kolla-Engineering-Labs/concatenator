@@ -4,8 +4,8 @@
  */
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
-import { DEFAULT_IGNORE_LIST } from '../constants'
-import { logger } from '../lib/logger'
+import { DEFAULT_IGNORE_LIST } from '../../../../core/constants'
+import { logger } from '../../../../lib/logger'
 
 /**
  * Custom hook to manage the ignore list state, including persistence to localStorage and server.

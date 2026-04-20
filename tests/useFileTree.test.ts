@@ -1,7 +1,7 @@
 import { renderHook } from '@testing-library/react'
 import { describe, it, expect } from 'vitest'
-import { useFileTree } from '../src/hooks/useFileTree'
-import { FileItem } from '../src/types'
+import { useFileTree } from '../src/web/features/concatenator/hooks/useFileTree'
+import { FileItem } from '../src/core/types'
 
 describe('useFileTree', () => {
   it('returns root node with empty children for empty file list', () => {

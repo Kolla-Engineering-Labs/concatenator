@@ -2,12 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import '@testing-library/jest-dom'
 import React from 'react'
-import { Header } from '../src/components/Header'
-import { Footer } from '../src/components/Footer'
-import { ModeToggle } from '../src/components/ModeToggle'
-import { OutputFormatToggle } from '../src/components/OutputFormatToggle'
-import { TreeNode } from '../src/components/TreeNode'
-import { TreeItem } from '../src/types'
+import { Header } from '../src/web/features/concatenator/components/Header'
+import { Footer } from '../src/web/features/concatenator/components/Footer'
+import { ModeToggle } from '../src/web/features/concatenator/components/ModeToggle'
+import { OutputFormatToggle } from '../src/web/features/concatenator/components/OutputFormatToggle'
+import { TreeNode } from '../src/web/features/concatenator/components/TreeNode'
+import { TreeItem } from '../src/core/types'
 
 describe('Header Component', () => {
   const mockSetIsDarkMode = vi.fn()

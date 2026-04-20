@@ -1,11 +1,11 @@
 import { renderHook, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { useFileProcessing } from '../src/hooks/useFileProcessing'
+import { useFileProcessing } from '../src/web/features/concatenator/hooks/useFileProcessing'
 import {
   START_DELIMITER,
   END_DELIMITER,
   FILE_END_DELIMITER,
-} from '../src/constants'
+} from '../src/core/constants'
 
 // Mock JSZip
 const mockFile = vi.fn()

@@ -4,7 +4,7 @@ import {
   END_DELIMITER,
   FILE_END_DELIMITER,
   DEFAULT_IGNORE_LIST,
-} from '../src/constants'
+} from '../src/core/constants'
 
 describe('Constants', () => {
   describe('Delimiters', () => {

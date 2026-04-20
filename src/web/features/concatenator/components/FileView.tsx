@@ -14,9 +14,14 @@ import {
   Download,
   Trash2,
 } from 'lucide-react'
-import { cn } from '../lib/utils'
-import { FileItem, TreeItem, ViewMode, OutputFormat } from '../types'
-import { getFileIcon } from '../lib/fileIcons'
+import { cn } from '../../../../lib/utils'
+import {
+  FileItem,
+  TreeItem,
+  ViewMode,
+  OutputFormat,
+} from '../../../../core/types'
+import { getFileIcon } from '../../../../lib/fileIcons'
 import { TreeNode } from './TreeNode'
 import { OutputFormatToggle } from './OutputFormatToggle'
 

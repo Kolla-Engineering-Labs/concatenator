@@ -4,8 +4,8 @@
  */
 
 import React from 'react'
-import { cn } from '../lib/utils'
-import { AppMode } from '../types'
+import { cn } from '../../../../lib/utils'
+import { AppMode } from '../../../../core/types'
 
 interface ModeToggleProps {
   appMode: AppMode
