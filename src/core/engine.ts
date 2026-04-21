@@ -9,11 +9,11 @@ import {
   FILE_END_DELIMITER,
   MANIFEST_PREFIX,
   MANIFEST_SUFFIX,
-} from './constants'
-import type { ValidationResult } from './types'
+} from './constants.js'
+import type { ValidationResult } from './types.js'
 
 // Re-export types for convenience
-export type { ValidationResult } from './types'
+export type { ValidationResult } from './types.js'
 
 /**
  * Represents a virtual file with path and content
@@ -465,6 +465,8 @@ export function validateConcatenation(input: string): ValidationResult {
   const errors: string[] = []
   const warnings: string[] = []
   const detectedFiles: string[] = []
+  const targetFiles: string[] = []
+  const foreignFiles: string[] = []
 
   // Extract session ID from manifest header
   const sessionId = extractSessionId(input)
@@ -540,9 +542,35 @@ export function validateConcatenation(input: string): ValidationResult {
     })
   }
 
-  // Check each file marker for matching end marker
+  // Classify markers as target (matching session or legacy no-session) vs foreign (different session)
+  const targetMarkers: typeof fileMarkers = []
+  const foreignMarkers: typeof fileMarkers = []
+
+  for (const marker of fileMarkers) {
+    // Target if: no manifest session (legacy), or marker matches manifest session
+    // Foreign if: manifest has session AND marker has different session
+    const isTarget = !sessionId || marker.markerSessionId === sessionId
+    if (isTarget) {
+      targetMarkers.push(marker)
+    } else {
+      foreignMarkers.push(marker)
+      foreignFiles.push(marker.path)
+    }
+  }
+
+  // Add warning if foreign markers detected
+  if (foreignMarkers.length > 0) {
+    warnings.push(
+      `Note: Detected ${foreignMarkers.length} markers with mismatched Session IDs. These are likely test fixtures or nested content and will be ignored during extraction.`
+    )
+  }
+
+  // Check each target file marker for matching end marker
   for (let i = 0; i < fileMarkers.length; i++) {
     const marker = fileMarkers[i]
+    // Target if: no manifest session (legacy), or marker matches manifest session
+    const isTarget = !sessionId || marker.markerSessionId === sessionId
+
     const nextMarkerStart =
       i < fileMarkers.length - 1 ? fileMarkers[i + 1].startPos : input.length
 
@@ -552,28 +580,30 @@ export function validateConcatenation(input: string): ValidationResult {
 
     marker.hasMatchingEnd = hasEndMarker
 
-    if (!hasEndMarker) {
-      errors.push(`Missing end marker for file: ${marker.path}`)
-    }
+    // Report errors for target files and session mismatches
+    if (isTarget) {
+      if (!hasEndMarker) {
+        errors.push(`Missing end marker for file: ${marker.path}`)
+      } else {
+        // Only add to targetFiles if it has a matching end marker (will be extracted)
+        targetFiles.push(marker.path)
 
-    // Check session ID consistency if we have a manifest session ID
-    if (
+        // Check for empty file warning
+        const endIndex = contentAfterStart.indexOf(FILE_END_DELIMITER)
+        const content = contentAfterStart.substring(0, endIndex).trim()
+        if (content.length === 0) {
+          warnings.push(`Empty file detected: ${marker.path}`)
+        }
+      }
+    } else if (
       sessionId &&
       marker.markerSessionId &&
       marker.markerSessionId !== sessionId
     ) {
+      // Session ID mismatch: marker has different ID than manifest
       errors.push(
         `Session ID mismatch in marker for ${marker.path}: expected ${sessionId}, found ${marker.markerSessionId}`
       )
-    }
-
-    // Check for empty file warning
-    if (hasEndMarker) {
-      const endIndex = contentAfterStart.indexOf(FILE_END_DELIMITER)
-      const content = contentAfterStart.substring(0, endIndex).trim()
-      if (content.length === 0) {
-        warnings.push(`Empty file detected: ${marker.path}`)
-      }
     }
 
     detectedFiles.push(marker.path)
@@ -590,19 +620,25 @@ export function validateConcatenation(input: string): ValidationResult {
     )
   }
 
-  // Determine overall validity
-  // Valid if: no errors AND (has session-based markers OR valid legacy format)
+  // Determine overall validity based on TARGET markers only
+  // Valid if: no errors AND (has session-based target markers OR valid legacy format)
   // Invalid if: has errors OR (no sessionId AND no valid markers)
-  const hasValidMarkers =
-    fileMarkers.length > 0 && fileMarkers.some((m) => m.hasMatchingEnd)
-  const isValid = errors.length === 0 && hasValidMarkers
+  const hasValidTargetMarkers =
+    targetMarkers.length > 0 && targetMarkers.some((m) => m.hasMatchingEnd)
+  const isValid = errors.length === 0 && hasValidTargetMarkers
 
   return {
     isValid,
     sessionId,
-    fileCount: fileMarkers.filter((m) => m.hasMatchingEnd).length,
+    fileCount: targetMarkers.filter((m) => m.hasMatchingEnd).length,
     detectedFiles,
     errors,
     warnings,
+    // Segmented validation counts
+    targetFileCount: targetMarkers.filter((m) => m.hasMatchingEnd).length,
+    foreignFileCount: foreignMarkers.length,
+    totalMarkersFound: fileMarkers.length,
+    targetFiles,
+    foreignFiles,
   }
 }

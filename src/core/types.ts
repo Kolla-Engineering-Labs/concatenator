@@ -28,8 +28,17 @@ export type OutputFormat = 'text' | 'pdf'
 export interface ValidationResult {
   isValid: boolean
   sessionId: string | null
+  /**
+   * @deprecated Use targetFileCount instead
+   */
   fileCount: number
   detectedFiles: string[]
   errors: string[]
   warnings: string[]
+  // Segmented validation counts
+  targetFileCount: number
+  foreignFileCount: number
+  totalMarkersFound: number
+  targetFiles: string[]
+  foreignFiles: string[]
 }

@@ -4,7 +4,7 @@
  */
 
 import JSZip from 'jszip'
-import type { VirtualFile } from '../core/engine'
+import type { VirtualFile } from '../core/engine.js'
 
 /**
  * Create a ZIP archive from an array of virtual files

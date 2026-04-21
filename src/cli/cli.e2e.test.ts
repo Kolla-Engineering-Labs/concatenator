@@ -113,7 +113,7 @@ describe('CLI E2E Tests', () => {
 
       // Run CLI to concatenate
       const outputPath = join(tempDir, 'output.txt')
-      const result = runCLI([tempDir, outputPath])
+      const result = runCLI(['concat', tempDir, '-o', outputPath])
 
       // Verify exit code is 0
       expect(result.status).toBe(0)
@@ -140,7 +140,7 @@ describe('CLI E2E Tests', () => {
     it('should output to stdout when no output path is provided', () => {
       writeFileSync(join(tempDir, 'file.txt'), 'Hello World')
 
-      const result = runCLI([tempDir])
+      const result = runCLI(['concat', tempDir])
 
       expect(result.status).toBe(0)
       expect(result.stdout).toContain('--- CONCATENATOR_SESSION_ID:')
@@ -172,8 +172,8 @@ console.log("hello")
       const outputDir = join(tempDir, 'extracted')
       writeFileSync(inputFile, concatenatedContent)
 
-      // Run CLI with --undo flag
-      const result = runCLI(['--undo', inputFile, outputDir])
+      // Run CLI extract command
+      const result = runCLI(['extract', inputFile, '-o', outputDir])
 
       // Verify exit code is 0
       expect(result.status).toBe(0)
@@ -218,7 +218,7 @@ Content 2
       const zipPath = join(tempDir, 'output.zip')
       writeFileSync(inputFile, concatenatedContent)
 
-      const result = runCLI(['--undo', '--zip', inputFile, zipPath])
+      const result = runCLI(['extract', inputFile, '--zip', '-o', zipPath])
 
       expect(result.status).toBe(0)
       expect(existsSync(zipPath)).toBe(true)
@@ -248,14 +248,17 @@ Valid content
       writeFileSync(inputFile, corruptedContent)
 
       // Run dry-run - should complete without error
-      const result = runCLI(['--undo', '--dry-run', inputFile, outputDir])
+      const result = runCLI(['extract', inputFile, '--dry-run'])
 
       // Verify output directory was NOT created (crucial for dry-run)
       expect(existsSync(outputDir)).toBe(false)
 
-      // Verify dry-run output was produced
+      // Verify dry-run output was produced with segmented validation
       expect(result.stdout).toContain('[DRY RUN]')
-      expect(result.stdout).toContain('Detected files:')
+      expect(result.stdout).toContain('Total markers found:')
+      expect(result.stdout).toContain('Target files (will be extracted):')
+      // Files to be extracted section should show valid files only
+      expect(result.stdout).toContain('Files to be Extracted')
     })
 
     it('should exit with code 0 on valid file and not create any files', () => {
@@ -276,7 +279,7 @@ Content 2
       const outputDir = join(tempDir, 'should-not-exist')
       writeFileSync(inputFile, validContent)
 
-      const result = runCLI(['--undo', '--dry-run', inputFile, outputDir])
+      const result = runCLI(['validate', inputFile])
 
       // Verify exit code is 0
       expect(result.status).toBe(0)
@@ -284,9 +287,15 @@ Content 2
       // Verify output directory was NOT created
       expect(existsSync(outputDir)).toBe(false)
 
-      // Verify success message
+      // Verify success message with segmented counts
       expect(result.stdout).toContain('✓ Validation passed')
       expect(result.stdout).toContain('2 file(s) ready for extraction')
+      // Should show Marker Analysis with total first
+      expect(result.stdout).toContain('Total markers found:')
+      expect(result.stdout).toContain('Files to be Extracted (2):')
+      // Validate command should show [VALIDATION], not [DRY RUN]
+      expect(result.stdout).toContain('[VALIDATION]')
+      expect(result.stdout).not.toContain('[DRY RUN]')
     })
   })
 
@@ -306,7 +315,7 @@ Just regular content here
       const outputPath = join(tempDir, 'output.txt')
 
       // This should detect the collision and generate a different session ID
-      const result = runCLI([tempDir, outputPath])
+      const result = runCLI(['concat', tempDir, '-o', outputPath])
 
       // Should succeed (exit code 0) - collision is handled automatically
       expect(result.status).toBe(0)
@@ -333,7 +342,7 @@ All just documentation content.
       writeFileSync(join(tempDir, 'code.ts'), 'const x = 1')
 
       const outputPath = join(tempDir, 'output.txt')
-      const result = runCLI([tempDir, outputPath])
+      const result = runCLI(['concat', tempDir, '-o', outputPath])
 
       // Should succeed - documentation content shouldn't cause issues
       expect(result.status).toBe(0)
@@ -353,7 +362,7 @@ All just documentation content.
       writeFileSync(join(nestedDir, 'deep.txt'), 'Deep content')
 
       const outputPath = join(tempDir, 'output.txt')
-      const result = runCLI([tempDir, outputPath])
+      const result = runCLI(['concat', tempDir, '-o', outputPath])
 
       expect(result.status).toBe(0)
 
@@ -371,14 +380,14 @@ All just documentation content.
 
       expect(result.status).toBe(0)
       expect(result.stdout).toContain('Usage:')
-      expect(result.stdout).toContain('--undo')
-      expect(result.stdout).toContain('--zip')
-      expect(result.stdout).toContain('--dry-run')
+      expect(result.stdout).toContain('concat')
+      expect(result.stdout).toContain('extract')
+      expect(result.stdout).toContain('validate')
     })
 
     it('should handle non-existent input directory gracefully', () => {
       const nonExistentPath = join(tempDir, 'does-not-exist')
-      const result = runCLI([nonExistentPath])
+      const result = runCLI(['concat', nonExistentPath])
 
       expect(result.status).toBe(1)
       expect(result.stderr + result.stdout).toContain('Error')
