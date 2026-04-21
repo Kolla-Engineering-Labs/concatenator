@@ -13,6 +13,8 @@ export interface WorkbenchState {
   view: ViewPreference
   ignoreList: string[]
   isSidebarOpen: boolean
+  isIgnored: (path: string) => boolean
   compiledIgnores: (string | RegExp)[]
   forceMode: boolean
+  virtualFileSystem: Record<string, string>
 }

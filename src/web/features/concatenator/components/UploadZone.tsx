@@ -70,9 +70,11 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
           <div className="w-full max-w-md space-y-4">
             <div className="flex items-center justify-between text-sm font-medium">
               <span className="text-brand-600 dark:text-brand-400">
-                {importProgress.total === 0
-                  ? 'Scanning Folder...'
-                  : 'Reading Files...'}
+                {appMode === 'deconcatenate'
+                  ? 'Parsing...'
+                  : importProgress.total === 0
+                    ? 'Scanning Folder...'
+                    : 'Reading Files...'}
               </span>
               <span className="text-slate-500">
                 {importProgress.current} / {importProgress.total}

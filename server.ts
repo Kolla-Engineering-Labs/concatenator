@@ -105,7 +105,41 @@ async function startServer() {
         (error as { code?: string }).code === 'ENOENT'
       ) {
         // If file doesn't exist, return default list
-        return res.json(['node_modules', '.git', '.DS_Store', 'dist', '.next'])
+        return res.json([
+          '.concatenate-ignore',
+          '.DS_Store',
+          '.env',
+          '.expo',
+          '.git',
+          '.gradle',
+          '.next',
+          '.secrets',
+          '.terraform',
+          '.vagrant',
+          '.vscode',
+          '/^\\.concatenate-ignore-worker-\\d+$/',
+          '/\\.class$/',
+          '/\\.exe$/',
+          '/\\.jar$/',
+          '/\\.log$/',
+          '/\\.o$/',
+          '/\\.obj$/',
+          '/\\.swp$/',
+          '/^__.*cache__$/',
+          '/^\\..*_cache$/',
+          'bin',
+          'build',
+          'desktop.ini',
+          'dist',
+          'node_modules',
+          'obj',
+          'package-lock.json',
+          'ruff_output.txt',
+          'target',
+          'Thumbs.db',
+          'vendor',
+          'venv',
+        ])
       }
       logger.error('Error reading ignore file:', error)
       res.status(500).json({ error: 'Failed to read ignore list' })

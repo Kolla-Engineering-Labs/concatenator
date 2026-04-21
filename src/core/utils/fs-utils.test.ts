@@ -13,7 +13,10 @@ describe('fs-utils: isDirectoryTainted', () => {
   let tempDir: string
 
   beforeEach(() => {
-    tempDir = join(tmpdir(), `fs-utils-test-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`)
+    tempDir = join(
+      tmpdir(),
+      `fs-utils-test-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+    )
     mkdirSync(tempDir, { recursive: true })
   })
 

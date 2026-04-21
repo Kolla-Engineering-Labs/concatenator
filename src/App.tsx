@@ -3,33 +3,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {
-  useState,
-  useMemo,
-  useEffect,
-  useCallback,
-  lazy,
-  Suspense,
-} from 'react'
-import { Menu, PanelLeftClose } from 'lucide-react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
+import { Menu } from 'lucide-react'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/react'
 import { ConcatenatorLogo } from './web/features/concatenator/components/ConcatenatorLogo'
-import { Header } from './web/features/concatenator/components/Header'
-import { Footer } from './web/features/concatenator/components/Footer'
 import { UploadZone } from './web/features/concatenator/components/UploadZone'
 import { FileView } from './web/features/concatenator/components/FileView'
 
-// Lazy load components that aren't needed on initial render
-const IgnoreList = lazy(() =>
-  import('./web/features/concatenator/components/IgnoreList').then((m) => ({
-    default: m.IgnoreList,
-  }))
-)
 import { useFileProcessing } from './web/features/concatenator/hooks/useFileProcessing'
 import { useFileTree } from './web/features/concatenator/hooks/useFileTree'
 import { FileItem, TreeItem, OutputFormat, ViewMode } from './core/types'
 import { useWorkbench } from './web/hooks/useWorkbench'
+import { AppMode } from './web/types/workbench'
+
+import { Sidebar } from './web/components/Sidebar'
 import { ModeSwitch } from './web/components/ModeSwitch'
 
 /**
@@ -64,11 +52,11 @@ export default function App() {
     setView: setViewMode,
     ignoreList,
     setIgnoreList,
-    compiledIgnores,
+    isIgnored,
     isSidebarOpen,
     setSidebarOpen,
-    forceMode,
-    setForceMode,
+    virtualFileSystem,
+    setVirtualFileSystem,
   } = useWorkbench()
 
   const isIgnoreListLoading = false // ModeContext is local-first
@@ -86,30 +74,45 @@ export default function App() {
     importError,
     setImportError,
     cancelProcessing,
-    isIgnored,
     handleFileUpload,
     handleDrop,
     handleConcatenate,
     handleDownloadAsZip,
   } = useFileProcessing({
     appMode,
-    compiledIgnores,
+    isIgnored,
     maxFileLimit,
     isIgnoreListLoading,
+    setVirtualFileSystem,
   })
 
   // --- Derived State ---
-  const filteredFiles = useMemo(() => {
-    return files
-      .filter((file) => !isIgnored(file.path))
+  const displayFiles = useMemo(() => {
+    let baseFiles: FileItem[] = []
+    if (appMode === AppMode.DECONCATENATE) {
+      baseFiles = Object.entries(virtualFileSystem).map(([path, content]) => ({
+        name: path.split('/').pop() || '',
+        path,
+        kind: 'file' as const,
+        content,
+      }))
+    } else {
+      baseFiles = files
+    }
+
+    return baseFiles
+      .map((file) => ({
+        ...file,
+        isIgnored: isIgnored(file.path),
+      }))
       .sort((a, b) => {
         if (a.kind === 'directory' && b.kind === 'file') return -1
         if (a.kind === 'file' && b.kind === 'directory') return 1
         return a.path.localeCompare(b.path)
       })
-  }, [files, isIgnored])
+  }, [files, virtualFileSystem, appMode, isIgnored])
 
-  const fileTree = useFileTree(filteredFiles)
+  const fileTree = useFileTree(displayFiles)
 
   // --- Effects ---
   // View mode and Mode persistence is handled by ModeContext
@@ -195,103 +198,31 @@ export default function App() {
         Skip to main content
       </a>
 
-      {/* Sidebar */}
-      <aside
-        className={`fixed inset-y-0 left-0 z-40 w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-transform lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
-      >
-        <div className="flex flex-col h-full">
-          <div className="p-6 flex items-center justify-between">
-            <Header
-              isDarkMode={isDarkMode}
-              setIsDarkMode={setIsDarkMode}
-              compact={true}
-            />
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="lg:hidden p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
-              title="Close menu"
-            >
-              <PanelLeftClose className="w-5 h-5" />
-            </button>
-          </div>
+      {/* Mobile Backdrop */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 lg:hidden animate-in fade-in duration-300"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
 
-          <nav className="flex-1 px-4 py-4 space-y-6">
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">
-                Work Mode
-              </label>
-              <ModeSwitch />
-            </div>
-
-            {appMode === 'concatenate' && (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label
-                    htmlFor="max-file-limit"
-                    className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2"
-                  >
-                    Performance
-                  </label>
-                  <div className="px-2">
-                    <select
-                      id="max-file-limit"
-                      value={maxFileLimit}
-                      onChange={(e) =>
-                        setMaxFileLimit(parseInt(e.target.value, 10))
-                      }
-                      className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500"
-                    >
-                      <option value="500">500 files</option>
-                      <option value="1000">1,000 files</option>
-                      <option value="2500">2,500 files</option>
-                      <option value="5000">5,000 files</option>
-                      <option value="10000">10,000 files</option>
-                      <option value="20000">20,000 files</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {appMode === 'deconcatenate' && (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">
-                    Safety Settings
-                  </label>
-                  <div className="px-2">
-                    <label className="flex items-center gap-3 cursor-pointer group">
-                      <div className="relative inline-flex items-center">
-                        <input
-                          type="checkbox"
-                          className="sr-only peer"
-                          checked={forceMode}
-                          onChange={(e) => setForceMode(e.target.checked)}
-                        />
-                        <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-600 rounded-full"></div>
-                      </div>
-                      <span className="text-xs text-slate-600 dark:text-slate-400 font-medium group-hover:text-slate-900 dark:group-hover:text-slate-200">
-                        Force Overwrite
-                      </span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-            )}
-          </nav>
-
-          <div className="p-4 border-t border-slate-200 dark:border-slate-800">
-            <Footer />
-          </div>
-        </div>
-      </aside>
+      <Sidebar
+        isDarkMode={isDarkMode}
+        setIsDarkMode={setIsDarkMode}
+        maxFileLimit={maxFileLimit}
+        setMaxFileLimit={setMaxFileLimit}
+        isIgnoreListMinimized={isIgnoreListMinimized}
+        setIsIgnoreListMinimized={setIsIgnoreListMinimized}
+        newIgnoreItem={newIgnoreItem}
+        setNewIgnoreItem={setNewIgnoreItem}
+      />
 
       {/* Main Content Area */}
       <div
         className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${isSidebarOpen ? 'lg:pl-72' : ''}`}
       >
         {!isSidebarOpen && (
-          <div className="fixed top-0 left-0 right-0 z-30 lg:hidden bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 p-3 h-16 flex items-center gap-4">
+          <div className="fixed top-0 left-0 right-0 z-30 lg:hidden bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 p-3 h-16 flex items-center gap-4 transition-all duration-300">
             <button
               onClick={() => setSidebarOpen(true)}
               className="p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm text-slate-600 dark:text-slate-400"
@@ -299,9 +230,14 @@ export default function App() {
             >
               <Menu className="w-5 h-5" />
             </button>
-            <div className="flex items-center gap-2">
+            <div className="flex-1 flex justify-center px-4">
+              <div className="w-full max-w-[240px]">
+                <ModeSwitch />
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
               <ConcatenatorLogo className="h-6 w-auto" />
-              <h1 className="text-base font-bold" data-testid="mobile-title">
+              <h1 className="text-sm font-bold hidden sm:block">
                 Concatenator
               </h1>
             </div>
@@ -324,35 +260,10 @@ export default function App() {
             handleFileUpload={handleFileUpload}
           />
 
-          {appMode === 'concatenate' && (
-            <Suspense
-              fallback={
-                <div className="h-20 animate-pulse bg-slate-100 dark:bg-slate-800 rounded-xl" />
-              }
-            >
-              <IgnoreList
-                ignoreList={ignoreList}
-                isIgnoreListMinimized={isIgnoreListMinimized}
-                setIsIgnoreListMinimized={setIsIgnoreListMinimized}
-                newIgnoreItem={newIgnoreItem}
-                setNewIgnoreItem={setNewIgnoreItem}
-                addIgnoreItem={() => {
-                  if (newIgnoreItem && !ignoreList.includes(newIgnoreItem)) {
-                    setIgnoreList([...ignoreList, newIgnoreItem])
-                  }
-                  setNewIgnoreItem('')
-                }}
-                removeIgnoreItem={(item) => {
-                  setIgnoreList(ignoreList.filter((i) => i !== item))
-                }}
-              />
-            </Suspense>
-          )}
-
-          {(appMode === 'concatenate' || files.length > 0) && (
+          {(appMode === AppMode.CONCATENATE || files.length > 0) && (
             <FileView
               files={files}
-              filteredFiles={filteredFiles}
+              filteredFiles={displayFiles}
               viewMode={viewMode as ViewMode}
               setViewMode={setViewMode as unknown as (mode: ViewMode) => void}
               fileTree={fileTree}
@@ -360,7 +271,10 @@ export default function App() {
               setExpandedPaths={setExpandedPaths}
               isProcessing={isProcessing}
               onConcatenate={() =>
-                handleConcatenate(filteredFiles, outputFormat)
+                handleConcatenate(
+                  displayFiles.filter((f) => !f.isIgnored),
+                  outputFormat
+                )
               }
               onClearAll={handleClearAll}
               onIgnoreFile={(item) => {
@@ -368,7 +282,9 @@ export default function App() {
                   setIgnoreList([...ignoreList, item])
                 }
               }}
-              onDownloadAsZip={() => handleDownloadAsZip?.(filteredFiles)}
+              onDownloadAsZip={() =>
+                handleDownloadAsZip?.(displayFiles.filter((f) => !f.isIgnored))
+              }
               onRemoveFile={handleRemoveFile}
               outputFormat={outputFormat}
               setOutputFormat={setOutputFormat}

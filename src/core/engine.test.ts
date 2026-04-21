@@ -10,6 +10,7 @@ import {
   sanitizePath,
   dedupePath,
   generateSessionId,
+  parseBundle,
 } from './engine'
 
 describe('engine', () => {
@@ -139,12 +140,12 @@ describe('engine', () => {
       ]
 
       // Create a new session-based concatenation
-      const concatenated = concatenate(files, '2024-01-01', 'xyz789')
+      const concatenated = concatenate(files, '2024-01-01', 'def456')
 
       // Add some fake old-format delimiters in the middle (simulating self-hosting paradox)
       const poisonedContent = concatenated.replace(
-        '<<<<< FILE_START: src/engine.ts (ID: xyz789) >>>>>',
-        '<<<<< FILE_START: src/engine.ts (ID: xyz789) >>>>>\n<<<<< FILE_START: fake.txt >>>>>fake content<<<<< FILE_END >>>>>\n'
+        '<<<<< FILE_START: src/engine.ts (ID: def456) >>>>>',
+        '<<<<< FILE_START: src/engine.ts (ID: def456) >>>>>\n<<<<< FILE_START: fake.txt >>>>>fake content<<<<< FILE_END >>>>>\n'
       )
 
       const result = deconcatenate(poisonedContent)
@@ -283,6 +284,42 @@ legacy content
     it('handles files without extensions', () => {
       const existing = new Set<string>(['README'])
       expect(dedupePath('README', existing)).toBe('README(1)')
+    })
+  })
+
+  describe('parseBundle', () => {
+    it('should parse a concatenated bundle and return a file map', () => {
+      const files = [
+        { path: 'file1.txt', content: 'content1' },
+        { path: 'dir/file2.js', content: 'console.log("hello")' },
+      ]
+      const bundle = concatenate(files)
+      const result = parseBundle(bundle)
+
+      expect(result).toEqual({
+        'file1.txt': 'content1',
+        'dir/file2.js': 'console.log("hello")',
+      })
+    })
+
+    it('should un-neutralize escaped backticks', () => {
+      const files = [
+        { path: 'test.md', content: 'Here is some code: \\`console.log(1)\\`' },
+      ]
+      const bundle = concatenate(files)
+      const result = parseBundle(bundle)
+
+      expect(result['test.md']).toBe('Here is some code: `console.log(1)`')
+    })
+
+    it('should un-neutralize escaped special markers', () => {
+      const files = [
+        { path: 'meta.txt', content: 'Look at this: \\<<<<< and \\>>>>>' },
+      ]
+      const bundle = concatenate(files)
+      const result = parseBundle(bundle)
+
+      expect(result['meta.txt']).toBe('Look at this: <<<<< and >>>>>')
     })
   })
 })

@@ -7,6 +7,7 @@ export interface ModeContextType extends WorkbenchState {
   setIgnoreList: (tags: string[]) => void
   setSidebarOpen: (isOpen: boolean) => void
   setForceMode: (force: boolean) => void
+  setVirtualFileSystem: (vfs: Record<string, string>) => void
   resetWorkbench: () => void
 }
 

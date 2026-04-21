@@ -3,6 +3,7 @@ import { useLocalStorage } from '../hooks/useLocalStorage'
 import { AppMode, ViewPreference } from '../types/workbench'
 import { ModeContext } from './ModeContextCore'
 import { DEFAULT_IGNORE_LIST } from '../../core/constants'
+import { IgnoreEngine } from '../../core/ignore/IgnoreEngine'
 
 export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -76,30 +77,24 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
     false
   )
 
-  const resetWorkbench = useCallback(() => {
-    // Crucial for Task CONCAT-01: Clear buffers on mode switch to prevent memory leaks
-    setIgnoreList([])
-    setForceMode(false)
-    // Trigger any additional cleanup for file streams here
-  }, [setIgnoreList, setForceMode])
+  const [virtualFileSystem, setVirtualFileSystem] = React.useState<
+    Record<string, string>
+  >({})
 
-  const compiledIgnores = React.useMemo(() => {
-    return ignoreList.map((pattern) => {
-      if (pattern.startsWith('/')) {
-        const lastSlash = pattern.lastIndexOf('/')
-        if (lastSlash > 0) {
-          const body = pattern.slice(1, lastSlash)
-          const flags = pattern.slice(lastSlash + 1)
-          try {
-            return new RegExp(body, flags)
-          } catch {
-            return pattern
-          }
-        }
-      }
-      return pattern
-    })
+  const resetWorkbench = useCallback(() => {
+    setForceMode(false)
+    setVirtualFileSystem({})
+    // Trigger any additional cleanup for file streams here
+  }, [setForceMode, setVirtualFileSystem])
+
+  const ignoreEngine = React.useMemo(() => {
+    return new IgnoreEngine(ignoreList)
   }, [ignoreList])
+
+  const isIgnored = useCallback(
+    (path: string) => ignoreEngine.isIgnored(path),
+    [ignoreEngine]
+  )
 
   const handleModeChange = (newMode: AppMode) => {
     if (newMode !== mode) {
@@ -114,14 +109,17 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
         mode,
         view,
         ignoreList,
-        compiledIgnores,
+        isIgnored,
         isSidebarOpen,
+        compiledIgnores: ignoreEngine.patterns,
         forceMode,
+        virtualFileSystem,
         setMode: handleModeChange,
         setView,
         setIgnoreList,
         setSidebarOpen: setIsSidebarOpen,
         setForceMode,
+        setVirtualFileSystem,
         resetWorkbench,
       }}
     >

@@ -75,10 +75,12 @@ export const FileView: React.FC<FileViewProps> = ({
         <div className="flex items-center gap-2 text-slate-500">
           <Files className="w-4 h-4" />
           <h2 className="text-sm font-semibold uppercase tracking-wider ph-no-capture">
-            Selected Files
-            <span className="ml-2 tabular-nums opacity-60">
-              ({filteredFiles.filter((f) => f.kind === 'file').length})
-            </span>
+            Selected Files (
+            {
+              filteredFiles.filter((f) => f.kind === 'file' && !f.isIgnored)
+                .length
+            }
+            )
           </h2>
         </div>
 
@@ -114,14 +116,18 @@ export const FileView: React.FC<FileViewProps> = ({
         {files.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center p-12 text-slate-400 gap-2">
             <FileCode className="w-12 h-12 opacity-20" />
-            <p>No files selected</p>
+            <p>
+              {mode === WorkbenchMode.DECONCATENATE
+                ? 'No concatenated files were found'
+                : 'No files selected'}
+            </p>
           </div>
         ) : (
           <div className="p-2">
             {viewMode === 'list' ? (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
                 {filteredFiles
-                  .filter((f) => f.kind === 'file')
+                  .filter((f) => f.kind === 'file' && !f.isIgnored)
                   .map((file, index) => (
                     <div
                       key={`${file.path}-${index}`}
@@ -129,9 +135,11 @@ export const FileView: React.FC<FileViewProps> = ({
                     >
                       {getFileIcon(file.name, file.kind)}
                       <div className="flex flex-col min-w-0 flex-1 ph-no-capture">
-                        <span className="text-sm font-medium truncate leading-tight">
-                          {file.name}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium truncate leading-tight">
+                            {file.name}
+                          </span>
+                        </div>
                         <span
                           className="text-[10px] text-slate-400 truncate leading-tight cursor-help"
                           title={file.path}
@@ -198,12 +206,28 @@ export const FileView: React.FC<FileViewProps> = ({
             </button>
           ) : (
             <div className="flex flex-col items-end gap-2">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  Extracting{' '}
+                  {
+                    filteredFiles.filter(
+                      (f) => f.kind === 'file' && !f.isIgnored
+                    ).length
+                  }{' '}
+                  files
+                </span>
+                {filteredFiles.some((f) => f.isIgnored) && (
+                  <span className="text-[10px] font-bold text-brand-500/60 uppercase tracking-widest">
+                    ({filteredFiles.filter((f) => f.isIgnored).length} ignored)
+                  </span>
+                )}
+              </div>
               {!forceMode && (
                 <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800/50 animate-in fade-in slide-in-from-bottom-1">
                   <Info className="w-3.5 h-3.5" />
                   <span className="text-[10px] font-medium leading-none">
-                    Standard extraction: Ensure target folder is empty to avoid
-                    file merging.
+                    Note: Extraction assumes a clean directory. Enable 'Force'
+                    if merging into existing code.
                   </span>
                 </div>
               )}
@@ -211,24 +235,31 @@ export const FileView: React.FC<FileViewProps> = ({
                 <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-800/50 animate-in fade-in slide-in-from-bottom-1">
                   <AlertTriangle className="w-3.5 h-3.5" />
                   <span className="text-[10px] font-medium leading-none">
-                    Force Mode Enabled: Files will be overwritten.
+                    Force Mode Enabled: Overwriting existing files during
+                    extraction.
                   </span>
                 </div>
               )}
               <button
                 onClick={onDownloadAsZip}
                 disabled={
-                  filteredFiles.length === 0 || isProcessing || !onDownloadAsZip
+                  filteredFiles.filter((f) => !f.isIgnored).length === 0 ||
+                  isProcessing ||
+                  !onDownloadAsZip
                 }
                 className={cn(
                   'px-8 py-2.5 rounded-xl font-semibold shadow-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95',
                   forceMode
-                    ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-600/20'
-                    : 'bg-brand-600 hover:bg-brand-700 text-white shadow-brand-600/20'
+                    ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-600/20 border-2 border-red-400 ring-2 ring-red-500/20'
+                    : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20'
                 )}
                 title={forceMode ? 'Force Download ZIP' : 'Download ZIP'}
               >
-                <FolderArchive className="w-5 h-5" />
+                {forceMode ? (
+                  <AlertTriangle className="w-5 h-5 animate-pulse" />
+                ) : (
+                  <FolderArchive className="w-5 h-5" />
+                )}
                 <span className="">
                   {forceMode ? 'Force Extract ZIP' : 'Download ZIP'}
                 </span>

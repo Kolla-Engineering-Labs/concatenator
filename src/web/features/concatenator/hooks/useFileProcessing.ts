@@ -5,7 +5,8 @@
 
 import React, { useState, useRef, useCallback } from 'react'
 import JSZip from 'jszip'
-import { FileItem, AppMode, OutputFormat } from '../../../../core/types'
+import { FileItem, OutputFormat } from '../../../../core/types'
+import { AppMode } from '../../../types/workbench'
 import {
   START_DELIMITER,
   END_DELIMITER,
@@ -16,16 +17,17 @@ import {
   concatenate,
   generateFileTimestamp,
   validateConcatenation,
+  parseBundle,
 } from '../../../../core/engine'
 import type { ValidationResult } from '../../../../core/types'
-import { createZipFromVirtualFiles } from '../../../../drivers/zip-driver'
 import { logger } from '../../../../lib/logger'
 
 interface UseFileProcessingProps {
   appMode: AppMode
-  compiledIgnores: (string | RegExp)[]
+  isIgnored: (path: string) => boolean
   maxFileLimit: number
   isIgnoreListLoading: boolean
+  setVirtualFileSystem: (vfs: Record<string, string>) => void
 }
 
 /**
@@ -33,9 +35,10 @@ interface UseFileProcessingProps {
  */
 export const useFileProcessing = ({
   appMode,
-  compiledIgnores,
+  isIgnored,
   maxFileLimit,
   isIgnoreListLoading,
+  setVirtualFileSystem,
 }: UseFileProcessingProps) => {
   const [files, setFiles] = useState<FileItem[]>([])
   const [isProcessing, setIsProcessingState] = useState(false)
@@ -58,61 +61,6 @@ export const useFileProcessing = ({
     }
   }, [])
 
-  const isIgnored = useCallback(
-    (path: string) => {
-      if (!path) return false
-      const normalizedPath = path.replace(/\\/g, '/')
-      const segments = normalizedPath.split('/').filter(Boolean)
-      const fileName = segments.length > 0 ? segments[segments.length - 1] : ''
-
-      if (segments.length === 0) return false
-
-      const result = compiledIgnores.some((ignore) => {
-        if (ignore instanceof RegExp) {
-          // Test regex against full path, filename, and each segment
-          if (ignore.test(normalizedPath)) return true
-          if (ignore.test(fileName)) return true
-          return segments.some((segment) => ignore.test(segment))
-        }
-
-        const ignoreStr =
-          typeof ignore === 'string' ? ignore.replace(/\/$/, '') : ignore
-
-        // Check if pattern contains glob characters
-        if (ignoreStr.includes('*') || ignoreStr.includes('?')) {
-          // Convert glob pattern to regex
-          const globToRegex = (glob: string) => {
-            const escaped = glob
-              .replace(/[.+^${}()|[\]\\]/g, '\\$&') // Escape regex special chars except * and ?
-              .replace(/\*/g, '.*') // * matches any sequence
-              .replace(/\?/g, '.') // ? matches single char
-            return new RegExp(`^${escaped}$`)
-          }
-
-          const patternRegex = globToRegex(ignoreStr)
-
-          // Match against filename for simple patterns (no / in pattern)
-          if (!ignoreStr.includes('/')) {
-            if (patternRegex.test(fileName)) return true
-          }
-
-          // Also match against full path and each segment
-          if (patternRegex.test(normalizedPath)) return true
-          return segments.some((segment) => patternRegex.test(segment))
-        }
-
-        // For non-glob patterns, use exact matching against segments and filename
-        return (
-          segments.some((segment) => segment === ignoreStr) ||
-          fileName === ignoreStr
-        )
-      })
-
-      return result
-    },
-    [compiledIgnores]
-  )
-
   const handleDeconcatenate = useCallback(
     async (inputFiles?: FileItem[]) => {
       const targetFiles = inputFiles || files
@@ -123,6 +71,12 @@ export const useFileProcessing = ({
       const skippedFiles: string[] = []
 
       try {
+        if (appMode === AppMode.DECONCATENATE && targetFiles.length > 0) {
+          // In de-concatenate mode, we might just be downloading what's already in the virtualFileSystem
+          // or we are processing dropped files.
+          // If we have virtualFileSystem, we should use that to generate the ZIP.
+        }
+
         for (const fileItem of targetFiles) {
           if (fileItem.kind !== 'file' || !fileItem.content) continue
 
@@ -188,7 +142,7 @@ export const useFileProcessing = ({
         setIsProcessing(false)
       }
     },
-    [files, setIsProcessing]
+    [files, setIsProcessing, appMode]
   )
 
   const processUploadedFiles = useCallback(
@@ -269,11 +223,58 @@ export const useFileProcessing = ({
       }
 
       if (!cancelImportRef.current) {
-        if (appMode === 'deconcatenate') {
-          await handleDeconcatenate(newFiles)
+        if (appMode === AppMode.DECONCATENATE) {
+          // De-concatenate mode: we only allow ONE bundle file at a time
+          if (newFiles.length > 1) {
+            setImportError(
+              'Please upload only one concatenated file at a time.'
+            )
+            setIsProcessing(false)
+            return
+          }
+
+          const bundle = newFiles[0]
+          if (!bundle || typeof bundle.content !== 'string') {
+            setImportError('Failed to read concatenated file.')
+            setIsProcessing(false)
+            return
+          }
+
+          // Validate bundle format
+          const validation = validateConcatenation(bundle.content)
+          if (validation.targetFileCount === 0) {
+            setImportError(
+              'No concatenated files were found in the uploaded file(s). Make sure you are uploading a file generated by this tool.'
+            )
+            setIsProcessing(false)
+            return
+          }
+
+          // Parse and populate virtualFileSystem
+          try {
+            const vfs = parseBundle(bundle.content)
+            if (Object.keys(vfs).length === 0) {
+              setImportError(
+                'No concatenated files were found in the uploaded file(s). Make sure you are uploading a file generated by this tool.'
+              )
+              setIsProcessing(false)
+              return
+            }
+            setVirtualFileSystem(vfs)
+            // Also keep the bundle file in files state for breadcrumb/reference if needed
+            setFiles([bundle])
+
+            // Auto-trigger de-concatenation download for seamless UX and test compatibility.
+            // This restores the behavior expected by the E2E test suite while still
+            // populating the virtual file system for UI exploration.
+            await handleDeconcatenate([bundle])
+          } catch (err) {
+            logger.error('Failed to parse concatenated file:', err)
+            setImportError('Failed to parse concatenated file.')
+          }
         } else {
           setFiles((prev) => {
-            // Optimized Deduplication preventing Array [...spread] max call stack and Map loop limits
+            // Optimized Deduplication
             const newPaths = new Set(newFiles.map((f) => f.path))
             const filteredPrev = prev.filter((f) => !newPaths.has(f.path))
 
@@ -292,7 +293,15 @@ export const useFileProcessing = ({
       cancelImportRef.current = false
       activeReaderRef.current = null
     },
-    [appMode, handleDeconcatenate, setIsProcessing]
+    [
+      appMode,
+      setIsProcessing,
+      setVirtualFileSystem,
+      setFiles,
+      setImportError,
+      setImportProgress,
+      handleDeconcatenate,
+    ]
   )
 
   const handleFileUpload = useCallback(
@@ -599,20 +608,29 @@ export const useFileProcessing = ({
       setIsProcessing(true)
 
       try {
-        const virtualFiles = fileList.map((f) => ({
-          path: f.path,
-          content: typeof f.content === 'string' ? f.content : '',
-        }))
+        const zip = new JSZip()
 
-        const zipData = await createZipFromVirtualFiles(virtualFiles)
-        const blob = new Blob([zipData.buffer as ArrayBuffer], {
-          type: 'application/zip',
-        })
+        // Add files to ZIP
+        for (const f of fileList) {
+          if (isIgnored(f.path)) {
+            logger.info(
+              `Skipping ignored file during ZIP generation: ${f.path}`
+            )
+            continue
+          }
+          zip.file(f.path, typeof f.content === 'string' ? f.content : '')
+        }
+
+        const blob = await zip.generateAsync({ type: 'blob' })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
         const fileTimestamp = generateFileTimestamp()
-        a.download = `concatenator-${fileTimestamp}.zip`
+        const downloadName =
+          appMode === AppMode.DECONCATENATE
+            ? `extracted-${fileTimestamp}.zip`
+            : `concatenator-${fileTimestamp}.zip`
+        a.download = downloadName
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
@@ -624,7 +642,7 @@ export const useFileProcessing = ({
         setIsProcessing(false)
       }
     },
-    [setIsProcessing]
+    [setIsProcessing, appMode, isIgnored]
   )
 
   /**
@@ -652,12 +670,12 @@ export const useFileProcessing = ({
     importError,
     setImportError,
     cancelProcessing,
-    isIgnored,
     handleFileUpload,
     handleDrop,
     handleConcatenate,
     handleDeconcatenate,
     handleDownloadAsZip,
+    isIgnored,
     validationResult,
     validateContent,
     clearValidation,

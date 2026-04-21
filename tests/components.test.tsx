@@ -110,11 +110,14 @@ describe('ModeSwitch Component', () => {
       isSidebarOpen: true,
       compiledIgnores: [],
       forceMode: false,
+      virtualFileSystem: {},
+      isIgnored: () => false,
       resetWorkbench: vi.fn(),
       setSidebarOpen: vi.fn(),
       setView: vi.fn(),
       setIgnoreList: vi.fn(),
       setForceMode: vi.fn(),
+      setVirtualFileSystem: vi.fn(),
     })
   })
 
@@ -144,11 +147,14 @@ describe('ModeSwitch Component', () => {
       isSidebarOpen: true,
       compiledIgnores: [],
       forceMode: false,
+      virtualFileSystem: {},
+      isIgnored: () => false,
       resetWorkbench: vi.fn(),
       setSidebarOpen: vi.fn(),
       setView: vi.fn(),
       setIgnoreList: vi.fn(),
       setForceMode: vi.fn(),
+      setVirtualFileSystem: vi.fn(),
     })
 
     render(<ModeSwitch />)
@@ -169,11 +175,14 @@ describe('ModeSwitch Component', () => {
       isSidebarOpen: true,
       compiledIgnores: [],
       forceMode: false,
+      virtualFileSystem: {},
+      isIgnored: () => false,
       resetWorkbench: vi.fn(),
       setSidebarOpen: vi.fn(),
       setView: vi.fn(),
       setIgnoreList: vi.fn(),
       setForceMode: vi.fn(),
+      setVirtualFileSystem: vi.fn(),
     })
 
     render(<ModeSwitch />)
@@ -192,11 +201,14 @@ describe('ModeSwitch Component', () => {
       compiledIgnores: [],
       isSidebarOpen: true,
       forceMode: false,
+      virtualFileSystem: {},
+      isIgnored: () => false,
       resetWorkbench: vi.fn(),
       setSidebarOpen: vi.fn(),
       setView: vi.fn(),
       setIgnoreList: vi.fn(),
       setForceMode: vi.fn(),
+      setVirtualFileSystem: vi.fn(),
     })
 
     render(<ModeSwitch />)

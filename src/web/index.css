@@ -29,3 +29,25 @@
     @apply bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-50 transition-colors duration-300;
   }
 }
+
+@utility custom-scrollbar {
+  &::-webkit-scrollbar {
+    width: 5px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: var(--color-slate-200);
+    border-radius: 10px;
+  }
+  .dark &::-webkit-scrollbar-thumb {
+    background: var(--color-slate-800);
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: var(--color-slate-300);
+  }
+  .dark &::-webkit-scrollbar-thumb:hover {
+    background: var(--color-slate-700);
+  }
+}

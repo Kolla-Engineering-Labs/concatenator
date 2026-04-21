@@ -34,6 +34,7 @@ export const useFileTree = (filteredFiles: FileItem[]) => {
             path: currentPath,
             kind: isLast ? file.kind : 'directory',
             children: isLast && file.kind === 'file' ? undefined : [],
+            isIgnored: isLast ? file.isIgnored : false,
           }
           current.children?.push(existing)
         }

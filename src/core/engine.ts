@@ -124,17 +124,11 @@ function generateCollisionFreeSessionId(files: ConcatenateInputFile[]): string {
  * @returns Session ID or null if not found
  */
 function extractSessionId(content: string): string | null {
-  const firstLine = content.split('\n')[0]
-  if (!firstLine) return null
-
-  const prefixIndex = firstLine.indexOf(MANIFEST_PREFIX)
-  if (prefixIndex === -1) return null
-
-  const idStart = prefixIndex + MANIFEST_PREFIX.length
-  const suffixIndex = firstLine.indexOf(MANIFEST_SUFFIX, idStart)
-  if (suffixIndex === -1) return null
-
-  return firstLine.substring(idStart, suffixIndex)
+  // Regex: --- CONCATENATOR_SESSION_ID: ###### ---
+  // Flexible with whitespace and case
+  const manifestRegex = /---\s*CONCATENATOR_SESSION_ID:\s*([a-zA-Z0-9]+)\s*---/i
+  const match = content.match(manifestRegex)
+  return match ? match[1] : null
 }
 
 /**
@@ -150,8 +144,9 @@ function buildFileStartRegex(sessionId: string): RegExp {
 
   // Pattern: START_DELIMITER + (path) + " (ID: " + sessionId + ")" + END_DELIMITER
   // We use a capturing group for the path portion
+  // Flexible whitespace around the ID part
   return new RegExp(
-    `${escapedStart}(.+?)\\s*\\(ID:\\s*${sessionId}\\s*\\)${escapedEnd}`,
+    `${escapedStart}(.+?)\\s*\\(ID:\\s*${sessionId}\\s*\\)\\s*${escapedEnd}`,
     'g'
   )
 }
@@ -184,6 +179,12 @@ export function deconcatenate(content: string): DeconcatenateResult {
       // Try legacy parsing (no session ID filtering)
       return deconcatenateLegacy(content)
     }
+
+    // Check for Header format (--- FILE: path/to/file ---)
+    if (content.includes('--- FILE:')) {
+      return deconcatenateHeader(content)
+    }
+
     return { files: [], skippedPaths: [], foundAny: false }
   }
 
@@ -196,6 +197,7 @@ export function deconcatenate(content: string): DeconcatenateResult {
     path: string
     contentStart: number
     fullMatchEnd: number
+    index: number
   }> = []
   let match
 
@@ -204,6 +206,7 @@ export function deconcatenate(content: string): DeconcatenateResult {
       path: match[1].trim(),
       contentStart: match.index + match[0].length,
       fullMatchEnd: match.index + match[0].length,
+      index: match.index,
     })
   }
 
@@ -211,19 +214,13 @@ export function deconcatenate(content: string): DeconcatenateResult {
 
   for (let i = 0; i < matches.length; i++) {
     const { path, contentStart } = matches[i]
-    const nextMatchStart =
-      i < matches.length - 1
-        ? matches[i + 1].fullMatchEnd -
-          matches[i + 1].path.length -
-          START_DELIMITER.length -
-          END_DELIMITER.length -
-          10 /* approx */
-        : null
+    const nextMatchStart = i < matches.length - 1 ? matches[i + 1].index : null
 
     // Find the end delimiter for this file
     const fileEndIndex = content.indexOf(fileEndDelimiter, contentStart)
 
     // Partial File Detection
+    // Valid if we find an end delimiter AND it's before the next file start (if any)
     if (
       fileEndIndex === -1 ||
       (nextMatchStart !== null && fileEndIndex > nextMatchStart)
@@ -303,6 +300,53 @@ function deconcatenateLegacy(content: string): DeconcatenateResult {
   }
 
   return { files, skippedPaths, foundAny }
+}
+
+/**
+ * Header deconcatenate parser
+ * Handles markers like: --- FILE: path/to/file ---
+ *
+ * @param content - Header concatenated content
+ * @returns DeconcatenateResult
+ */
+function deconcatenateHeader(content: string): DeconcatenateResult {
+  const files: VirtualFile[] = []
+  const addedPaths = new Set<string>()
+
+  // Regex for --- FILE: path/to/file ---
+  const startRegex = /--- FILE: (.+?) ---/g
+  let match: RegExpExecArray | null
+  const matches: { path: string; start: number; end: number }[] = []
+
+  while ((match = startRegex.exec(content)) !== null) {
+    matches.push({
+      path: match[1].trim(),
+      start: match.index,
+      end: match.index + match[0].length,
+    })
+  }
+
+  for (let i = 0; i < matches.length; i++) {
+    const startPos = matches[i].end
+    const nextStartPos =
+      i < matches.length - 1 ? matches[i + 1].start : content.length
+
+    let fileContent = content.substring(startPos, nextStartPos)
+
+    // Clean up content: remove leading/trailing newlines
+    // Also remove trailing '---' if it exists before the next marker or EOF
+    fileContent = fileContent.replace(/[\r\n]+---[\r\n]*$/, '')
+    fileContent = fileContent.replace(/^[\r\n]+|[\r\n]+$/g, '')
+
+    const sanitizedPath = sanitizePath(matches[i].path)
+    if (sanitizedPath) {
+      const finalPath = dedupePath(sanitizedPath, addedPaths)
+      addedPaths.add(finalPath)
+      files.push({ path: finalPath, content: fileContent })
+    }
+  }
+
+  return { files, skippedPaths: [], foundAny: files.length > 0 }
 }
 
 /**
@@ -477,23 +521,27 @@ export function validateConcatenation(input: string): ValidationResult {
   const sessionId = extractSessionId(input)
 
   // Check if first line looks like a corrupted manifest (starts with --- but wrong content)
-  const firstLine = input.split('\n')[0] || ''
+  const lines = input.split(/\r?\n/)
+  const firstLine = lines.find((l) => l.trim().length > 0) || ''
   const looksLikeCorruptedManifest =
     firstLine.startsWith('--- ') &&
     !firstLine.includes(MANIFEST_PREFIX.trim()) &&
     !sessionId
 
   if (!sessionId) {
-    // Check for legacy format
+    // Check for legacy formats
     const hasLegacyFormat =
       input.includes('<<<<< FILE_START:') ||
       input.includes('<<<<< CONCATENATOR_FILE_START:')
+    const hasHeaderProtocol = input.includes('--- FILE:')
     if (looksLikeCorruptedManifest) {
       errors.push('Corrupted manifest header detected')
     } else if (hasLegacyFormat) {
       warnings.push(
         'No session manifest found - using legacy format validation'
       )
+    } else if (hasHeaderProtocol) {
+      // Header recognized
     } else {
       errors.push('No valid session manifest header found')
     }
@@ -518,6 +566,8 @@ export function validateConcatenation(input: string): ValidationResult {
     `${escapedStart}(.+?)(?:\\s*\\(ID:\\s*([a-zA-Z0-9]+)\\s*\\))?${escapedEnd}`,
     'gi'
   )
+
+  const headerRegex = /--- FILE: (.+?) ---/gi
 
   let match
   while ((match = startMarkerRegex.exec(input)) !== null) {
@@ -547,6 +597,17 @@ export function validateConcatenation(input: string): ValidationResult {
     })
   }
 
+  // Also look for Header Protocol markers
+  while ((match = headerRegex.exec(input)) !== null) {
+    fileMarkers.push({
+      path: match[1].trim(),
+      markerSessionId: null,
+      startPos: match.index,
+      endPos: match.index + match[0].length,
+      hasMatchingEnd: true,
+    })
+  }
+
   // Classify markers as target (matching session or legacy no-session) vs foreign (different session)
   const targetMarkers: typeof fileMarkers = []
   const foreignMarkers: typeof fileMarkers = []
@@ -571,46 +632,44 @@ export function validateConcatenation(input: string): ValidationResult {
   }
 
   // Check each target file marker for matching end marker
-  for (let i = 0; i < fileMarkers.length; i++) {
-    const marker = fileMarkers[i]
-    // Target if: no manifest session (legacy), or marker matches manifest session
-    const isTarget = !sessionId || marker.markerSessionId === sessionId
+  // We only consider other TARGET markers as boundaries, to allow
+  // foreign markers (test fixtures, nested content) to exist within a file.
+  for (let i = 0; i < targetMarkers.length; i++) {
+    const marker = targetMarkers[i]
 
-    const nextMarkerStart =
-      i < fileMarkers.length - 1 ? fileMarkers[i + 1].startPos : input.length
+    const nextTargetMarkerStart =
+      i < targetMarkers.length - 1
+        ? targetMarkers[i + 1].startPos
+        : input.length
 
-    // Look for end marker between this start and next start (or end of content)
-    const contentAfterStart = input.substring(marker.endPos, nextMarkerStart)
+    // Look for end marker between this start and next target start (or end of content)
+    const contentAfterStart = input.substring(
+      marker.endPos,
+      nextTargetMarkerStart
+    )
     const hasEndMarker = contentAfterStart.includes(FILE_END_DELIMITER)
 
     marker.hasMatchingEnd = hasEndMarker
 
-    // Report errors for target files and session mismatches
-    if (isTarget) {
-      if (!hasEndMarker) {
-        errors.push(`Missing end marker for file: ${marker.path}`)
-      } else {
-        // Only add to targetFiles if it has a matching end marker (will be extracted)
-        targetFiles.push(marker.path)
+    if (!hasEndMarker) {
+      errors.push(`Missing end marker for file: ${marker.path}`)
+    } else {
+      // Only add to targetFiles if it has a matching end marker (will be extracted)
+      targetFiles.push(marker.path)
 
-        // Check for empty file warning
-        const endIndex = contentAfterStart.indexOf(FILE_END_DELIMITER)
-        const content = contentAfterStart.substring(0, endIndex).trim()
-        if (content.length === 0) {
-          warnings.push(`Empty file detected: ${marker.path}`)
-        }
+      // Check for empty file warning
+      const endIndex = contentAfterStart.indexOf(FILE_END_DELIMITER)
+      const content = contentAfterStart.substring(0, endIndex).trim()
+      if (content.length === 0) {
+        warnings.push(`Empty file detected: ${marker.path}`)
       }
-    } else if (
-      sessionId &&
-      marker.markerSessionId &&
-      marker.markerSessionId !== sessionId
-    ) {
-      // Session ID mismatch: marker has different ID than manifest
-      errors.push(
-        `Session ID mismatch in marker for ${marker.path}: expected ${sessionId}, found ${marker.markerSessionId}`
-      )
     }
 
+    detectedFiles.push(marker.path)
+  }
+
+  // Also add foreign files to detected list for completeness
+  for (const marker of foreignMarkers) {
     detectedFiles.push(marker.path)
   }
 
@@ -628,9 +687,8 @@ export function validateConcatenation(input: string): ValidationResult {
   // Determine overall validity based on TARGET markers only
   // Valid if: no errors AND (has session-based target markers OR valid legacy format)
   // Invalid if: has errors OR (no sessionId AND no valid markers)
-  const hasValidTargetMarkers =
-    targetMarkers.length > 0 && targetMarkers.some((m) => m.hasMatchingEnd)
-  const isValid = errors.length === 0 && hasValidTargetMarkers
+  const hasAnyMarkers = targetMarkers.length > 0 || foreignMarkers.length > 0
+  const isValid = errors.length === 0 && hasAnyMarkers
 
   return {
     isValid,
@@ -646,4 +704,30 @@ export function validateConcatenation(input: string): ValidationResult {
     targetFiles,
     foreignFiles,
   }
+}
+
+/**
+ * High-level parser that takes concatenated content and returns a file-map.
+ * Includes "un-neutralization" logic for escaped backticks and special markers.
+ *
+ * @param content - The concatenated string content
+ * @returns Map of path -> content
+ */
+export function parseBundle(content: string): Record<string, string> {
+  const { files } = deconcatenate(content)
+  const fileMap: Record<string, string> = {}
+
+  for (const file of files) {
+    // Un-neutralize:
+    // 1. Backticks: \` -> ` (Reverse of common LLM/Markdown escaping)
+    // 2. Delimiter parts: \<<<<< or \>>>>> (Reverse of common manual escaping)
+    const processedContent = file.content
+      .replace(/\\`/g, '`')
+      .replace(/\\<{5}/g, '<<<<<')
+      .replace(/\\>{5}/g, '>>>>>')
+
+    fileMap[file.path] = processedContent
+  }
+
+  return fileMap
 }

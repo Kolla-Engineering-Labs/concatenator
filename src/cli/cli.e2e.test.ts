@@ -494,7 +494,6 @@ Extracted content
       )
     })
 
-
     it('should overwrite file with --force flag during extract', () => {
       // Create a valid concatenated file
       const sessionId = 'collision002'

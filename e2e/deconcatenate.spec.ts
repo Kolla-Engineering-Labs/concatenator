@@ -99,8 +99,6 @@ test.describe('De-concatenate Mode', () => {
       localStorage.removeItem('concat_mode')
       localStorage.removeItem('concat_view')
       localStorage.removeItem('concat_ignore')
-      localStorage.removeItem('concat_sidebar')
-      localStorage.setItem('concat_sidebar', 'false')
     })
 
     // Reset server-side ignore list BEFORE navigation so client fetches correct state.

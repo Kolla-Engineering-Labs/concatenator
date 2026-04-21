@@ -41,7 +41,9 @@ export const TreeNode: React.FC<TreeNodeProps> = ({
       <div
         className={cn(
           'flex items-center py-1 px-2 rounded-md cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors',
-          depth === 0 && 'font-semibold text-slate-500'
+          depth === 0 && 'font-semibold text-slate-500',
+          node.isIgnored &&
+            'opacity-30 grayscale italic select-none pointer-events-none'
         )}
         style={{ paddingLeft: `${depth * 1.25 + 0.5}rem` }}
         onClick={hasChildren ? toggleExpand : undefined}
@@ -62,9 +64,14 @@ export const TreeNode: React.FC<TreeNodeProps> = ({
             {getFileIcon(node.name, 'file')}
           </div>
         )}
-        <span className="text-sm truncate ph-no-capture">
+        <span className="text-sm truncate ph-no-capture flex items-center gap-2">
           {node.name}
           {node.kind === 'directory' && node.name !== 'Root' ? '/' : ''}
+          {node.isIgnored && (
+            <span className="text-xs bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded uppercase tracking-tighter font-bold">
+              Ignored
+            </span>
+          )}
         </span>
       </div>
 

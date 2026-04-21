@@ -9,6 +9,7 @@ export interface FileItem {
   kind: 'file' | 'directory'
   content?: string | ArrayBuffer
   size?: number
+  isIgnored?: boolean
 }
 
 export interface TreeItem {
@@ -16,6 +17,7 @@ export interface TreeItem {
   path: string
   kind: 'file' | 'directory'
   children?: TreeItem[]
+  isIgnored?: boolean
 }
 
 export type ViewMode = 'list' | 'tree'

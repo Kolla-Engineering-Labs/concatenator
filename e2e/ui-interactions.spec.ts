@@ -5,14 +5,14 @@
 
 import { test, expect } from './fixtures'
 import { FileUploadHelper } from './helpers/file-upload'
-import type { Locator, APIRequestContext } from '@playwright/test'
+import type { APIRequestContext } from '@playwright/test'
 
-/**
- * Helper function to click an element using JavaScript for better Firefox compatibility
- */
-async function jsClick(locator: Locator): Promise<void> {
-  await locator.evaluate((el: HTMLElement) => el.click())
-}
+import {
+  jsClick,
+  ensureSidebarOpen,
+  ensureIgnoreListExpanded,
+  ensureAllIgnoresVisible,
+} from './helpers/sidebar'
 
 /**
  * Helper to reset the ignore list via API using the worker-specific context.
@@ -73,8 +73,6 @@ test.describe('UI Interactions and Edge Cases', () => {
       localStorage.removeItem('concat_mode')
       localStorage.removeItem('concat_view')
       localStorage.removeItem('concat_ignore')
-      localStorage.removeItem('concat_sidebar')
-      localStorage.setItem('concat_sidebar', 'false')
     })
 
     // Reset server-side ignore list BEFORE navigation so client fetches correct state.
@@ -185,17 +183,10 @@ test.describe('UI Interactions and Edge Cases', () => {
         ).toBeVisible({ timeout: 10000 })
 
         // Expand ignore list if needed
-        const expandIgnoreButton = page.locator(
-          'button[title="Expand ignore list"]'
-        )
-        if (
-          (await expandIgnoreButton.count()) > 0 &&
-          (await expandIgnoreButton.isVisible().catch(() => false))
-        ) {
-          await jsClick(expandIgnoreButton)
-          // Wait for AnimatePresence animation to complete (Firefox needs more time)
-          await page.waitForTimeout(300)
-        }
+        await ensureIgnoreListExpanded(page)
+
+        // Expand truncated items if needed
+        await ensureAllIgnoresVisible(page)
 
         // Type in ignore input and press Enter
         const ignoreInput = page.getByPlaceholder('Add ignore pattern...')
@@ -252,10 +243,7 @@ test.describe('UI Interactions and Edge Cases', () => {
       ).toBeVisible()
 
       // Open sidebar on mobile to reveal mode toggle
-      const openMenuButton = page.locator('button[title="Open menu"]')
-      await openMenuButton.waitFor({ state: 'visible', timeout: 10000 })
-      await jsClick(openMenuButton)
-      await page.waitForTimeout(500)
+      await ensureSidebarOpen(page)
 
       // Mode toggle should still be usable - use JavaScript click
       const deconcatButton = page.getByRole('button', {
@@ -460,11 +448,7 @@ test.describe('UI Interactions and Edge Cases', () => {
 
       // Rapidly switch modes multiple times using JavaScript clicks
       // On mobile, ensure sidebar is open
-      const openMenuButton = page.locator('button[title="Open menu"]')
-      if (await openMenuButton.isVisible()) {
-        await jsClick(openMenuButton)
-        await page.waitForTimeout(500)
-      }
+      await ensureSidebarOpen(page)
 
       for (let i = 0; i < 5; i++) {
         await jsClick(deconcatButton)
@@ -509,11 +493,7 @@ test.describe('UI Interactions and Edge Cases', () => {
 
         // Immediately try to switch mode using JavaScript click
         // On mobile, ensure sidebar is open
-        const openMenuButton = page.locator('button[title="Open menu"]')
-        if (await openMenuButton.isVisible()) {
-          await jsClick(openMenuButton)
-          await page.waitForTimeout(500)
-        }
+        await ensureSidebarOpen(page)
 
         const deconcatButton = page.getByRole('button', {
           name: 'De-concatenate',
