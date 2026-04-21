@@ -1,5 +1,5 @@
 /**
- * Copyright 2026 Kolla-Labs Software Inc.
+ * Copyright 2026 Kolla Engineering Labs
  * SPDX-License-Identifier: Apache-2.0
  *
  * CLI E2E Test Suite
@@ -16,6 +16,7 @@ import {
   rmdirSync,
   unlinkSync,
   readdirSync,
+  statSync,
 } from 'fs'
 import { tmpdir } from 'os'
 import { join, normalize, sep } from 'path'
@@ -391,6 +392,171 @@ All just documentation content.
 
       expect(result.status).toBe(1)
       expect(result.stderr + result.stdout).toContain('Error')
+    })
+  })
+
+  describe('Force Flag and Collision Handling', () => {
+    it('should error when output path exists as directory without --force', () => {
+      // Create source directory with files
+      writeFileSync(join(tempDir, 'src.txt'), 'Source content')
+
+      // Create a directory with the same name as intended output file
+      const outputPath = join(tempDir, 'output.txt')
+      mkdirSync(outputPath, { recursive: true })
+      writeFileSync(join(outputPath, 'existing.txt'), 'Existing content')
+
+      // Try to concatenate to that path (should fail)
+      const result = runCLI(['concat', tempDir, '-o', outputPath])
+
+      expect(result.status).toBe(1)
+      expect(result.stderr + result.stdout).toContain('exists as a directory')
+      expect(result.stderr + result.stdout).toContain('--force')
+    })
+
+    it('should overwrite directory with --force flag during concat', () => {
+      // Create source directory with files
+      const srcDir = join(tempDir, 'src')
+      mkdirSync(srcDir, { recursive: true })
+      writeFileSync(join(srcDir, 'file.txt'), 'New content')
+
+      // Create a directory with the same name as intended output file
+      const outputPath = join(tempDir, 'output.txt')
+      mkdirSync(outputPath, { recursive: true })
+      writeFileSync(join(outputPath, 'existing.txt'), 'Old content')
+
+      // Concatenate with --force (should succeed)
+      const result = runCLI(['concat', srcDir, '-o', outputPath, '--force'])
+
+      expect(result.status).toBe(0)
+      expect(existsSync(outputPath)).toBe(true)
+
+      // Verify output is now a file with the concatenated content
+      const stats = statSync(outputPath)
+      expect(stats.isFile()).toBe(true)
+
+      const content = readFileSync(outputPath, 'utf-8')
+      expect(content).toContain('New content')
+    })
+
+    it('should error when output directory exists as file without --force', () => {
+      // Create a valid concatenated file
+      const sessionId = 'collision001'
+      const concatenatedContent = `--- CONCATENATOR_SESSION_ID: ${sessionId} ---
+Concatenated on: 2024-01-01
+
+<<<<< FILE_START: file.txt (ID: ${sessionId}) >>>>>
+Content here
+<<<<< FILE_END >>>>>
+`
+      const inputFile = join(tempDir, 'bundle.txt')
+      writeFileSync(inputFile, concatenatedContent)
+
+      // Create a file with the same name as intended output directory
+      const outputPath = join(tempDir, 'output')
+      writeFileSync(outputPath, 'I am a file not a directory')
+
+      // Try to extract to that path (should fail)
+      const result = runCLI(['extract', inputFile, '-o', outputPath])
+
+      expect(result.status).toBe(1)
+      expect(result.stderr + result.stdout).toContain('exists as a file')
+      expect(result.stderr + result.stdout).toContain('--force')
+    })
+
+    it('should overwrite file with --force flag during extract', () => {
+      // Create a valid concatenated file
+      const sessionId = 'collision002'
+      const concatenatedContent = `--- CONCATENATOR_SESSION_ID: ${sessionId} ---
+Concatenated on: 2024-01-01
+
+<<<<< FILE_START: extracted.txt (ID: ${sessionId}) >>>>>
+Extracted content
+<<<<< FILE_END >>>>>
+`
+      const inputFile = join(tempDir, 'bundle.txt')
+      writeFileSync(inputFile, concatenatedContent)
+
+      // Create a file with the same name as intended output directory
+      const outputPath = join(tempDir, 'output')
+      writeFileSync(outputPath, 'I am a file not a directory')
+
+      // Extract with --force (should succeed)
+      const result = runCLI(['extract', inputFile, '-o', outputPath, '--force'])
+
+      expect(result.status).toBe(0)
+      expect(existsSync(outputPath)).toBe(true)
+
+      // Verify output is now a directory with extracted content
+      const stats = statSync(outputPath)
+      expect(stats.isDirectory()).toBe(true)
+
+      expect(readFileSync(join(outputPath, 'extracted.txt'), 'utf-8')).toBe(
+        'Extracted content'
+      )
+    })
+
+    it('should error when zip output path exists as directory without --force', () => {
+      // Create a valid concatenated file
+      const sessionId = 'zipcollision001'
+      const concatenatedContent = `--- CONCATENATOR_SESSION_ID: ${sessionId} ---
+Concatenated on: 2024-01-01
+
+<<<<< FILE_START: file.txt (ID: ${sessionId}) >>>>>
+Content here
+<<<<< FILE_END >>>>>
+`
+      const inputFile = join(tempDir, 'bundle.txt')
+      writeFileSync(inputFile, concatenatedContent)
+
+      // Create a directory with the same name as intended zip file
+      const zipPath = join(tempDir, 'output.zip')
+      mkdirSync(zipPath, { recursive: true })
+
+      // Try to extract as zip (should fail)
+      const result = runCLI(['extract', inputFile, '--zip', '-o', zipPath])
+
+      expect(result.status).toBe(1)
+      expect(result.stderr + result.stdout).toContain('exists as a directory')
+      expect(result.stderr + result.stdout).toContain('--force')
+    })
+
+    it('should overwrite directory with --force flag during zip extraction', () => {
+      // Create a valid concatenated file
+      const sessionId = 'zipcollision002'
+      const concatenatedContent = `--- CONCATENATOR_SESSION_ID: ${sessionId} ---
+Concatenated on: 2024-01-01
+
+<<<<< FILE_START: file.txt (ID: ${sessionId}) >>>>>
+Zip content
+<<<<< FILE_END >>>>>
+`
+      const inputFile = join(tempDir, 'bundle.txt')
+      writeFileSync(inputFile, concatenatedContent)
+
+      // Create a directory with the same name as intended zip file
+      const zipPath = join(tempDir, 'output.zip')
+      mkdirSync(zipPath, { recursive: true })
+
+      // Extract as zip with --force (should succeed)
+      const result = runCLI([
+        'extract',
+        inputFile,
+        '--zip',
+        '-o',
+        zipPath,
+        '-f',
+      ])
+
+      expect(result.status).toBe(0)
+      expect(existsSync(zipPath)).toBe(true)
+
+      // Verify output is now a file (zip)
+      const stats = statSync(zipPath)
+      expect(stats.isFile()).toBe(true)
+
+      // Verify it's a valid ZIP
+      const zipHeader = readFileSync(zipPath).subarray(0, 2)
+      expect(zipHeader.toString('hex')).toBe('504b') // 'PK' in hex
     })
   })
 })

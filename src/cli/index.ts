@@ -12,6 +12,7 @@ import {
   writeFileSync,
   mkdirSync,
   existsSync,
+  rmSync,
 } from 'fs'
 import { join, relative, dirname } from 'path'
 import { fileURLToPath } from 'url'
@@ -68,9 +69,80 @@ function collectFiles(
 }
 
 /**
+ * Check if output path exists and handle collisions
+ * Returns true if path is safe to write, false if handled by force
+ * Throws user-friendly error if collision detected without force
+ */
+function checkOutputPath(
+  outputPath: string,
+  force: boolean,
+  itemType: 'file' | 'directory'
+): boolean {
+  if (!existsSync(outputPath)) {
+    return true
+  }
+
+  const stats = statSync(outputPath)
+  const isDir = stats.isDirectory()
+
+  if (isDir && itemType === 'file') {
+    if (force) {
+      rmSync(outputPath, { recursive: true, force: true })
+      return true
+    }
+    throw new Error(
+      `Path ${outputPath} exists as a directory. Please provide a different filename or use --force to overwrite.`
+    )
+  }
+
+  if (!isDir && itemType === 'directory') {
+    if (force) {
+      rmSync(outputPath, { recursive: true, force: true })
+      return true
+    }
+    throw new Error(
+      `Path ${outputPath} exists as a file. Please provide a different directory name or use --force to overwrite.`
+    )
+  }
+
+  if (isDir && itemType === 'directory') {
+    if (force) {
+      rmSync(outputPath, { recursive: true, force: true })
+      return true
+    }
+    throw new Error(
+      `Directory ${outputPath} already exists. Please provide a different directory name or use --force to overwrite.`
+    )
+  }
+
+  // File exists and itemType is file
+  if (force) {
+    rmSync(outputPath, { recursive: true, force: true })
+    return true
+  }
+
+  return true
+}
+
+/**
  * Reconstruct files from deconcatenated content (File Explosion mode)
  */
-function reconstructFiles(files: VirtualFile[], outputDir: string): void {
+function reconstructFiles(
+  files: VirtualFile[],
+  outputDir: string,
+  force = false
+): void {
+  // Check if output directory exists as a file
+  if (existsSync(outputDir) && !statSync(outputDir).isDirectory()) {
+    if (force) {
+      rmSync(outputDir, { recursive: true, force: true })
+    } else {
+      throw new Error(
+        `Path ${outputDir} exists as a file. Please provide a different directory name or use --force to overwrite.`
+      )
+    }
+  }
+
   for (const file of files) {
     const fullPath = join(outputDir, file.path)
     const dir = dirname(fullPath)
@@ -224,10 +296,20 @@ program
     ''
   )
   .option('-v, --verbose', 'Show detailed file processing logs', false)
+  .option(
+    '-f, --force',
+    'Overwrite existing files or directories without prompting',
+    false
+  )
   .action(
     async (
       inputPath: string,
-      options: { output?: string; exclude: string; verbose: boolean }
+      options: {
+        output?: string
+        exclude: string
+        verbose: boolean
+        force: boolean
+      }
     ) => {
       try {
         const stats = statSync(inputPath)
@@ -259,6 +341,8 @@ program
         const result = concatenate(files)
 
         if (options.output) {
+          // Check for directory collision before writing
+          checkOutputPath(options.output, options.force, 'file')
           writeFileSync(options.output, result)
           logger.info(
             `Concatenated ${files.length} file(s) to ${options.output}`
@@ -294,6 +378,11 @@ program
     (value, previous) => previous + 1,
     0
   )
+  .option(
+    '-f, --force',
+    'Overwrite existing files or directories without prompting',
+    false
+  )
   .action(
     async (
       inputFile: string,
@@ -302,6 +391,7 @@ program
         zip: boolean
         dryRun: boolean
         verbose: number
+        force: boolean
       }
     ) => {
       try {
@@ -345,6 +435,10 @@ program
           const zipPath = options.output.endsWith('.zip')
             ? options.output
             : join(options.output, 'output.zip')
+
+          // Check for directory collision before writing zip
+          checkOutputPath(zipPath, options.force, 'file')
+
           const zipData = await createZipFromVirtualFiles(result.files)
           writeFileSync(zipPath, zipData)
 
@@ -359,7 +453,21 @@ program
           )
         } else {
           // File explosion mode (default)
-          reconstructFiles(result.files, options.output)
+          // Check for file collision before extracting to directory
+          if (
+            existsSync(options.output) &&
+            !statSync(options.output).isDirectory()
+          ) {
+            if (options.force) {
+              rmSync(options.output, { recursive: true, force: true })
+            } else {
+              throw new Error(
+                `Path ${options.output} exists as a file. Please provide a different directory name or use --force to overwrite.`
+              )
+            }
+          }
+
+          reconstructFiles(result.files, options.output, options.force)
 
           if (result.skippedPaths.length > 0) {
             logger.warn(
