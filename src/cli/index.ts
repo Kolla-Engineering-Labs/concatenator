@@ -23,6 +23,8 @@ import {
   type VirtualFile,
   type ValidationResult,
 } from '../core/engine.js'
+import { isDirectoryTainted } from '../core/utils/fs-utils.js'
+import { UserError } from '../core/errors.js'
 import { createZipFromVirtualFiles } from '../drivers/zip-driver.js'
 import { logger } from '../lib/logger.js'
 
@@ -121,7 +123,9 @@ function checkOutputPath(
     return true
   }
 
-  return true
+  throw new Error(
+    `File ${outputPath} already exists. Use --force to overwrite.`
+  )
 }
 
 /**
@@ -149,6 +153,12 @@ function reconstructFiles(
 
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true })
+    }
+
+    if (existsSync(fullPath) && !force) {
+      throw new Error(
+        `File ${fullPath} already exists. Use --force to overwrite.`
+      )
     }
 
     writeFileSync(fullPath, file.content, 'utf-8')
@@ -263,9 +273,16 @@ function formatValidationReport(
  * Global error handler for CLI commands
  */
 function handleError(error: unknown): void {
-  logger.error(
-    `Error: ${error instanceof Error ? error.message : String(error)}`
-  )
+  if (error instanceof UserError) {
+    logger.error(`Error: ${error.message}`)
+  } else {
+    logger.error(
+      `Error: ${error instanceof Error ? error.message : String(error)}`
+    )
+    if (error instanceof Error && error.stack) {
+      logger.debug(error.stack)
+    }
+  }
   process.exit(1)
 }
 
@@ -453,18 +470,11 @@ program
           )
         } else {
           // File explosion mode (default)
-          // Check for file collision before extracting to directory
-          if (
-            existsSync(options.output) &&
-            !statSync(options.output).isDirectory()
-          ) {
-            if (options.force) {
-              rmSync(options.output, { recursive: true, force: true })
-            } else {
-              throw new Error(
-                `Path ${options.output} exists as a file. Please provide a different directory name or use --force to overwrite.`
-              )
-            }
+          // Guard against non-empty target directory or existing file
+          if (!options.force && isDirectoryTainted(options.output)) {
+            throw new UserError(
+              'Target directory is not empty. Use --force to overwrite or merge.'
+            )
           }
 
           reconstructFiles(result.files, options.output, options.force)

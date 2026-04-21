@@ -73,6 +73,11 @@ test.describe('Concatenate Mode', () => {
       localStorage.removeItem('concatenate-ignore')
       localStorage.removeItem('concatenate-view-mode')
       localStorage.removeItem('concatenate-dark-mode')
+      localStorage.removeItem('concat_mode')
+      localStorage.removeItem('concat_view')
+      localStorage.removeItem('concat_ignore')
+      localStorage.removeItem('concat_sidebar')
+      localStorage.setItem('concat_sidebar', 'false')
     })
 
     // Reset server-side ignore list BEFORE navigation so client fetches correct state.
@@ -88,7 +93,7 @@ test.describe('Concatenate Mode', () => {
       name: 'Concatenate',
       exact: true,
     })
-    await expect(concatenateButton).toHaveClass(/bg-white|dark:bg-slate-800/, {
+    await expect(concatenateButton).toHaveClass(/bg-blue-600/, {
       timeout: 10000,
     })
   })
@@ -573,7 +578,7 @@ test.describe('Concatenate Mode', () => {
       try {
         // Pre-set tree view mode before navigation
         await page.addInitScript(() => {
-          localStorage.setItem('concatenate-view-mode', 'tree')
+          localStorage.setItem('concat_view', '"tree"')
         })
 
         // Navigate fresh (init script sets the preference)

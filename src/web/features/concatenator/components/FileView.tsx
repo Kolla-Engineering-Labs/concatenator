@@ -14,8 +14,12 @@ import {
   Download,
   Trash2,
   FolderArchive,
+  AlertTriangle,
+  Info,
 } from 'lucide-react'
 import { cn } from '../../../../lib/utils'
+import { useWorkbench } from '../../../hooks/useWorkbench'
+import { AppMode as WorkbenchMode } from '../../../types/workbench'
 import {
   FileItem,
   TreeItem,
@@ -64,6 +68,7 @@ export const FileView: React.FC<FileViewProps> = ({
   outputFormat,
   setOutputFormat,
 }) => {
+  const { mode, forceMode } = useWorkbench()
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between h-9">
@@ -167,46 +172,82 @@ export const FileView: React.FC<FileViewProps> = ({
         )}
       </div>
 
-      <div className="flex items-center justify-between pt-4">
-        <OutputFormatToggle
-          outputFormat={outputFormat}
-          setOutputFormat={setOutputFormat}
-        />
-
-        <button
-          onClick={onConcatenate}
-          disabled={filteredFiles.length === 0 || isProcessing}
-          className="px-8 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-semibold shadow-lg shadow-brand-600/20 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95"
-        >
-          {isProcessing ? (
-            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-          ) : (
-            <Download className="w-5 h-5" />
+      <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800/50">
+        <div className="flex items-center gap-4">
+          {mode === WorkbenchMode.CONCATENATE && (
+            <OutputFormatToggle
+              outputFormat={outputFormat}
+              setOutputFormat={setOutputFormat}
+            />
           )}
-          Concatenate & Download
-        </button>
+        </div>
 
-        <button
-          onClick={onDownloadAsZip}
-          disabled={
-            filteredFiles.length === 0 || isProcessing || !onDownloadAsZip
-          }
-          className="px-4 py-2 flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-brand-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          title="Download as ZIP"
-        >
-          <FolderArchive className="w-4 h-4" />
-          <span className="hidden sm:inline">Download ZIP</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {mode === WorkbenchMode.CONCATENATE ? (
+            <button
+              onClick={onConcatenate}
+              disabled={filteredFiles.length === 0 || isProcessing}
+              className="px-8 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-semibold shadow-lg shadow-brand-600/20 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95"
+            >
+              {isProcessing ? (
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <Download className="w-5 h-5" />
+              )}
+              Concatenate & Download
+            </button>
+          ) : (
+            <div className="flex flex-col items-end gap-2">
+              {!forceMode && (
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800/50 animate-in fade-in slide-in-from-bottom-1">
+                  <Info className="w-3.5 h-3.5" />
+                  <span className="text-[10px] font-medium leading-none">
+                    Standard extraction: Ensure target folder is empty to avoid
+                    file merging.
+                  </span>
+                </div>
+              )}
+              {forceMode && (
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border border-amber-100 dark:border-amber-800/50 animate-in fade-in slide-in-from-bottom-1">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span className="text-[10px] font-medium leading-none">
+                    Force Mode Enabled: Files will be overwritten.
+                  </span>
+                </div>
+              )}
+              <button
+                onClick={onDownloadAsZip}
+                disabled={
+                  filteredFiles.length === 0 || isProcessing || !onDownloadAsZip
+                }
+                className={cn(
+                  'px-8 py-2.5 rounded-xl font-semibold shadow-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95',
+                  forceMode
+                    ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-600/20'
+                    : 'bg-brand-600 hover:bg-brand-700 text-white shadow-brand-600/20'
+                )}
+                title={forceMode ? 'Force Download ZIP' : 'Download ZIP'}
+              >
+                <FolderArchive className="w-5 h-5" />
+                <span className="">
+                  {forceMode ? 'Force Extract ZIP' : 'Download ZIP'}
+                </span>
+              </button>
+            </div>
+          )}
 
-        <button
-          onClick={onClearAll}
-          disabled={files.length === 0 || isProcessing}
-          className="px-4 py-2 flex items-center gap-2 text-sm font-medium text-slate-600 hover:text-red-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          title="Clear All"
-        >
-          <Trash2 className="w-4 h-4" />
-          <span className="hidden sm:inline">Clear All</span>
-        </button>
+          <button
+            onClick={onClearAll}
+            disabled={files.length === 0 || isProcessing}
+            className="ml-4 p-2.5 flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            title="Clear All"
+          >
+            <Trash2 className="w-5 h-5" />
+            <span className="hidden sm:inline text-xs uppercase tracking-wider font-bold">
+              Clear All
+            </span>
+          </button>
+        </div>
       </div>
     </div>
   )

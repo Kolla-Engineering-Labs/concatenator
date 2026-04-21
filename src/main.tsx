@@ -23,8 +23,12 @@ posthog.init(import.meta.env.VITE_POSTHOG_KEY, {
 ;(window as Window & { posthog?: typeof posthog }).posthog = posthog
 // }
 
+import { ModeProvider } from './web/context/ModeContext.tsx'
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ModeProvider>
+      <App />
+    </ModeProvider>
   </StrictMode>
 )

@@ -459,9 +459,41 @@ Content here
       const result = runCLI(['extract', inputFile, '-o', outputPath])
 
       expect(result.status).toBe(1)
-      expect(result.stderr + result.stdout).toContain('exists as a file')
+      expect(result.stderr + result.stdout).toContain(
+        'Target directory is not empty'
+      )
       expect(result.stderr + result.stdout).toContain('--force')
     })
+
+    it('should allow extraction into a directory containing only .DS_Store', () => {
+      // Create a valid concatenated file
+      const sessionId = 'dsstore001'
+      const concatenatedContent = `--- CONCATENATOR_SESSION_ID: ${sessionId} ---
+Concatenated on: 2024-01-01
+
+<<<<< FILE_START: extracted.txt (ID: ${sessionId}) >>>>>
+Extracted content
+<<<<< FILE_END >>>>>
+`
+      const inputFile = join(tempDir, 'bundle.txt')
+      writeFileSync(inputFile, concatenatedContent)
+
+      // Create a directory containing only .DS_Store
+      const outputPath = join(tempDir, 'output')
+      mkdirSync(outputPath, { recursive: true })
+      writeFileSync(join(outputPath, '.DS_Store'), '')
+
+      // Run CLI extract (should succeed without --force)
+      const result = runCLI(['extract', inputFile, '-o', outputPath])
+
+      // Verify exit code is 0
+      expect(result.status).toBe(0)
+      expect(existsSync(join(outputPath, 'extracted.txt'))).toBe(true)
+      expect(readFileSync(join(outputPath, 'extracted.txt'), 'utf-8')).toBe(
+        'Extracted content'
+      )
+    })
+
 
     it('should overwrite file with --force flag during extract', () => {
       // Create a valid concatenated file

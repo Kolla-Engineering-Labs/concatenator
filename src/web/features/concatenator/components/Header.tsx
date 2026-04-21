@@ -10,6 +10,7 @@ import { ConcatenatorLogo } from './ConcatenatorLogo'
 interface HeaderProps {
   isDarkMode: boolean
   setIsDarkMode: (isDark: boolean) => void
+  compact?: boolean
 }
 
 /**
@@ -18,13 +19,22 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({
   isDarkMode,
   setIsDarkMode,
+  compact = false,
 }) => {
   return (
-    <header className="sticky top-0 z-50 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
-      <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
+    <header
+      className={`${compact ? '' : 'sticky top-0 z-50 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800'}`}
+    >
+      <div
+        className={`${compact ? 'flex items-center justify-between' : 'max-w-4xl mx-auto px-6 py-4 flex items-center justify-between'}`}
+      >
         <div className="flex items-center gap-3">
-          <ConcatenatorLogo className="h-12 w-auto" />
-          <h1 className="text-xl font-display font-bold tracking-tight">
+          <ConcatenatorLogo
+            className={compact ? 'h-6 w-auto' : 'h-12 w-auto'}
+          />
+          <h1
+            className={`${compact ? 'text-base' : 'text-xl'} font-display font-bold tracking-tight`}
+          >
             Concatenator
           </h1>
         </div>

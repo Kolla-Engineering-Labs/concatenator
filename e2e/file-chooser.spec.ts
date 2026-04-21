@@ -263,7 +263,7 @@ test.describe('File Upload via File Chooser', () => {
     await deconcatButton.waitFor({ state: 'visible', timeout: 10000 })
     await jsClick(deconcatButton)
     // Wait for mode switch to complete
-    await expect(deconcatButton).toHaveClass(/bg-white|dark:bg-slate-800/, {
+    await expect(deconcatButton).toHaveClass(/bg-blue-600/, {
       timeout: 10000,
     })
 
@@ -309,7 +309,7 @@ console.log("World");
     await deconcatButton.waitFor({ state: 'visible', timeout: 10000 })
     await jsClick(deconcatButton)
     // Wait for mode switch to complete
-    await expect(deconcatButton).toHaveClass(/bg-white|dark:bg-slate-800/, {
+    await expect(deconcatButton).toHaveClass(/bg-blue-600/, {
       timeout: 10000,
     })
 

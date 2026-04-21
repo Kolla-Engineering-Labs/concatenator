@@ -8,6 +8,13 @@ import { FileUploadHelper } from './helpers/file-upload'
 import type { APIRequestContext } from '@playwright/test'
 
 /**
+ * Helper function to click an element using JavaScript for better Firefox compatibility
+ */
+async function jsClick(locator: Locator): Promise<void> {
+  await locator.evaluate((el: HTMLElement) => el.click())
+}
+
+/**
  * Helper to reset the ignore list via API using the worker-specific context.
  */
 async function resetIgnoreList(apiContext: APIRequestContext): Promise<void> {
@@ -67,6 +74,11 @@ test.describe('Max File Limit Feature', () => {
       localStorage.removeItem('concatenate-ignore')
       localStorage.removeItem('concatenate-view-mode')
       localStorage.removeItem('concatenate-dark-mode')
+      localStorage.removeItem('concat_mode')
+      localStorage.removeItem('concat_view')
+      localStorage.removeItem('concat_ignore')
+      localStorage.removeItem('concat_sidebar')
+      localStorage.setItem('concat_sidebar', 'false')
     })
 
     // Reset server-side ignore list BEFORE navigation so client fetches correct state.
@@ -86,10 +98,9 @@ test.describe('Max File Limit Feature', () => {
         name: 'Concatenate',
         exact: true,
       })
-      await expect(concatenateButton).toHaveClass(
-        /bg-white|dark:bg-slate-800/,
-        { timeout: 10000 }
-      )
+      await expect(concatenateButton).toHaveClass(/bg-blue-600/, {
+        timeout: 10000,
+      })
 
       // Check that the dropdown is visible
       const maxFileLimitSelect = page.locator('select#max-file-limit')
@@ -98,7 +109,7 @@ test.describe('Max File Limit Feature', () => {
       // Check that the label is visible
       const label = page.locator('label[for="max-file-limit"]')
       await expect(label).toBeVisible({ timeout: 10000 })
-      await expect(label).toHaveText('Max Files:')
+      await expect(label).toHaveText('Performance')
     })
 
     test('should hide max file limit dropdown in deconcatenate mode', async ({
@@ -109,11 +120,10 @@ test.describe('Max File Limit Feature', () => {
         name: 'De-concatenate',
         exact: true,
       })
-      await deconcatenateButton.click()
-      await expect(deconcatenateButton).toHaveClass(
-        /bg-white|dark:bg-slate-800/,
-        { timeout: 5000 }
-      )
+      await jsClick(deconcatenateButton)
+      await expect(deconcatenateButton).toHaveClass(/bg-blue-600/, {
+        timeout: 5000,
+      })
 
       // Check that the dropdown is hidden
       const maxFileLimitSelect = page.locator('select#max-file-limit')
@@ -132,22 +142,20 @@ test.describe('Max File Limit Feature', () => {
         name: 'De-concatenate',
         exact: true,
       })
-      await deconcatenateButton.click()
-      await expect(deconcatenateButton).toHaveClass(
-        /bg-white|dark:bg-slate-800/,
-        { timeout: 5000 }
-      )
+      await jsClick(deconcatenateButton)
+      await expect(deconcatenateButton).toHaveClass(/bg-blue-600/, {
+        timeout: 5000,
+      })
 
       // Then switch back to concatenate mode and confirm
       const concatenateButton = page.getByRole('button', {
         name: 'Concatenate',
         exact: true,
       })
-      await concatenateButton.click()
-      await expect(concatenateButton).toHaveClass(
-        /bg-white|dark:bg-slate-800/,
-        { timeout: 5000 }
-      )
+      await jsClick(concatenateButton)
+      await expect(concatenateButton).toHaveClass(/bg-blue-600/, {
+        timeout: 5000,
+      })
 
       // Check that the dropdown is visible again
       const maxFileLimitSelect = page.locator('select#max-file-limit')
@@ -177,7 +185,7 @@ test.describe('Max File Limit Feature', () => {
       for (let i = 0; i < expectedOptions.length; i++) {
         const option = options.nth(i)
         await expect(option).toHaveAttribute('value', expectedOptions[i].value)
-        await expect(option).toHaveText(expectedOptions[i].label)
+        await expect(option).toHaveText(new RegExp(expectedOptions[i].label))
       }
     })
 
@@ -263,7 +271,7 @@ test.describe('Max File Limit Feature', () => {
         const concatenateButton = page.getByRole('button', {
           name: /Concatenate & Download/,
         })
-        await concatenateButton.click()
+        await jsClick(concatenateButton)
 
         // Check for error message with correct limit
         const errorMessage = page.locator(
@@ -305,7 +313,7 @@ test.describe('Max File Limit Feature', () => {
         const concatenateButton = page.getByRole('button', {
           name: /Concatenate & Download/,
         })
-        await concatenateButton.click()
+        await jsClick(concatenateButton)
 
         // Wait a bit for download to start
         await page.waitForTimeout(500)
@@ -349,7 +357,7 @@ test.describe('Max File Limit Feature', () => {
         const concatenateButton = page.getByRole('button', {
           name: /Concatenate & Download/,
         })
-        await concatenateButton.click()
+        await jsClick(concatenateButton)
         await page.waitForTimeout(500)
 
         // No error should be shown
@@ -363,21 +371,19 @@ test.describe('Max File Limit Feature', () => {
           name: 'De-concatenate',
           exact: true,
         })
-        await deconcatenateButton.click()
-        await expect(deconcatenateButton).toHaveClass(
-          /bg-white|dark:bg-slate-800/,
-          { timeout: 5000 }
-        )
+        await jsClick(deconcatenateButton)
+        await expect(deconcatenateButton).toHaveClass(/bg-blue-600/, {
+          timeout: 5000,
+        })
 
         const concatenateModeButton = page.getByRole('button', {
           name: 'Concatenate',
           exact: true,
         })
-        await concatenateModeButton.click()
-        await expect(concatenateModeButton).toHaveClass(
-          /bg-white|dark:bg-slate-800/,
-          { timeout: 5000 }
-        )
+        await jsClick(concatenateModeButton)
+        await expect(concatenateModeButton).toHaveClass(/bg-blue-600/, {
+          timeout: 5000,
+        })
 
         // Change limit to 500
         const maxFileLimitSelect = page.locator('select#max-file-limit')
@@ -391,7 +397,7 @@ test.describe('Max File Limit Feature', () => {
         })
 
         // Try to concatenate - should now fail with 500 limit
-        await concatenateButton.click()
+        await jsClick(concatenateButton)
 
         const newErrorMessage = page.locator(
           'text=Warning: You are attempting to concatenate over 500 files'

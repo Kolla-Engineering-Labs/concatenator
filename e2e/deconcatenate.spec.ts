@@ -96,6 +96,11 @@ test.describe('De-concatenate Mode', () => {
       localStorage.removeItem('concatenate-ignore')
       localStorage.removeItem('concatenate-view-mode')
       localStorage.removeItem('concatenate-dark-mode')
+      localStorage.removeItem('concat_mode')
+      localStorage.removeItem('concat_view')
+      localStorage.removeItem('concat_ignore')
+      localStorage.removeItem('concat_sidebar')
+      localStorage.setItem('concat_sidebar', 'false')
     })
 
     // Reset server-side ignore list BEFORE navigation so client fetches correct state.
@@ -106,7 +111,7 @@ test.describe('De-concatenate Mode', () => {
     await page.goto('/', { waitUntil: 'domcontentloaded' })
 
     // Wait for the mode toggle container to be fully rendered and stable
-    const modeToggle = page.locator('.flex.p-1.bg-slate-200').first()
+    const modeToggle = page.locator('.flex.p-1.bg-slate-900').first()
     await modeToggle.waitFor({ state: 'visible', timeout: 10000 })
 
     // Switch to de-concatenate mode using JavaScript click for Firefox compatibility
@@ -120,7 +125,7 @@ test.describe('De-concatenate Mode', () => {
     await deconcatButton.evaluate((el: HTMLElement) => el.click())
 
     // Wait for the mode switch to complete by checking button state
-    await expect(deconcatButton).toHaveClass(/bg-white|dark:bg-slate-800/, {
+    await expect(deconcatButton).toHaveClass(/bg-blue-600/, {
       timeout: 10000,
     })
   })
@@ -140,14 +145,14 @@ test.describe('De-concatenate Mode', () => {
         name: 'De-concatenate',
         exact: true,
       })
-      await expect(deconcatButton).toHaveClass(/bg-white|dark:bg-slate-800/)
+      await expect(deconcatButton).toHaveClass(/bg-blue-600/)
 
       // Concatenate button should be inactive
       const concatButton = page.getByRole('button', {
         name: 'Concatenate',
         exact: true,
       })
-      await expect(concatButton).not.toHaveClass(/bg-white|dark:bg-slate-800/)
+      await expect(concatButton).not.toHaveClass(/bg-blue-600/)
     })
 
     test('should clear files when switching modes', async ({ page }) => {
@@ -177,7 +182,7 @@ test.describe('De-concatenate Mode', () => {
         await deconcatButton.evaluate((el: HTMLElement) => el.click())
 
         // Wait for mode switch and verify we're in de-concatenate mode
-        await expect(deconcatButton).toHaveClass(/bg-white|dark:bg-slate-800/, {
+        await expect(deconcatButton).toHaveClass(/bg-blue-600/, {
           timeout: 10000,
         })
 

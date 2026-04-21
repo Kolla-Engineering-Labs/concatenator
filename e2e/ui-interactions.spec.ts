@@ -70,6 +70,11 @@ test.describe('UI Interactions and Edge Cases', () => {
     // Clear localStorage before navigation to avoid interference from previous test runs
     await page.addInitScript(() => {
       localStorage.removeItem('concatenate-ignore')
+      localStorage.removeItem('concat_mode')
+      localStorage.removeItem('concat_view')
+      localStorage.removeItem('concat_ignore')
+      localStorage.removeItem('concat_sidebar')
+      localStorage.setItem('concat_sidebar', 'false')
     })
 
     // Reset server-side ignore list BEFORE navigation so client fetches correct state.
@@ -240,11 +245,17 @@ test.describe('UI Interactions and Edge Cases', () => {
 
       // Page should still load
       await expect(
-        page.getByRole('heading', { name: 'Concatenator' })
+        page.getByRole('heading', { name: 'Concatenator' }).first()
       ).toBeVisible()
       await expect(
         page.getByRole('button', { name: 'Concatenate', exact: true })
       ).toBeVisible()
+
+      // Open sidebar on mobile to reveal mode toggle
+      const openMenuButton = page.locator('button[title="Open menu"]')
+      await openMenuButton.waitFor({ state: 'visible', timeout: 10000 })
+      await jsClick(openMenuButton)
+      await page.waitForTimeout(500)
 
       // Mode toggle should still be usable - use JavaScript click
       const deconcatButton = page.getByRole('button', {
@@ -253,7 +264,7 @@ test.describe('UI Interactions and Edge Cases', () => {
       })
       await deconcatButton.waitFor({ state: 'visible', timeout: 10000 })
       await jsClick(deconcatButton)
-      await expect(deconcatButton).toHaveClass(/bg-white|dark:bg-slate-800/, {
+      await expect(deconcatButton).toHaveClass(/bg-blue-600/, {
         timeout: 10000,
       })
     })
@@ -360,7 +371,7 @@ test.describe('UI Interactions and Edge Cases', () => {
 
       // Page should still be functional
       await expect(
-        page.getByRole('heading', { name: 'Concatenator' })
+        page.getByRole('heading', { name: 'Concatenator' }).first()
       ).toBeVisible()
     })
   })
@@ -448,6 +459,13 @@ test.describe('UI Interactions and Edge Cases', () => {
       await deconcatButton.waitFor({ state: 'visible', timeout: 5000 })
 
       // Rapidly switch modes multiple times using JavaScript clicks
+      // On mobile, ensure sidebar is open
+      const openMenuButton = page.locator('button[title="Open menu"]')
+      if (await openMenuButton.isVisible()) {
+        await jsClick(openMenuButton)
+        await page.waitForTimeout(500)
+      }
+
       for (let i = 0; i < 5; i++) {
         await jsClick(deconcatButton)
         await page.waitForTimeout(50) // Small delay for state update
@@ -456,13 +474,13 @@ test.describe('UI Interactions and Edge Cases', () => {
       }
 
       // Should end in concatenate mode
-      await expect(concatButton).toHaveClass(/bg-white|dark:bg-slate-800/, {
+      await expect(concatButton).toHaveClass(/bg-blue-600/, {
         timeout: 10000,
       })
 
       // App should still be functional
       await expect(
-        page.getByRole('heading', { name: 'Concatenator' })
+        page.getByRole('heading', { name: 'Concatenator' }).first()
       ).toBeVisible()
     })
 
@@ -490,6 +508,13 @@ test.describe('UI Interactions and Edge Cases', () => {
         await uploadHelper.dragAndDropDirectory(files)
 
         // Immediately try to switch mode using JavaScript click
+        // On mobile, ensure sidebar is open
+        const openMenuButton = page.locator('button[title="Open menu"]')
+        if (await openMenuButton.isVisible()) {
+          await jsClick(openMenuButton)
+          await page.waitForTimeout(500)
+        }
+
         const deconcatButton = page.getByRole('button', {
           name: 'De-concatenate',
         })
@@ -497,7 +522,7 @@ test.describe('UI Interactions and Edge Cases', () => {
         await jsClick(deconcatButton)
 
         // Should switch mode (files will be cleared)
-        await expect(deconcatButton).toHaveClass(/bg-white|dark:bg-slate-800/, {
+        await expect(deconcatButton).toHaveClass(/bg-blue-600/, {
           timeout: 10000,
         })
       } finally {

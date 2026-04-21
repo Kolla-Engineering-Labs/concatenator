@@ -1,0 +1,5057 @@
+--- CONCATENATOR_SESSION_ID: 41a781 ---
+Concatenated on: 21/4/2026, 11:57:17 a.m.
+
+<<<<< FILE_START: App.tsx (ID: 41a781) >>>>>
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import {
+  useState,
+  useMemo,
+  useEffect,
+  useCallback,
+  lazy,
+  Suspense,
+} from 'react'
+import { Menu, PanelLeftClose } from 'lucide-react'
+import { Analytics } from '@vercel/analytics/react'
+import { SpeedInsights } from '@vercel/speed-insights/react'
+import { ConcatenatorLogo } from './web/features/concatenator/components/ConcatenatorLogo'
+import { Header } from './web/features/concatenator/components/Header'
+import { Footer } from './web/features/concatenator/components/Footer'
+import { UploadZone } from './web/features/concatenator/components/UploadZone'
+import { FileView } from './web/features/concatenator/components/FileView'
+
+// Lazy load components that aren't needed on initial render
+const IgnoreList = lazy(() =>
+  import('./web/features/concatenator/components/IgnoreList').then((m) => ({
+    default: m.IgnoreList,
+  }))
+)
+import { useFileProcessing } from './web/features/concatenator/hooks/useFileProcessing'
+import { useFileTree } from './web/features/concatenator/hooks/useFileTree'
+import { FileItem, TreeItem, OutputFormat, ViewMode } from './core/types'
+import { useWorkbench } from './web/hooks/useWorkbench'
+import { ModeSwitch } from './web/components/ModeSwitch'
+
+/**
+ * The main application component that orchestrates the file concatenation and de-concatenation workflow.
+ */
+export default function App() {
+  // --- UI State ---
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = localStorage.getItem('concatenate-dark-mode')
+    return saved === 'true'
+  })
+  const [isDropzoneMinimized, setIsDropzoneMinimized] = useState(() => {
+    const saved = localStorage.getItem('concatenate-dropzone-minimized')
+    return saved === 'true'
+  })
+  const [isIgnoreListMinimized, setIsIgnoreListMinimized] = useState(() => {
+    const saved = localStorage.getItem('concatenate-ignore-minimized')
+    return saved === 'true'
+  })
+  const [outputFormat, setOutputFormat] = useState<OutputFormat>(() => {
+    const saved = localStorage.getItem('concatenate-output-format')
+    return (saved as OutputFormat) || 'text'
+  })
+  const [maxFileLimit, setMaxFileLimit] = useState<number>(() => {
+    const saved = localStorage.getItem('concatenator-max-files')
+    return saved ? parseInt(saved, 10) : 10000
+  })
+  const [newIgnoreItem, setNewIgnoreItem] = useState('')
+  const {
+    mode: appMode,
+    view: viewMode,
+    setView: setViewMode,
+    ignoreList,
+    setIgnoreList,
+    compiledIgnores,
+    isSidebarOpen,
+    setSidebarOpen,
+  } = useWorkbench()
+
+  const isIgnoreListLoading = false // ModeContext is local-first
+
+  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(
+    new Set(['/', 'root'])
+  )
+
+  // --- Custom Hooks ---
+  const {
+    files,
+    setFiles,
+    isProcessing,
+    importProgress,
+    importError,
+    setImportError,
+    cancelProcessing,
+    isIgnored,
+    handleFileUpload,
+    handleDrop,
+    handleConcatenate,
+    handleDownloadAsZip,
+  } = useFileProcessing({
+    appMode,
+    compiledIgnores,
+    maxFileLimit,
+    isIgnoreListLoading,
+  })
+
+  // --- Derived State ---
+  const filteredFiles = useMemo(() => {
+    return files
+      .filter((file) => !isIgnored(file.path))
+      .sort((a, b) => {
+        if (a.kind === 'directory' && b.kind === 'file') return -1
+        if (a.kind === 'file' && b.kind === 'directory') return 1
+        return a.path.localeCompare(b.path)
+      })
+  }, [files, isIgnored])
+
+  const fileTree = useFileTree(filteredFiles)
+
+  // --- Effects ---
+  // View mode and Mode persistence is handled by ModeContext
+
+  useEffect(() => {
+    localStorage.setItem('concatenate-dark-mode', isDarkMode.toString())
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  }, [isDarkMode])
+
+  useEffect(() => {
+    localStorage.setItem(
+      'concatenate-dropzone-minimized',
+      isDropzoneMinimized.toString()
+    )
+  }, [isDropzoneMinimized])
+
+  useEffect(() => {
+    localStorage.setItem(
+      'concatenate-ignore-minimized',
+      isIgnoreListMinimized.toString()
+    )
+  }, [isIgnoreListMinimized])
+
+  useEffect(() => {
+    localStorage.setItem('concatenate-output-format', outputFormat)
+  }, [outputFormat])
+
+  useEffect(() => {
+    localStorage.setItem('concatenator-max-files', maxFileLimit.toString())
+  }, [maxFileLimit])
+
+  useEffect(() => {
+    setExpandedPaths((prev) => {
+      const next = new Set(prev)
+      const addDirectoryPaths = (node: TreeItem) => {
+        if (node.kind === 'directory') {
+          next.add(node.path)
+          node.children?.forEach(addDirectoryPaths)
+        }
+      }
+      addDirectoryPaths(fileTree)
+      return next
+    })
+  }, [fileTree])
+
+  // Clear files and errors when switching modes
+  useEffect(() => {
+    setFiles([])
+    setImportError(null)
+  }, [appMode, setFiles, setImportError])
+
+  // --- Handlers ---
+  const handleRemoveFile = useCallback(
+    (file: FileItem) => {
+      if (file.kind === 'directory') {
+        const prefix = file.path + '/'
+        setFiles((prev) =>
+          prev.filter((f) => f.path !== file.path && !f.path.startsWith(prefix))
+        )
+      } else {
+        setFiles((prev) => prev.filter((f) => f.path !== file.path))
+      }
+    },
+    [setFiles]
+  )
+
+  const handleClearAll = useCallback(() => {
+    setFiles([])
+  }, [setFiles])
+
+  return (
+    <div
+      className={`min-h-screen font-sans transition-colors duration-300 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex`}
+    >
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:px-4 focus:py-2 focus:bg-brand-600 focus:text-white focus:rounded-lg"
+      >
+        Skip to main content
+      </a>
+
+      {/* Sidebar */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-transform lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+      >
+        <div className="flex flex-col h-full">
+          <div className="p-6 flex items-center justify-between">
+            <Header
+              isDarkMode={isDarkMode}
+              setIsDarkMode={setIsDarkMode}
+              compact={true}
+            />
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="lg:hidden p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+              title="Close menu"
+            >
+              <PanelLeftClose className="w-5 h-5" />
+            </button>
+          </div>
+
+          <nav className="flex-1 px-4 py-4 space-y-6">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">
+                Work Mode
+              </label>
+              <ModeSwitch />
+            </div>
+
+            {appMode === 'concatenate' && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <label
+                    htmlFor="max-file-limit"
+                    className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2"
+                  >
+                    Performance
+                  </label>
+                  <div className="px-2">
+                    <select
+                      id="max-file-limit"
+                      value={maxFileLimit}
+                      onChange={(e) =>
+                        setMaxFileLimit(parseInt(e.target.value, 10))
+                      }
+                      className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    >
+                      <option value="500">500 files</option>
+                      <option value="1000">1,000 files</option>
+                      <option value="2500">2,500 files</option>
+                      <option value="5000">5,000 files</option>
+                      <option value="10000">10,000 files</option>
+                      <option value="20000">20,000 files</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
+          </nav>
+
+          <div className="p-4 border-t border-slate-200 dark:border-slate-800">
+            <Footer />
+          </div>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <div
+        className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${isSidebarOpen ? 'lg:pl-72' : ''}`}
+      >
+        {!isSidebarOpen && (
+          <div className="fixed top-0 left-0 right-0 z-30 lg:hidden bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 p-3 h-16 flex items-center gap-4">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-sm text-slate-600 dark:text-slate-400"
+              title="Open menu"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+            <div className="flex items-center gap-2">
+              <ConcatenatorLogo className="h-6 w-auto" />
+              <h1 className="text-base font-bold" data-testid="mobile-title">
+                Concatenator
+              </h1>
+            </div>
+          </div>
+        )}
+        <main
+          id="main-content"
+          className={`flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 ${!isSidebarOpen ? 'pt-24 lg:pt-8' : ''}`}
+        >
+          <UploadZone
+            isProcessing={isProcessing}
+            isDropzoneMinimized={isDropzoneMinimized}
+            setIsDropzoneMinimized={setIsDropzoneMinimized}
+            importProgress={importProgress}
+            cancelProcessing={cancelProcessing}
+            importError={importError}
+            setImportError={setImportError}
+            appMode={appMode}
+            handleDrop={handleDrop}
+            handleFileUpload={handleFileUpload}
+          />
+
+          {appMode === 'concatenate' && (
+            <Suspense
+              fallback={
+                <div className="h-20 animate-pulse bg-slate-100 dark:bg-slate-800 rounded-xl" />
+              }
+            >
+              <IgnoreList
+                ignoreList={ignoreList}
+                isIgnoreListMinimized={isIgnoreListMinimized}
+                setIsIgnoreListMinimized={setIsIgnoreListMinimized}
+                newIgnoreItem={newIgnoreItem}
+                setNewIgnoreItem={setNewIgnoreItem}
+                addIgnoreItem={() => {
+                  if (newIgnoreItem && !ignoreList.includes(newIgnoreItem)) {
+                    setIgnoreList([...ignoreList, newIgnoreItem])
+                  }
+                  setNewIgnoreItem('')
+                }}
+                removeIgnoreItem={(item) => {
+                  setIgnoreList(ignoreList.filter((i) => i !== item))
+                }}
+              />
+            </Suspense>
+          )}
+
+          {(appMode === 'concatenate' || files.length > 0) && (
+            <FileView
+              files={files}
+              filteredFiles={filteredFiles}
+              viewMode={viewMode as ViewMode}
+              setViewMode={setViewMode as unknown as (mode: ViewMode) => void}
+              fileTree={fileTree}
+              expandedPaths={expandedPaths}
+              setExpandedPaths={setExpandedPaths}
+              isProcessing={isProcessing}
+              onConcatenate={() =>
+                handleConcatenate(filteredFiles, outputFormat)
+              }
+              onClearAll={handleClearAll}
+              onIgnoreFile={(item) => {
+                if (item && !ignoreList.includes(item)) {
+                  setIgnoreList([...ignoreList, item])
+                }
+              }}
+              onDownloadAsZip={() => handleDownloadAsZip?.(filteredFiles)}
+              onRemoveFile={handleRemoveFile}
+              outputFormat={outputFormat}
+              setOutputFormat={setOutputFormat}
+            />
+          )}
+        </main>
+      </div>
+
+      <Analytics />
+      <SpeedInsights />
+    </div>
+  )
+}
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: cli\cli.e2e.test.ts (ID: 41a781) >>>>>
+/**
+ * Copyright 2026 Kolla Engineering Labs
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * CLI E2E Test Suite
+ * Tests the CLI functionality using child_process and temporary workspaces
+ */
+
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { spawnSync } from 'child_process'
+import {
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  existsSync,
+  rmdirSync,
+  unlinkSync,
+  readdirSync,
+  statSync,
+} from 'fs'
+import { tmpdir } from 'os'
+import { join, normalize, sep } from 'path'
+
+interface CLIResult {
+  status: number
+  stdout: string
+  stderr: string
+}
+
+/**
+ * Helper function to run CLI commands using tsx
+ */
+function runCLI(args: string[]): CLIResult {
+  const result = spawnSync('npx', ['tsx', 'src/cli/index.ts', ...args], {
+    encoding: 'utf-8',
+    cwd: process.cwd(),
+    timeout: 30000,
+    shell: true,
+  })
+
+  // Handle null status (process terminated by signal) - treat as non-zero exit
+  const status =
+    result.status === null ? (result.signal ? 1 : 0) : result.status
+
+  return {
+    status,
+    stdout: result.stdout || '',
+    stderr: result.stderr || '',
+  }
+}
+
+/**
+ * Create a unique temporary directory
+ */
+function createTempDir(): string {
+  const timestamp = Date.now()
+  const random = Math.random().toString(36).substring(2, 8)
+  const tempDir = join(tmpdir(), `concatenator-cli-test-${timestamp}-${random}`)
+  mkdirSync(tempDir, { recursive: true })
+  return tempDir
+}
+
+/**
+ * Recursively delete a directory and all its contents
+ */
+function deleteRecursive(dirPath: string): void {
+  if (!existsSync(dirPath)) return
+
+  const entries = readdirSync(dirPath, { withFileTypes: true })
+
+  for (const entry of entries) {
+    const fullPath = join(dirPath, entry.name)
+    if (entry.isDirectory()) {
+      deleteRecursive(fullPath)
+    } else {
+      unlinkSync(fullPath)
+    }
+  }
+
+  rmdirSync(dirPath)
+}
+
+/**
+ * Normalize path for cross-platform comparisons
+ */
+function normalizePath(inputPath: string): string {
+  return normalize(inputPath).split(sep).join('/')
+}
+
+describe('CLI E2E Tests', () => {
+  let tempDir: string
+
+  beforeEach(() => {
+    tempDir = createTempDir()
+  })
+
+  afterEach(() => {
+    deleteRecursive(tempDir)
+  })
+
+  describe('Concatenation Flow', () => {
+    it('should concatenate 3 files with one nested and include session manifest', () => {
+      // Create directory structure
+      const nestedDir = join(tempDir, 'src', 'utils')
+      mkdirSync(nestedDir, { recursive: true })
+
+      // Create 3 files
+      writeFileSync(join(tempDir, 'root.txt'), 'Root level content')
+      writeFileSync(join(tempDir, 'src', 'main.ts'), 'console.log("main")')
+      writeFileSync(
+        join(nestedDir, 'helper.ts'),
+        'export const helper = () => {}'
+      )
+
+      // Run CLI to concatenate
+      const outputPath = join(tempDir, 'output.txt')
+      const result = runCLI(['concat', tempDir, '-o', outputPath])
+
+      // Verify exit code is 0
+      expect(result.status).toBe(0)
+
+      // Verify output file exists
+      expect(existsSync(outputPath)).toBe(true)
+
+      // Verify content contains session manifest
+      const content = readFileSync(outputPath, 'utf-8')
+      expect(content).toContain('--- CONCATENATOR_SESSION_ID:')
+      expect(content).toContain('Concatenated on:')
+
+      // Verify all files are included (use regex to handle both / and \ path separators)
+      expect(content).toMatch(/FILE_START: root\.txt/)
+      expect(content).toMatch(/FILE_START: src[\\/]main\.ts/)
+      expect(content).toMatch(/FILE_START: src[\\/]utils[\\/]helper\.ts/)
+
+      // Verify content is preserved
+      expect(content).toContain('Root level content')
+      expect(content).toContain('console.log("main")')
+      expect(content).toContain('export const helper = () => {}')
+    })
+
+    it('should output to stdout when no output path is provided', () => {
+      writeFileSync(join(tempDir, 'file.txt'), 'Hello World')
+
+      const result = runCLI(['concat', tempDir])
+
+      expect(result.status).toBe(0)
+      expect(result.stdout).toContain('--- CONCATENATOR_SESSION_ID:')
+      expect(result.stdout).toContain('Hello World')
+    })
+  })
+
+  describe('De-concatenation Flow', () => {
+    it('should extract all files with correct directory structure and content', () => {
+      // Create a concatenated file with nested structure
+      const sessionId = 'test001'
+      const concatenatedContent = `--- CONCATENATOR_SESSION_ID: ${sessionId} ---
+Concatenated on: 2024-01-01
+
+<<<<< FILE_START: root.txt (ID: ${sessionId}) >>>>>
+Root content here
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: src/main.ts (ID: ${sessionId}) >>>>>
+console.log("hello")
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: src/deep/nested/file.js (ID: ${sessionId}) >>>>>
+// nested file
+<<<<< FILE_END >>>>>
+`
+
+      const inputFile = join(tempDir, 'bundle.txt')
+      const outputDir = join(tempDir, 'extracted')
+      writeFileSync(inputFile, concatenatedContent)
+
+      // Run CLI extract command
+      const result = runCLI(['extract', inputFile, '-o', outputDir])
+
+      // Verify exit code is 0
+      expect(result.status).toBe(0)
+
+      // Verify all files were extracted
+      expect(existsSync(join(outputDir, 'root.txt'))).toBe(true)
+      expect(existsSync(join(outputDir, 'src', 'main.ts'))).toBe(true)
+      expect(
+        existsSync(join(outputDir, 'src', 'deep', 'nested', 'file.js'))
+      ).toBe(true)
+
+      // Verify content is correct
+      expect(readFileSync(join(outputDir, 'root.txt'), 'utf-8')).toBe(
+        'Root content here'
+      )
+      expect(readFileSync(join(outputDir, 'src', 'main.ts'), 'utf-8')).toBe(
+        'console.log("hello")'
+      )
+      expect(
+        readFileSync(
+          join(outputDir, 'src', 'deep', 'nested', 'file.js'),
+          'utf-8'
+        )
+      ).toBe('// nested file')
+    })
+
+    it('should extract files as ZIP when --zip flag is used', () => {
+      const sessionId = 'zip001'
+      const concatenatedContent = `--- CONCATENATOR_SESSION_ID: ${sessionId} ---
+Concatenated on: 2024-01-01
+
+<<<<< FILE_START: file1.txt (ID: ${sessionId}) >>>>>
+Content 1
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: file2.txt (ID: ${sessionId}) >>>>>
+Content 2
+<<<<< FILE_END >>>>>
+`
+
+      const inputFile = join(tempDir, 'bundle.txt')
+      const zipPath = join(tempDir, 'output.zip')
+      writeFileSync(inputFile, concatenatedContent)
+
+      const result = runCLI(['extract', inputFile, '--zip', '-o', zipPath])
+
+      expect(result.status).toBe(0)
+      expect(existsSync(zipPath)).toBe(true)
+
+      // Verify it's a valid ZIP (starts with PK magic number)
+      const zipHeader = readFileSync(zipPath).subarray(0, 2)
+      expect(zipHeader.toString('hex')).toBe('504b') // 'PK' in hex
+    })
+  })
+
+  describe('Dry Run Validation', () => {
+    it('should not create any files during dry-run even with corrupted content', () => {
+      // Create content with a file missing end marker
+      const corruptedContent = `--- CONCATENATOR_SESSION_ID: bad001 ---
+Concatenated on: 2024-01-01
+
+<<<<< FILE_START: incomplete.txt (ID: bad001) >>>>>
+This content has no end delimiter
+
+<<<<< FILE_START: valid.txt (ID: bad001) >>>>>
+Valid content
+<<<<< FILE_END >>>>>
+`
+
+      const inputFile = join(tempDir, 'corrupted.txt')
+      const outputDir = join(tempDir, 'should-not-exist')
+      writeFileSync(inputFile, corruptedContent)
+
+      // Run dry-run - should complete without error
+      const result = runCLI(['extract', inputFile, '--dry-run'])
+
+      // Verify output directory was NOT created (crucial for dry-run)
+      expect(existsSync(outputDir)).toBe(false)
+
+      // Verify dry-run output was produced with segmented validation
+      expect(result.stdout).toContain('[DRY RUN]')
+      expect(result.stdout).toContain('Total markers found:')
+      expect(result.stdout).toContain('Target files (will be extracted):')
+      // Files to be extracted section should show valid files only
+      expect(result.stdout).toContain('Files to be Extracted')
+    })
+
+    it('should exit with code 0 on valid file and not create any files', () => {
+      const sessionId = 'valid001'
+      const validContent = `--- CONCATENATOR_SESSION_ID: ${sessionId} ---
+Concatenated on: 2024-01-01
+
+<<<<< FILE_START: file1.txt (ID: ${sessionId}) >>>>>
+Content 1
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: file2.txt (ID: ${sessionId}) >>>>>
+Content 2
+<<<<< FILE_END >>>>>
+`
+
+      const inputFile = join(tempDir, 'valid.txt')
+      const outputDir = join(tempDir, 'should-not-exist')
+      writeFileSync(inputFile, validContent)
+
+      const result = runCLI(['validate', inputFile])
+
+      // Verify exit code is 0
+      expect(result.status).toBe(0)
+
+      // Verify output directory was NOT created
+      expect(existsSync(outputDir)).toBe(false)
+
+      // Verify success message with segmented counts
+      expect(result.stdout).toContain('✓ Validation passed')
+      expect(result.stdout).toContain('2 file(s) ready for extraction')
+      // Should show Marker Analysis with total first
+      expect(result.stdout).toContain('Total markers found:')
+      expect(result.stdout).toContain('Files to be Extracted (2):')
+      // Validate command should show [VALIDATION], not [DRY RUN]
+      expect(result.stdout).toContain('[VALIDATION]')
+      expect(result.stdout).not.toContain('[DRY RUN]')
+    })
+  })
+
+  describe('Recursive Protection', () => {
+    it('should detect collision but still complete with different session ID', () => {
+      // Create a file that contains what looks like a session marker pattern
+      // This could trigger collision detection
+      const fileWithPattern = `
+Some code that happens to contain marker patterns
+(ID: abc123) >>>>>
+Just regular content here
+`
+
+      writeFileSync(join(tempDir, 'has-pattern.txt'), fileWithPattern)
+      writeFileSync(join(tempDir, 'normal.txt'), 'Normal content')
+
+      const outputPath = join(tempDir, 'output.txt')
+
+      // This should detect the collision and generate a different session ID
+      const result = runCLI(['concat', tempDir, '-o', outputPath])
+
+      // Should succeed (exit code 0) - collision is handled automatically
+      expect(result.status).toBe(0)
+
+      // Output should exist
+      expect(existsSync(outputPath)).toBe(true)
+
+      // The output should contain both files
+      const output = readFileSync(outputPath, 'utf-8')
+      expect(output).toContain('has-pattern.txt')
+      expect(output).toContain('normal.txt')
+    })
+
+    it('should handle files with various marker-like content', () => {
+      // File with various patterns that might look like markers
+      const variousContent = `
+Documentation about markers:
+- FILE_START pattern example
+- FILE_END marker documentation
+- Session ID format explanation
+All just documentation content.
+`
+      writeFileSync(join(tempDir, 'docs.txt'), variousContent)
+      writeFileSync(join(tempDir, 'code.ts'), 'const x = 1')
+
+      const outputPath = join(tempDir, 'output.txt')
+      const result = runCLI(['concat', tempDir, '-o', outputPath])
+
+      // Should succeed - documentation content shouldn't cause issues
+      expect(result.status).toBe(0)
+      expect(existsSync(outputPath)).toBe(true)
+
+      const output = readFileSync(outputPath, 'utf-8')
+      expect(output).toContain('docs.txt')
+      expect(output).toContain('code.ts')
+    })
+  })
+
+  describe('Cross-platform Path Handling', () => {
+    it('should normalize paths correctly on all platforms', () => {
+      const nestedDir = join(tempDir, 'level1', 'level2', 'level3')
+      mkdirSync(nestedDir, { recursive: true })
+
+      writeFileSync(join(nestedDir, 'deep.txt'), 'Deep content')
+
+      const outputPath = join(tempDir, 'output.txt')
+      const result = runCLI(['concat', tempDir, '-o', outputPath])
+
+      expect(result.status).toBe(0)
+
+      const content = readFileSync(outputPath, 'utf-8')
+
+      // Use normalized path for comparison
+      const expectedPath = normalizePath('level1/level2/level3/deep.txt')
+      expect(normalizePath(content)).toContain(expectedPath)
+    })
+  })
+
+  describe('CLI Help and Error Handling', () => {
+    it('should show help text with --help flag', () => {
+      const result = runCLI(['--help'])
+
+      expect(result.status).toBe(0)
+      expect(result.stdout).toContain('Usage:')
+      expect(result.stdout).toContain('concat')
+      expect(result.stdout).toContain('extract')
+      expect(result.stdout).toContain('validate')
+    })
+
+    it('should handle non-existent input directory gracefully', () => {
+      const nonExistentPath = join(tempDir, 'does-not-exist')
+      const result = runCLI(['concat', nonExistentPath])
+
+      expect(result.status).toBe(1)
+      expect(result.stderr + result.stdout).toContain('Error')
+    })
+  })
+
+  describe('Force Flag and Collision Handling', () => {
+    it('should error when output path exists as directory without --force', () => {
+      // Create source directory with files
+      writeFileSync(join(tempDir, 'src.txt'), 'Source content')
+
+      // Create a directory with the same name as intended output file
+      const outputPath = join(tempDir, 'output.txt')
+      mkdirSync(outputPath, { recursive: true })
+      writeFileSync(join(outputPath, 'existing.txt'), 'Existing content')
+
+      // Try to concatenate to that path (should fail)
+      const result = runCLI(['concat', tempDir, '-o', outputPath])
+
+      expect(result.status).toBe(1)
+      expect(result.stderr + result.stdout).toContain('exists as a directory')
+      expect(result.stderr + result.stdout).toContain('--force')
+    })
+
+    it('should overwrite directory with --force flag during concat', () => {
+      // Create source directory with files
+      const srcDir = join(tempDir, 'src')
+      mkdirSync(srcDir, { recursive: true })
+      writeFileSync(join(srcDir, 'file.txt'), 'New content')
+
+      // Create a directory with the same name as intended output file
+      const outputPath = join(tempDir, 'output.txt')
+      mkdirSync(outputPath, { recursive: true })
+      writeFileSync(join(outputPath, 'existing.txt'), 'Old content')
+
+      // Concatenate with --force (should succeed)
+      const result = runCLI(['concat', srcDir, '-o', outputPath, '--force'])
+
+      expect(result.status).toBe(0)
+      expect(existsSync(outputPath)).toBe(true)
+
+      // Verify output is now a file with the concatenated content
+      const stats = statSync(outputPath)
+      expect(stats.isFile()).toBe(true)
+
+      const content = readFileSync(outputPath, 'utf-8')
+      expect(content).toContain('New content')
+    })
+
+    it('should error when output directory exists as file without --force', () => {
+      // Create a valid concatenated file
+      const sessionId = 'collision001'
+      const concatenatedContent = `--- CONCATENATOR_SESSION_ID: ${sessionId} ---
+Concatenated on: 2024-01-01
+
+<<<<< FILE_START: file.txt (ID: ${sessionId}) >>>>>
+Content here
+<<<<< FILE_END >>>>>
+`
+      const inputFile = join(tempDir, 'bundle.txt')
+      writeFileSync(inputFile, concatenatedContent)
+
+      // Create a file with the same name as intended output directory
+      const outputPath = join(tempDir, 'output')
+      writeFileSync(outputPath, 'I am a file not a directory')
+
+      // Try to extract to that path (should fail)
+      const result = runCLI(['extract', inputFile, '-o', outputPath])
+
+      expect(result.status).toBe(1)
+      expect(result.stderr + result.stdout).toContain('exists as a file')
+      expect(result.stderr + result.stdout).toContain('--force')
+    })
+
+    it('should overwrite file with --force flag during extract', () => {
+      // Create a valid concatenated file
+      const sessionId = 'collision002'
+      const concatenatedContent = `--- CONCATENATOR_SESSION_ID: ${sessionId} ---
+Concatenated on: 2024-01-01
+
+<<<<< FILE_START: extracted.txt (ID: ${sessionId}) >>>>>
+Extracted content
+<<<<< FILE_END >>>>>
+`
+      const inputFile = join(tempDir, 'bundle.txt')
+      writeFileSync(inputFile, concatenatedContent)
+
+      // Create a file with the same name as intended output directory
+      const outputPath = join(tempDir, 'output')
+      writeFileSync(outputPath, 'I am a file not a directory')
+
+      // Extract with --force (should succeed)
+      const result = runCLI(['extract', inputFile, '-o', outputPath, '--force'])
+
+      expect(result.status).toBe(0)
+      expect(existsSync(outputPath)).toBe(true)
+
+      // Verify output is now a directory with extracted content
+      const stats = statSync(outputPath)
+      expect(stats.isDirectory()).toBe(true)
+
+      expect(readFileSync(join(outputPath, 'extracted.txt'), 'utf-8')).toBe(
+        'Extracted content'
+      )
+    })
+
+    it('should error when zip output path exists as directory without --force', () => {
+      // Create a valid concatenated file
+      const sessionId = 'zipcollision001'
+      const concatenatedContent = `--- CONCATENATOR_SESSION_ID: ${sessionId} ---
+Concatenated on: 2024-01-01
+
+<<<<< FILE_START: file.txt (ID: ${sessionId}) >>>>>
+Content here
+<<<<< FILE_END >>>>>
+`
+      const inputFile = join(tempDir, 'bundle.txt')
+      writeFileSync(inputFile, concatenatedContent)
+
+      // Create a directory with the same name as intended zip file
+      const zipPath = join(tempDir, 'output.zip')
+      mkdirSync(zipPath, { recursive: true })
+
+      // Try to extract as zip (should fail)
+      const result = runCLI(['extract', inputFile, '--zip', '-o', zipPath])
+
+      expect(result.status).toBe(1)
+      expect(result.stderr + result.stdout).toContain('exists as a directory')
+      expect(result.stderr + result.stdout).toContain('--force')
+    })
+
+    it('should overwrite directory with --force flag during zip extraction', () => {
+      // Create a valid concatenated file
+      const sessionId = 'zipcollision002'
+      const concatenatedContent = `--- CONCATENATOR_SESSION_ID: ${sessionId} ---
+Concatenated on: 2024-01-01
+
+<<<<< FILE_START: file.txt (ID: ${sessionId}) >>>>>
+Zip content
+<<<<< FILE_END >>>>>
+`
+      const inputFile = join(tempDir, 'bundle.txt')
+      writeFileSync(inputFile, concatenatedContent)
+
+      // Create a directory with the same name as intended zip file
+      const zipPath = join(tempDir, 'output.zip')
+      mkdirSync(zipPath, { recursive: true })
+
+      // Extract as zip with --force (should succeed)
+      const result = runCLI([
+        'extract',
+        inputFile,
+        '--zip',
+        '-o',
+        zipPath,
+        '-f',
+      ])
+
+      expect(result.status).toBe(0)
+      expect(existsSync(zipPath)).toBe(true)
+
+      // Verify output is now a file (zip)
+      const stats = statSync(zipPath)
+      expect(stats.isFile()).toBe(true)
+
+      // Verify it's a valid ZIP
+      const zipHeader = readFileSync(zipPath).subarray(0, 2)
+      expect(zipHeader.toString('hex')).toBe('504b') // 'PK' in hex
+    })
+  })
+})
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: cli\index.ts (ID: 41a781) >>>>>
+#!/usr/bin/env npx tsx
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import { Command } from 'commander'
+import {
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+  mkdirSync,
+  existsSync,
+  rmSync,
+} from 'fs'
+import { join, relative, dirname } from 'path'
+import { fileURLToPath } from 'url'
+import {
+  concatenate,
+  deconcatenate,
+  validateConcatenation,
+  type VirtualFile,
+  type ValidationResult,
+} from '../core/engine.js'
+import { createZipFromVirtualFiles } from '../drivers/zip-driver.js'
+import { logger } from '../lib/logger.js'
+
+// Load version from package.json
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+const packageJson = JSON.parse(
+  readFileSync(join(__dirname, '../../package.json'), 'utf-8')
+)
+
+/**
+ * Recursively collect all files from a directory
+ */
+function collectFiles(
+  dir: string,
+  baseDir: string,
+  files: Array<{ path: string; content: string }> = [],
+  excludePatterns: string[] = []
+): Array<{ path: string; content: string }> {
+  const entries = readdirSync(dir, { withFileTypes: true })
+
+  for (const entry of entries) {
+    const fullPath = join(dir, entry.name)
+    const relativePath = relative(baseDir, fullPath)
+
+    // Check if path matches any exclude pattern
+    if (excludePatterns.some((pattern) => relativePath.includes(pattern))) {
+      continue
+    }
+
+    if (entry.isDirectory()) {
+      collectFiles(fullPath, baseDir, files, excludePatterns)
+    } else if (entry.isFile()) {
+      try {
+        const content = readFileSync(fullPath, 'utf-8')
+        files.push({ path: relativePath, content })
+      } catch {
+        // Skip files that can't be read (binary, permissions, etc.)
+      }
+    }
+  }
+
+  return files
+}
+
+/**
+ * Check if output path exists and handle collisions
+ * Returns true if path is safe to write, false if handled by force
+ * Throws user-friendly error if collision detected without force
+ */
+function checkOutputPath(
+  outputPath: string,
+  force: boolean,
+  itemType: 'file' | 'directory'
+): boolean {
+  if (!existsSync(outputPath)) {
+    return true
+  }
+
+  const stats = statSync(outputPath)
+  const isDir = stats.isDirectory()
+
+  if (isDir && itemType === 'file') {
+    if (force) {
+      rmSync(outputPath, { recursive: true, force: true })
+      return true
+    }
+    throw new Error(
+      `Path ${outputPath} exists as a directory. Please provide a different filename or use --force to overwrite.`
+    )
+  }
+
+  if (!isDir && itemType === 'directory') {
+    if (force) {
+      rmSync(outputPath, { recursive: true, force: true })
+      return true
+    }
+    throw new Error(
+      `Path ${outputPath} exists as a file. Please provide a different directory name or use --force to overwrite.`
+    )
+  }
+
+  if (isDir && itemType === 'directory') {
+    if (force) {
+      rmSync(outputPath, { recursive: true, force: true })
+      return true
+    }
+    throw new Error(
+      `Directory ${outputPath} already exists. Please provide a different directory name or use --force to overwrite.`
+    )
+  }
+
+  // File exists and itemType is file
+  if (force) {
+    rmSync(outputPath, { recursive: true, force: true })
+    return true
+  }
+
+  return true
+}
+
+/**
+ * Reconstruct files from deconcatenated content (File Explosion mode)
+ */
+function reconstructFiles(
+  files: VirtualFile[],
+  outputDir: string,
+  force = false
+): void {
+  // Check if output directory exists as a file
+  if (existsSync(outputDir) && !statSync(outputDir).isDirectory()) {
+    if (force) {
+      rmSync(outputDir, { recursive: true, force: true })
+    } else {
+      throw new Error(
+        `Path ${outputDir} exists as a file. Please provide a different directory name or use --force to overwrite.`
+      )
+    }
+  }
+
+  for (const file of files) {
+    const fullPath = join(outputDir, file.path)
+    const dir = dirname(fullPath)
+
+    if (!existsSync(dir)) {
+      mkdirSync(dir, { recursive: true })
+    }
+
+    writeFileSync(fullPath, file.content, 'utf-8')
+  }
+}
+
+/**
+ * Format validation result for CLI output
+ * Displays a professional summary with colors (if supported)
+ */
+function formatValidationReport(
+  result: ValidationResult,
+  filePath: string,
+  verbose: boolean | number = false,
+  isDryRun = false
+): void {
+  const isVeryVerbose = typeof verbose === 'number' ? verbose > 1 : false
+  const prefix = isDryRun ? '[DRY RUN] ' : '[VALIDATION] '
+  logger.info(`${prefix}Validating: ${filePath}`)
+  logger.info('')
+
+  // Session ID
+  if (result.sessionId) {
+    logger.info(`✓ Valid session manifest found: ID ${result.sessionId}`)
+  } else {
+    logger.warn('⚠ No session manifest found (legacy format detected)')
+  }
+
+  logger.info('')
+
+  // Segmented file summary - all three classes should sum to total
+  // Only count missing end markers as file errors (session mismatches are foreign markers)
+  const errorCount = result.errors.filter((e) =>
+    e.includes('Missing end marker')
+  ).length
+  logger.info(`Marker Analysis:`)
+  logger.info(`  Total markers found: ${result.totalMarkersFound}`)
+  logger.info(
+    `    ├── Target files (will be extracted): ${result.targetFileCount}`
+  )
+  if (result.foreignFileCount > 0) {
+    logger.info(
+      `    ├── Foreign markers (will be ignored): ${result.foreignFileCount}`
+    )
+  }
+  if (errorCount > 0) {
+    logger.info(`    └── Files with errors (skipped): ${errorCount}`)
+  }
+
+  // Warnings
+  if (result.warnings.length > 0) {
+    logger.info('')
+    logger.warn(`Warnings (${result.warnings.length}):`)
+    for (const warning of result.warnings) {
+      logger.warn(`  ⚠ ${warning}`)
+    }
+  }
+
+  // Errors
+  if (result.errors.length > 0) {
+    logger.info('')
+    logger.error(`Errors (${result.errors.length}):`)
+    for (const error of result.errors) {
+      logger.error(`  ✗ ${error}`)
+    }
+  }
+
+  // File list - show target files that will be extracted
+  if (result.targetFiles.length > 0) {
+    logger.info('')
+    logger.info(`Files to be Extracted (${result.targetFiles.length}):`)
+    for (const filePath of result.targetFiles) {
+      logger.info(`  ✓ ${filePath}`)
+    }
+  }
+
+  // Show foreign files in verbose mode (all if very verbose, else first 20)
+  if (verbose && result.foreignFiles.length > 0) {
+    logger.info('')
+    logger.info(`Foreign Markers Ignored (${result.foreignFiles.length}):`)
+    const limit = isVeryVerbose ? result.foreignFiles.length : 20
+    for (const filePath of result.foreignFiles.slice(0, limit)) {
+      logger.info(`  • ${filePath}`)
+    }
+    if (!isVeryVerbose && result.foreignFiles.length > 20) {
+      logger.info(
+        `  ... and ${result.foreignFiles.length - 20} more (use -vv to see all)`
+      )
+    }
+  }
+
+  // Final summary
+  logger.info('')
+  if (result.isValid) {
+    if (result.foreignFileCount > 0) {
+      logger.info(
+        `✓ Validation passed: ${result.targetFileCount}/${result.targetFileCount + result.foreignFileCount} target file(s) ready for extraction (${result.foreignFileCount} foreign markers ignored)`
+      )
+    } else {
+      logger.info(
+        `✓ Validation passed: ${result.targetFileCount} file(s) ready for extraction`
+      )
+    }
+  } else {
+    logger.error(
+      `✗ Validation found ${result.errors.length} error(s) - ${result.targetFileCount} valid file(s) can still be extracted`
+    )
+  }
+}
+
+/**
+ * Global error handler for CLI commands
+ */
+function handleError(error: unknown): void {
+  logger.error(
+    `Error: ${error instanceof Error ? error.message : String(error)}`
+  )
+  process.exit(1)
+}
+
+// Initialize Commander program
+const program = new Command()
+  .name('concatenator')
+  .description(
+    'Bundle and unbundle directories into LLM-ready concatenated files'
+  )
+  .version(packageJson.version)
+  .configureOutput({
+    writeErr: (str) => logger.error(str.trim()),
+    outputError: (str, write) => {
+      logger.error(str.trim())
+      write(str.trim())
+    },
+  })
+
+// Concat command (default action)
+program
+  .command('concat')
+  .argument('<path>', 'Directory path to concatenate')
+  .description('Bundle a directory into a single LLM-ready file')
+  .option('-o, --output <file>', 'Specify output filename (default: stdout)')
+  .option(
+    '-e, --exclude <pattern>',
+    'Additional patterns to ignore (comma-separated)',
+    ''
+  )
+  .option('-v, --verbose', 'Show detailed file processing logs', false)
+  .option(
+    '-f, --force',
+    'Overwrite existing files or directories without prompting',
+    false
+  )
+  .action(
+    async (
+      inputPath: string,
+      options: {
+        output?: string
+        exclude: string
+        verbose: boolean
+        force: boolean
+      }
+    ) => {
+      try {
+        const stats = statSync(inputPath)
+        if (!stats.isDirectory()) {
+          throw new Error(`${inputPath} is not a directory`)
+        }
+
+        // Parse exclude patterns
+        const excludePatterns = options.exclude
+          ? options.exclude
+              .split(',')
+              .map((p) => p.trim())
+              .filter(Boolean)
+          : []
+
+        const files = collectFiles(inputPath, inputPath, [], excludePatterns)
+
+        if (files.length === 0) {
+          throw new Error(`No readable files found in ${inputPath}`)
+        }
+
+        if (options.verbose) {
+          logger.info(`Processing ${files.length} file(s)...`)
+          for (const file of files) {
+            logger.info(`  - ${file.path}`)
+          }
+        }
+
+        const result = concatenate(files)
+
+        if (options.output) {
+          // Check for directory collision before writing
+          checkOutputPath(options.output, options.force, 'file')
+          writeFileSync(options.output, result)
+          logger.info(
+            `Concatenated ${files.length} file(s) to ${options.output}`
+          )
+        } else {
+          process.stdout.write(result)
+        }
+      } catch (error) {
+        handleError(error)
+      }
+    }
+  )
+
+// Extract command
+program
+  .command('extract')
+  .argument('<file>', 'Path to the concatenated file')
+  .description('Reconstruct a project from a concatenated file')
+  .option('-o, --output <dir>', 'Destination directory', '.')
+  .option(
+    '-z, --zip',
+    'Output as a .zip archive instead of writing to disk',
+    false
+  )
+  .option(
+    '-d, --dry-run',
+    'Validate integrity and show what would be extracted without writing anything',
+    false
+  )
+  .option(
+    '-v, --verbose',
+    'Show detailed file processing logs (use -vv for very verbose in dry-run)',
+    (value, previous) => previous + 1,
+    0
+  )
+  .option(
+    '-f, --force',
+    'Overwrite existing files or directories without prompting',
+    false
+  )
+  .action(
+    async (
+      inputFile: string,
+      options: {
+        output: string
+        zip: boolean
+        dryRun: boolean
+        verbose: number
+        force: boolean
+      }
+    ) => {
+      try {
+        const content = readFileSync(inputFile, 'utf-8')
+        const result = deconcatenate(content)
+
+        if (!result.foundAny) {
+          throw new Error('No concatenated files found in input')
+        }
+
+        const totalFiles = result.files.length + result.skippedPaths.length
+
+        if (options.verbose > 0) {
+          logger.info(
+            `Found ${result.files.length}/${totalFiles} file(s) to extract`
+          )
+          for (const file of result.files) {
+            logger.info(`  - ${file.path}`)
+          }
+          if (result.skippedPaths.length > 0) {
+            logger.warn(
+              `  Skipped ${result.skippedPaths.length} file(s) with missing end markers`
+            )
+          }
+        }
+
+        if (options.dryRun) {
+          // Dry run mode: validate and report only
+          const validationResult = validateConcatenation(content)
+          formatValidationReport(
+            validationResult,
+            inputFile,
+            options.verbose,
+            true
+          )
+          if (!validationResult.isValid) {
+            process.exit(1)
+          }
+        } else if (options.zip) {
+          // Zip bundling mode
+          const zipPath = options.output.endsWith('.zip')
+            ? options.output
+            : join(options.output, 'output.zip')
+
+          // Check for directory collision before writing zip
+          checkOutputPath(zipPath, options.force, 'file')
+
+          const zipData = await createZipFromVirtualFiles(result.files)
+          writeFileSync(zipPath, zipData)
+
+          if (result.skippedPaths.length > 0) {
+            logger.warn(
+              `Skipped ${result.skippedPaths.length} file(s) with missing end markers: ${result.skippedPaths.join(', ')}`
+            )
+          }
+
+          logger.info(
+            `Created ${zipPath} with ${result.files.length}/${totalFiles} file(s)`
+          )
+        } else {
+          // File explosion mode (default)
+          // Check for file collision before extracting to directory
+          if (
+            existsSync(options.output) &&
+            !statSync(options.output).isDirectory()
+          ) {
+            if (options.force) {
+              rmSync(options.output, { recursive: true, force: true })
+            } else {
+              throw new Error(
+                `Path ${options.output} exists as a file. Please provide a different directory name or use --force to overwrite.`
+              )
+            }
+          }
+
+          reconstructFiles(result.files, options.output, options.force)
+
+          if (result.skippedPaths.length > 0) {
+            logger.warn(
+              `Skipped ${result.skippedPaths.length} file(s) with missing end markers: ${result.skippedPaths.join(', ')}`
+            )
+          }
+
+          logger.info(
+            `Restored ${result.files.length}/${totalFiles} file(s) to ${options.output}`
+          )
+        }
+      } catch (error) {
+        handleError(error)
+      }
+    }
+  )
+
+// Validate command
+program
+  .command('validate')
+  .argument('<file>', 'Path to the concatenated file')
+  .description('Check the integrity of a concatenated file')
+  .option(
+    '-v, --verbose',
+    'Show detailed validation logs (use -vv for very verbose)',
+    (value, previous) => previous + 1,
+    0
+  )
+  .action(async (inputFile: string, options: { verbose: number }) => {
+    try {
+      const content = readFileSync(inputFile, 'utf-8')
+      const result = validateConcatenation(content)
+      formatValidationReport(result, inputFile, options.verbose, false)
+      process.exit(result.isValid ? 0 : 1)
+    } catch (error) {
+      handleError(error)
+    }
+  })
+
+// Add custom help text with examples
+program.on('--help', () => {
+  console.log('')
+  console.log('Examples:')
+  console.log('  $ concatenator concat -o context.txt ./src')
+  console.log('  $ concatenator concat -v -e node_modules,dist ./my-project')
+  console.log('  $ concatenator extract -o ./restored bundle.txt')
+  console.log('  $ concatenator extract --zip -o restored.zip bundle.txt')
+  console.log('  $ concatenator validate --verbose bundle.txt')
+})
+
+// Parse CLI arguments
+program.parse()
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: core\constants.ts (ID: 41a781) >>>>>
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+// Obfuscated delimiters to prevent self-hosting paradox
+// The actual marker strings are constructed at runtime
+const START_MARKER_PARTS = [
+  '<',
+  '<',
+  '<',
+  '<',
+  '<',
+  ' ',
+  'F',
+  'I',
+  'L',
+  'E',
+  '_',
+  'S',
+  'T',
+  'A',
+  'R',
+  'T',
+  ':',
+  ' ',
+]
+const END_MARKER_PARTS = [' ', '>', '>', '>', '>', '>']
+const FILE_END_MARKER_PARTS = [
+  '<',
+  '<',
+  '<',
+  '<',
+  '<',
+  ' ',
+  'F',
+  'I',
+  'L',
+  'E',
+  '_',
+  'E',
+  'N',
+  'D',
+  ' ',
+  '>',
+  '>',
+  '>',
+  '>',
+  '>',
+]
+
+export const START_DELIMITER = START_MARKER_PARTS.join('')
+export const END_DELIMITER = END_MARKER_PARTS.join('')
+export const FILE_END_DELIMITER = FILE_END_MARKER_PARTS.join('')
+
+// Manifest header template (uses different pattern to avoid collision)
+const MANIFEST_PREFIX_PARTS = [
+  '-',
+  '-',
+  '-',
+  ' ',
+  'C',
+  'O',
+  'N',
+  'C',
+  'A',
+  'T',
+  'E',
+  'N',
+  'A',
+  'T',
+  'O',
+  'R',
+  '_',
+  'S',
+  'E',
+  'S',
+  'S',
+  'I',
+  'O',
+  'N',
+  '_',
+  'I',
+  'D',
+  ':',
+  ' ',
+]
+const MANIFEST_SUFFIX_PARTS = [' ', '-', '-', '-']
+
+export const MANIFEST_PREFIX = MANIFEST_PREFIX_PARTS.join('')
+export const MANIFEST_SUFFIX = MANIFEST_SUFFIX_PARTS.join('')
+
+export const DEFAULT_IGNORE_LIST = [
+  '.concatenate-ignore',
+  '.DS_Store',
+  '.env',
+  '.expo',
+  '.git',
+  '.gradle',
+  '.next',
+  '.secrets',
+  '.terraform',
+  '.vagrant',
+  '.vscode',
+  '/^\\.concatenate-ignore-worker-\\d+$/',
+  '/\\.class$',
+  '/\\.exe$/',
+  '/\\.jar$/',
+  '/\\.log$/',
+  '/\\.o$/',
+  '/\\.obj$/',
+  '/\\.swp$/',
+  '/^__.*cache__$/',
+  '/^\\..*_cache$/',
+  'bin',
+  'build',
+  'desktop.ini',
+  'dist',
+  'node_modules',
+  'obj',
+  'package-lock.json',
+  'ruff_output.txt',
+  'target',
+  'Thumbs.db',
+  'vendor',
+  'venv',
+]
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: core\engine.test.ts (ID: 41a781) >>>>>
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import { describe, it, expect } from 'vitest'
+import {
+  concatenate,
+  deconcatenate,
+  sanitizePath,
+  dedupePath,
+  generateSessionId,
+} from './engine'
+
+describe('engine', () => {
+  describe('generateSessionId', () => {
+    it('generates a 6-character hex string', () => {
+      const id = generateSessionId()
+      expect(id).toMatch(/^[0-9a-f]{6}$/)
+    })
+
+    it('generates different IDs on each call', () => {
+      const ids = new Set<string>()
+      for (let i = 0; i < 10; i++) {
+        ids.add(generateSessionId())
+      }
+      expect(ids.size).toBe(10)
+    })
+  })
+
+  describe('concatenate', () => {
+    it('concatenates files with session-based manifest header', () => {
+      const files = [
+        { path: 'file1.txt', content: 'Hello' },
+        { path: 'file2.txt', content: 'World' },
+      ]
+      const result = concatenate(files, '2024-01-01')
+
+      // Check manifest header
+      expect(result).toMatch(/--- CONCATENATOR_SESSION_ID: [0-9a-f]{6} ---/)
+      expect(result).toContain('Concatenated on: 2024-01-01')
+
+      // Check session-specific markers
+      expect(result).toMatch(
+        /<<<<< FILE_START: file1\.txt \(ID: [0-9a-f]{6}\) >>>>>/
+      )
+      expect(result).toContain('Hello')
+      expect(result).toContain('<<<<< FILE_END >>>>>')
+      expect(result).toMatch(
+        /<<<<< FILE_START: file2\.txt \(ID: [0-9a-f]{6}\) >>>>>/
+      )
+      expect(result).toContain('World')
+    })
+
+    it('uses provided session ID when given', () => {
+      const files = [{ path: 'test.txt', content: 'content' }]
+      const result = concatenate(files, '2024-01-01', 'abc123')
+
+      expect(result).toContain('--- CONCATENATOR_SESSION_ID: abc123 ---')
+      expect(result).toContain('<<<<< FILE_START: test.txt (ID: abc123) >>>>>')
+    })
+
+    it('throws error when session ID manifest header collides with content', () => {
+      const files = [
+        {
+          path: 'test.txt',
+          content: '--- CONCATENATOR_SESSION_ID: abc123 ---',
+        },
+      ]
+      expect(() => concatenate(files, '2024-01-01', 'abc123')).toThrow(
+        "Provided session ID 'abc123' collides with file content"
+      )
+    })
+
+    it('throws error when session ID marker core collides with content', () => {
+      // The marker core pattern (ID: {sessionId}){END_DELIMITER} would cause parsing issues
+      const files = [
+        { path: 'test.txt', content: 'some (ID: abc123) >>>>> text' },
+      ]
+      expect(() => concatenate(files, '2024-01-01', 'abc123')).toThrow(
+        "Provided session ID 'abc123' collides with file content"
+      )
+    })
+
+    it('does not throw for raw session ID appearing in content (only checks complete patterns)', () => {
+      // Raw session ID in content is fine - only the complete manifest/marker patterns matter
+      const files = [
+        { path: 'test.txt', content: 'This contains abc123 and more text' },
+      ]
+      // Should not throw because abc123 doesn't appear in a problematic pattern
+      const result = concatenate(files, '2024-01-01', 'abc123')
+      expect(result).toContain('--- CONCATENATOR_SESSION_ID: abc123 ---')
+    })
+  })
+
+  describe('deconcatenate', () => {
+    it('extracts files from session-based concatenated content', () => {
+      const files = [
+        { path: 'file1.txt', content: 'Hello' },
+        { path: 'file2.txt', content: 'World' },
+      ]
+      const concatenated = concatenate(files, '2024-01-01')
+      const result = deconcatenate(concatenated)
+
+      expect(result.foundAny).toBe(true)
+      expect(result.files).toHaveLength(2)
+      expect(result.files[0].path).toBe('file1.txt')
+      expect(result.files[0].content).toBe('Hello')
+      expect(result.files[1].path).toBe('file2.txt')
+      expect(result.files[1].content).toBe('World')
+    })
+
+    it('handles empty input', () => {
+      const result = deconcatenate('')
+      expect(result.foundAny).toBe(false)
+      expect(result.files).toHaveLength(0)
+    })
+
+    it('handles malformed content gracefully', () => {
+      const malformed =
+        '--- CONCATENATOR_SESSION_ID: abc123 ---\n\n<<<<< FILE_START: file.txt (ID: abc123) >>>>>missing end marker'
+      const result = deconcatenate(malformed)
+      expect(result.foundAny).toBe(false)
+      expect(result.skippedPaths).toContain('file.txt')
+    })
+
+    it('ignores foreign/legacy delimiters (self-hosting test)', () => {
+      // This simulates concatenating the concatenator's own source code
+      // which contains the old delimiter strings in constants
+      const files = [
+        {
+          path: 'src/constants.ts',
+          content: "const START_DELIMITER = '<<<<< FILE_START: '",
+        },
+        {
+          path: 'src/engine.ts',
+          content: 'function deconcatenate() { /* uses markers */ }',
+        },
+      ]
+
+      // Create a new session-based concatenation
+      const concatenated = concatenate(files, '2024-01-01', 'xyz789')
+
+      // Add some fake old-format delimiters in the middle (simulating self-hosting paradox)
+      const poisonedContent = concatenated.replace(
+        '<<<<< FILE_START: src/engine.ts (ID: xyz789) >>>>>',
+        '<<<<< FILE_START: src/engine.ts (ID: xyz789) >>>>>\n<<<<< FILE_START: fake.txt >>>>>fake content<<<<< FILE_END >>>>>\n'
+      )
+
+      const result = deconcatenate(poisonedContent)
+
+      // Should only extract the real files from our session, ignore the fake old-format one
+      expect(result.foundAny).toBe(true)
+      expect(result.files).toHaveLength(2)
+      expect(result.files.map((f) => f.path)).toContain('src/constants.ts')
+      expect(result.files.map((f) => f.path)).toContain('src/engine.ts')
+      // fake.txt should not appear because it's not in our session
+      expect(result.files.map((f) => f.path)).not.toContain('fake.txt')
+    })
+
+    it('handles backwards compatibility with legacy format', () => {
+      // Old format without manifest header
+      const legacyContent = `Concatenated on: 2024-01-01
+
+<<<<< FILE_START: legacy.txt >>>>>
+legacy content
+<<<<< FILE_END >>>>>
+`
+      const result = deconcatenate(legacyContent)
+
+      expect(result.foundAny).toBe(true)
+      expect(result.files).toHaveLength(1)
+      expect(result.files[0].path).toBe('legacy.txt')
+      expect(result.files[0].content).toBe('legacy content')
+    })
+  })
+
+  describe('round-trip', () => {
+    it('preserves file content through concatenate and deconcatenate', () => {
+      const originalFiles = [
+        {
+          path: 'src/utils.ts',
+          content: 'export const add = (a: number, b: number) => a + b',
+        },
+        {
+          path: 'src/main.ts',
+          content: 'import { add } from "./utils"\n\nconsole.log(add(2, 3))',
+        },
+        { path: 'README.md', content: '# My Project\n\nA sample project.' },
+      ]
+
+      // Concatenate
+      const concatenated = concatenate(originalFiles)
+
+      // Deconcatenate
+      const result = deconcatenate(concatenated)
+
+      // Verify
+      expect(result.foundAny).toBe(true)
+      expect(result.files).toHaveLength(3)
+      expect(result.skippedPaths).toHaveLength(0)
+
+      // Match paths and content
+      for (const original of originalFiles) {
+        const extracted = result.files.find((f) => f.path === original.path)
+        expect(extracted).toBeDefined()
+        expect(extracted!.content).toBe(original.content)
+      }
+    })
+
+    it('handles nested directory structures', () => {
+      const originalFiles = [
+        { path: 'deep/nested/path/file.txt', content: 'Deep content' },
+        { path: 'root.txt', content: 'Root content' },
+      ]
+
+      const concatenated = concatenate(originalFiles)
+      const result = deconcatenate(concatenated)
+
+      expect(result.files).toHaveLength(2)
+      expect(result.files.map((f) => f.path).sort()).toEqual(
+        ['deep/nested/path/file.txt', 'root.txt'].sort()
+      )
+    })
+
+    it('handles special characters in content', () => {
+      const originalFiles = [
+        {
+          path: 'special.txt',
+          content: 'Special <>&"\' chars and unicode: 🎉 日本語',
+        },
+        { path: 'code.txt', content: 'function test() {\n  return "test";\n}' },
+      ]
+
+      const concatenated = concatenate(originalFiles)
+      const result = deconcatenate(concatenated)
+
+      expect(result.files).toHaveLength(2)
+      expect(result.files[0].content).toBe(originalFiles[0].content)
+      expect(result.files[1].content).toBe(originalFiles[1].content)
+    })
+  })
+
+  describe('sanitizePath', () => {
+    it('normalizes backslashes to forward slashes', () => {
+      expect(sanitizePath('src\\utils\\file.ts')).toBe('src/utils/file.ts')
+    })
+
+    it('removes leading slashes', () => {
+      expect(sanitizePath('/absolute/path')).toBe('absolute/path')
+    })
+
+    it('removes Windows drive letters', () => {
+      expect(sanitizePath('C:/Users/test/file.txt')).toBe('Users/test/file.txt')
+    })
+
+    it('resolves parent directory traversal', () => {
+      expect(sanitizePath('src/../file.txt')).toBe('file.txt')
+      expect(sanitizePath('src/a/../../file.txt')).toBe('file.txt')
+    })
+
+    it('removes null bytes', () => {
+      expect(sanitizePath('file\0.txt')).toBe('file.txt')
+    })
+  })
+
+  describe('dedupePath', () => {
+    it('returns original path if not duplicate', () => {
+      const existing = new Set<string>()
+      expect(dedupePath('file.txt', existing)).toBe('file.txt')
+    })
+
+    it('appends counter for duplicates', () => {
+      const existing = new Set<string>(['file.txt'])
+      expect(dedupePath('file.txt', existing)).toBe('file(1).txt')
+    })
+
+    it('increments counter for multiple duplicates', () => {
+      const existing = new Set<string>(['file.txt', 'file(1).txt'])
+      expect(dedupePath('file.txt', existing)).toBe('file(2).txt')
+    })
+
+    it('handles files without extensions', () => {
+      const existing = new Set<string>(['README'])
+      expect(dedupePath('README', existing)).toBe('README(1)')
+    })
+  })
+})
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: core\engine.ts (ID: 41a781) >>>>>
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import {
+  START_DELIMITER,
+  END_DELIMITER,
+  FILE_END_DELIMITER,
+  MANIFEST_PREFIX,
+  MANIFEST_SUFFIX,
+} from './constants.js'
+import type { ValidationResult } from './types.js'
+
+// Re-export types for convenience
+export type { ValidationResult } from './types.js'
+
+/**
+ * Represents a virtual file with path and content
+ */
+export interface VirtualFile {
+  path: string
+  content: string
+}
+
+/**
+ * Result of parsing concatenated content
+ */
+export interface DeconcatenateResult {
+  files: VirtualFile[]
+  skippedPaths: string[]
+  foundAny: boolean
+}
+
+/**
+ * Input file for concatenation
+ */
+export interface ConcatenateInputFile {
+  path: string
+  content: string
+}
+
+/**
+ * Generate a short, unique 6-character hex session ID
+ *
+ * Uses cryptographically secure random number generation via Web Crypto API,
+ * which is available in both modern browsers and Node.js 15+.
+ *
+ * @returns 6-character hexadecimal string
+ */
+export function generateSessionId(): string {
+  const bytes = new Uint8Array(3)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+/**
+ * Check if session ID would cause marker collisions within file contents
+ *
+ * Only checks for complete marker patterns that would actually cause parsing issues:
+ * 1. The session-specific manifest header pattern
+ * 2. The session-specific file start marker pattern
+ *
+ * Raw session ID substrings or individual delimiter components are ignored
+ * to avoid false positives in source code with hex strings, variable names, etc.
+ *
+ * @param sessionId - The session ID to check
+ * @param files - Array of files to check against
+ * @returns true if collision detected, false otherwise
+ */
+function checkSessionIdCollision(
+  sessionId: string,
+  files: ConcatenateInputFile[]
+): boolean {
+  // Build the patterns that would actually cause issues if they existed in source
+  const manifestPattern = `${MANIFEST_PREFIX}${sessionId}${MANIFEST_SUFFIX}`
+  const sessionMarkerCore = `(ID: ${sessionId})${END_DELIMITER}`
+
+  for (const file of files) {
+    // Check for manifest header collision
+    if (file.content.includes(manifestPattern)) return true
+
+    // Check for session-specific marker collision
+    // This pattern includes the session ID and would cause the deconcatenator
+    // to mistakenly identify this as a file boundary
+    if (file.content.includes(sessionMarkerCore)) return true
+  }
+  return false
+}
+
+/**
+ * Generate a collision-free session ID
+ *
+ * @param files - Array of files to check for collisions
+ * @returns A unique session ID guaranteed not to exist in content
+ */
+function generateCollisionFreeSessionId(files: ConcatenateInputFile[]): string {
+  let sessionId = generateSessionId()
+  let attempts = 0
+  const maxAttempts = 100
+
+  while (checkSessionIdCollision(sessionId, files) && attempts < maxAttempts) {
+    sessionId = generateSessionId()
+    attempts++
+  }
+
+  if (attempts >= maxAttempts) {
+    throw new Error(
+      'Failed to generate collision-free session ID after 100 attempts'
+    )
+  }
+
+  return sessionId
+}
+
+/**
+ * Extract session ID from manifest header
+ *
+ * Format: --- CONCATENATOR_SESSION_ID: [######] ---
+ *
+ * @param content - The concatenated content
+ * @returns Session ID or null if not found
+ */
+function extractSessionId(content: string): string | null {
+  const firstLine = content.split('\n')[0]
+  if (!firstLine) return null
+
+  const prefixIndex = firstLine.indexOf(MANIFEST_PREFIX)
+  if (prefixIndex === -1) return null
+
+  const idStart = prefixIndex + MANIFEST_PREFIX.length
+  const suffixIndex = firstLine.indexOf(MANIFEST_SUFFIX, idStart)
+  if (suffixIndex === -1) return null
+
+  return firstLine.substring(idStart, suffixIndex)
+}
+
+/**
+ * Build session-specific file start marker regex
+ *
+ * @param sessionId - The session ID
+ * @returns RegExp to match file start markers with this session ID
+ */
+function buildFileStartRegex(sessionId: string): RegExp {
+  // Escape special chars in delimiters for regex
+  const escapedStart = START_DELIMITER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const escapedEnd = END_DELIMITER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+  // Pattern: START_DELIMITER + (path) + " (ID: " + sessionId + ")" + END_DELIMITER
+  // We use a capturing group for the path portion
+  return new RegExp(
+    `${escapedStart}(.+?)\\s*\\(ID:\\s*${sessionId}\\s*\\)${escapedEnd}`,
+    'g'
+  )
+}
+
+/**
+ * Parse concatenated content and extract individual files using session-aware parsing
+ *
+ * Handles fault tolerance for:
+ * - Missing FILE_END_DELIMITER (LLM hallucinations, deletions, truncation)
+ * - Malformed markers or nested delimiters
+ * - Path traversal attempts (sanitizes paths)
+ * - Duplicate paths (renames with counter suffix)
+ * - Legacy/foreign delimiters from other sessions (ignored)
+ *
+ * @param content - The concatenated text content to parse
+ * @returns DeconcatenateResult with extracted files and skipped paths
+ */
+export function deconcatenate(content: string): DeconcatenateResult {
+  const files: VirtualFile[] = []
+  const skippedPaths: string[] = []
+  const addedPaths = new Set<string>()
+
+  // Extract session ID from manifest
+  const sessionId = extractSessionId(content)
+  if (!sessionId) {
+    // No manifest found - could be legacy format or invalid
+    // Try to detect if this looks like old format
+    const hasOldFormat = content.includes('<<<<< FILE_START:')
+    if (hasOldFormat) {
+      // Try legacy parsing (no session ID filtering)
+      return deconcatenateLegacy(content)
+    }
+    return { files: [], skippedPaths: [], foundAny: false }
+  }
+
+  // Build regex for finding all file start markers with this session ID
+  const fileStartRegex = buildFileStartRegex(sessionId)
+  const fileEndDelimiter = FILE_END_DELIMITER
+
+  // Find all potential file markers with their positions
+  const matches: Array<{
+    path: string
+    contentStart: number
+    fullMatchEnd: number
+  }> = []
+  let match
+
+  while ((match = fileStartRegex.exec(content)) !== null) {
+    matches.push({
+      path: match[1].trim(),
+      contentStart: match.index + match[0].length,
+      fullMatchEnd: match.index + match[0].length,
+    })
+  }
+
+  let foundAny = false
+
+  for (let i = 0; i < matches.length; i++) {
+    const { path, contentStart } = matches[i]
+    const nextMatchStart =
+      i < matches.length - 1
+        ? matches[i + 1].fullMatchEnd -
+          matches[i + 1].path.length -
+          START_DELIMITER.length -
+          END_DELIMITER.length -
+          10 /* approx */
+        : null
+
+    // Find the end delimiter for this file
+    const fileEndIndex = content.indexOf(fileEndDelimiter, contentStart)
+
+    // Partial File Detection
+    if (
+      fileEndIndex === -1 ||
+      (nextMatchStart !== null && fileEndIndex > nextMatchStart)
+    ) {
+      skippedPaths.push(path || '(unknown path)')
+      continue
+    }
+
+    // Extract and clean file content
+    let fileContent = content.substring(contentStart, fileEndIndex)
+    fileContent = fileContent.replace(/^[\r\n]+|[\r\n]+$/g, '')
+
+    // Sanitize path
+    const sanitizedPath = sanitizePath(path)
+    if (sanitizedPath) {
+      const finalPath = dedupePath(sanitizedPath, addedPaths)
+      addedPaths.add(finalPath)
+      files.push({ path: finalPath, content: fileContent })
+      foundAny = true
+    }
+  }
+
+  return { files, skippedPaths, foundAny }
+}
+
+/**
+ * Legacy deconcatenate parser for backwards compatibility
+ * Handles old format without session IDs
+ *
+ * @param content - Legacy concatenated content
+ * @returns DeconcatenateResult
+ */
+function deconcatenateLegacy(content: string): DeconcatenateResult {
+  const files: VirtualFile[] = []
+  const skippedPaths: string[] = []
+  const addedPaths = new Set<string>()
+
+  let searchIndex = 0
+  let foundAny = false
+
+  while (true) {
+    const startIndex = content.indexOf(START_DELIMITER, searchIndex)
+    if (startIndex === -1) break
+
+    const pathStart = startIndex + START_DELIMITER.length
+    const pathEnd = content.indexOf(END_DELIMITER, pathStart)
+    if (pathEnd === -1) break
+
+    const nextStartDelimiter = content.indexOf(START_DELIMITER, pathStart)
+    const contentStartRaw = pathEnd + END_DELIMITER.length
+    const fileEndIndex = content.indexOf(FILE_END_DELIMITER, contentStartRaw)
+
+    const path = content.substring(pathStart, pathEnd).trim()
+
+    if (
+      fileEndIndex === -1 ||
+      (nextStartDelimiter !== -1 && nextStartDelimiter < fileEndIndex)
+    ) {
+      skippedPaths.push(path || '(unknown path)')
+      searchIndex =
+        nextStartDelimiter !== -1 ? nextStartDelimiter : content.length
+      continue
+    }
+
+    const sanitizedPath = sanitizePath(path)
+    let fileContent = content.substring(contentStartRaw, fileEndIndex)
+    fileContent = fileContent.replace(/^[\r\n]+|[\r\n]+$/g, '')
+
+    if (sanitizedPath) {
+      const finalPath = dedupePath(sanitizedPath, addedPaths)
+      addedPaths.add(finalPath)
+      files.push({ path: finalPath, content: fileContent })
+      foundAny = true
+    }
+
+    searchIndex = fileEndIndex + FILE_END_DELIMITER.length
+  }
+
+  return { files, skippedPaths, foundAny }
+}
+
+/**
+ * Sanitize a file path to prevent path traversal attacks
+ *
+ * - Removes null bytes
+ * - Normalizes backslashes to forward slashes
+ * - Removes leading slashes (absolute path prevention)
+ * - Removes Windows drive letters
+ * - Resolves ../ sequences
+ *
+ * @param path - The raw path from the concatenated file
+ * @returns Sanitized path safe for use
+ */
+export function sanitizePath(path: string): string {
+  const sanitized = path
+    // Remove null bytes (using char code to avoid ESLint control-regex error)
+    .replace(new RegExp(String.fromCharCode(0), 'g'), '')
+    // Normalize backslashes to forward slashes for security
+    .replace(/\\/g, '/')
+    // Remove leading slashes (absolute path prevention)
+    .replace(/^\/+/, '')
+    // Remove Windows drive letters (C:, D:, etc.)
+    .replace(/^[a-zA-Z]:\//, '')
+    // Remove UNC path prefixes (\\?\)
+    .replace(/^\\?\//, '')
+
+  // Resolve all ../ sequences throughout the path using stack-based normalization
+  const parts = sanitized.split('/')
+  const safeParts: string[] = []
+  for (const part of parts) {
+    if (part === '..') {
+      // Attempt to traverse up - pop the last safe directory if possible
+      if (safeParts.length > 0) {
+        safeParts.pop()
+      }
+      // If at root, ignore the .. (can't go above root)
+    } else if (part === '.' || part === '') {
+      // Skip current directory references and empty parts
+      continue
+    } else {
+      safeParts.push(part)
+    }
+  }
+
+  return safeParts.join('/')
+}
+
+/**
+ * Generate a unique path by appending a counter suffix if the path already exists
+ *
+ * Example: file.js -> file(1).js, file(2).js, etc.
+ *
+ * @param path - The desired file path
+ * @param existingPaths - Set of already used paths
+ * @returns A unique path (original or with counter suffix)
+ */
+export function dedupePath(path: string, existingPaths: Set<string>): string {
+  if (!existingPaths.has(path)) {
+    return path
+  }
+
+  let counter = 1
+  const lastDotIndex = path.lastIndexOf('.')
+  const hasExtension = lastDotIndex > path.lastIndexOf('/')
+  const baseName = hasExtension ? path.slice(0, lastDotIndex) : path
+  const extension = hasExtension ? path.slice(lastDotIndex) : ''
+
+  let finalPath = path
+  while (existingPaths.has(finalPath)) {
+    finalPath = `${baseName}(${counter})${extension}`
+    counter++
+  }
+
+  return finalPath
+}
+
+/**
+ * Build session-specific file start marker
+ *
+ * @param path - File path
+ * @param sessionId - Session ID
+ * @returns Formatted marker string
+ */
+function buildFileStartMarker(path: string, sessionId: string): string {
+  return `${START_DELIMITER}${path} (ID: ${sessionId})${END_DELIMITER}`
+}
+
+/**
+ * Concatenate multiple files into a single text output with session-based delimiters
+ *
+ * Format:
+ *   --- CONCATENATOR_SESSION_ID: [######] ---
+ *   Concatenated on: {timestamp}
+ *
+ *   <<<<< FILE_START: {path} (ID: ######) >>>>>
+ *   {content}
+ *   <<<<< FILE_END >>>>>
+ *
+ * @param files - Array of files to concatenate
+ * @param timestamp - Optional timestamp string (defaults to current locale time)
+ * @param sessionId - Optional session ID (generated if not provided, collision-checked)
+ * @returns Concatenated text content with manifest header
+ */
+export function concatenate(
+  files: ConcatenateInputFile[],
+  timestamp?: string,
+  sessionId?: string
+): string {
+  const ts = timestamp || new Date().toLocaleString()
+  const sid = sessionId || generateCollisionFreeSessionId(files)
+
+  // Validate provided session ID doesn't collide
+  if (sessionId && checkSessionIdCollision(sessionId, files)) {
+    throw new Error(
+      `Provided session ID '${sessionId}' collides with file content`
+    )
+  }
+
+  // Manifest header with session ID
+  let result = `${MANIFEST_PREFIX}${sid}${MANIFEST_SUFFIX}\n`
+  result += `Concatenated on: ${ts}\n\n`
+
+  for (const file of files) {
+    result += `${buildFileStartMarker(file.path, sid)}\n`
+    result += file.content
+    result += `\n${FILE_END_DELIMITER}\n\n`
+  }
+
+  return result
+}
+
+/**
+ * Generate a filename-safe timestamp for output files
+ *
+ * Format: YYYYMMDD_HHIISS
+ *
+ * @param date - Optional date (defaults to now)
+ * @returns Timestamp string safe for filenames
+ */
+export function generateFileTimestamp(date: Date = new Date()): string {
+  const YYYY = date.getFullYear()
+  const MM = String(date.getMonth() + 1).padStart(2, '0')
+  const DD = String(date.getDate()).padStart(2, '0')
+  const HH = String(date.getHours()).padStart(2, '0')
+  const II = String(date.getMinutes()).padStart(2, '0')
+  const SS = String(date.getSeconds()).padStart(2, '0')
+
+  return `${YYYY}${MM}${DD}_${HH}${II}${SS}`
+}
+
+/**
+ * Validate a concatenated content string without extracting files
+ *
+ * Performs structural analysis to detect:
+ * - Valid/invalid manifest header
+ * - Session ID consistency
+ * - Balanced file markers (every START has an END)
+ * - Mismatched or corrupted markers
+ *
+ * @param input - The concatenated content string to validate
+ * @returns ValidationResult with detailed findings
+ */
+export function validateConcatenation(input: string): ValidationResult {
+  const errors: string[] = []
+  const warnings: string[] = []
+  const detectedFiles: string[] = []
+  const targetFiles: string[] = []
+  const foreignFiles: string[] = []
+
+  // Extract session ID from manifest header
+  const sessionId = extractSessionId(input)
+
+  // Check if first line looks like a corrupted manifest (starts with --- but wrong content)
+  const firstLine = input.split('\n')[0] || ''
+  const looksLikeCorruptedManifest =
+    firstLine.startsWith('--- ') &&
+    !firstLine.includes(MANIFEST_PREFIX.trim()) &&
+    !sessionId
+
+  if (!sessionId) {
+    // Check for legacy format
+    const hasLegacyFormat =
+      input.includes('<<<<< FILE_START:') ||
+      input.includes('<<<<< CONCATENATOR_FILE_START:')
+    if (looksLikeCorruptedManifest) {
+      errors.push('Corrupted manifest header detected')
+    } else if (hasLegacyFormat) {
+      warnings.push(
+        'No session manifest found - using legacy format validation'
+      )
+    } else {
+      errors.push('No valid session manifest header found')
+    }
+  }
+
+  // Find all file start markers with their positions
+  const fileMarkers: Array<{
+    path: string
+    markerSessionId: string | null
+    startPos: number
+    endPos: number
+    hasMatchingEnd: boolean
+  }> = []
+
+  // Build regex to find all start markers (with or without session ID)
+  const escapedStart = START_DELIMITER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const escapedEnd = END_DELIMITER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+  // Pattern matches: START_DELIMITER + path + optional " (ID: xxx)" + END_DELIMITER
+  // Session ID can be any alphanumeric string
+  const startMarkerRegex = new RegExp(
+    `${escapedStart}(.+?)(?:\\s*\\(ID:\\s*([a-zA-Z0-9]+)\\s*\\))?${escapedEnd}`,
+    'gi'
+  )
+
+  let match
+  while ((match = startMarkerRegex.exec(input)) !== null) {
+    // match[1] contains: "path" or "path (ID: xxx)"
+    const rawPath = match[1].trim()
+    let path = rawPath
+    let markerSessionId: string | null = match[2] || null
+
+    // If no session ID captured by regex, check if it's embedded in the path
+    if (!markerSessionId) {
+      const sessionMatch = rawPath.match(/\s*\(ID:\s*([a-zA-Z0-9]+)\s*\)$/i)
+      if (sessionMatch) {
+        markerSessionId = sessionMatch[1]
+        path = rawPath.substring(0, rawPath.indexOf('(ID:')).trim()
+      }
+    }
+
+    const startPos = match.index
+    const endPos = match.index + match[0].length
+
+    fileMarkers.push({
+      path,
+      markerSessionId,
+      startPos,
+      endPos,
+      hasMatchingEnd: false, // Will be determined below
+    })
+  }
+
+  // Classify markers as target (matching session or legacy no-session) vs foreign (different session)
+  const targetMarkers: typeof fileMarkers = []
+  const foreignMarkers: typeof fileMarkers = []
+
+  for (const marker of fileMarkers) {
+    // Target if: no manifest session (legacy), or marker matches manifest session
+    // Foreign if: manifest has session AND marker has different session
+    const isTarget = !sessionId || marker.markerSessionId === sessionId
+    if (isTarget) {
+      targetMarkers.push(marker)
+    } else {
+      foreignMarkers.push(marker)
+      foreignFiles.push(marker.path)
+    }
+  }
+
+  // Add warning if foreign markers detected
+  if (foreignMarkers.length > 0) {
+    warnings.push(
+      `Note: Detected ${foreignMarkers.length} markers with mismatched Session IDs. These are likely test fixtures or nested content and will be ignored during extraction.`
+    )
+  }
+
+  // Check each target file marker for matching end marker
+  for (let i = 0; i < fileMarkers.length; i++) {
+    const marker = fileMarkers[i]
+    // Target if: no manifest session (legacy), or marker matches manifest session
+    const isTarget = !sessionId || marker.markerSessionId === sessionId
+
+    const nextMarkerStart =
+      i < fileMarkers.length - 1 ? fileMarkers[i + 1].startPos : input.length
+
+    // Look for end marker between this start and next start (or end of content)
+    const contentAfterStart = input.substring(marker.endPos, nextMarkerStart)
+    const hasEndMarker = contentAfterStart.includes(FILE_END_DELIMITER)
+
+    marker.hasMatchingEnd = hasEndMarker
+
+    // Report errors for target files and session mismatches
+    if (isTarget) {
+      if (!hasEndMarker) {
+        errors.push(`Missing end marker for file: ${marker.path}`)
+      } else {
+        // Only add to targetFiles if it has a matching end marker (will be extracted)
+        targetFiles.push(marker.path)
+
+        // Check for empty file warning
+        const endIndex = contentAfterStart.indexOf(FILE_END_DELIMITER)
+        const content = contentAfterStart.substring(0, endIndex).trim()
+        if (content.length === 0) {
+          warnings.push(`Empty file detected: ${marker.path}`)
+        }
+      }
+    } else if (
+      sessionId &&
+      marker.markerSessionId &&
+      marker.markerSessionId !== sessionId
+    ) {
+      // Session ID mismatch: marker has different ID than manifest
+      errors.push(
+        `Session ID mismatch in marker for ${marker.path}: expected ${sessionId}, found ${marker.markerSessionId}`
+      )
+    }
+
+    detectedFiles.push(marker.path)
+  }
+
+  // Count orphaned end markers (end markers without preceding start)
+  const endMarkerCount = (input.match(/<<<<< FILE_END >>>>>/g) || []).length
+  const startMarkerCount = fileMarkers.length
+
+  if (endMarkerCount > startMarkerCount) {
+    const orphanedCount = endMarkerCount - startMarkerCount
+    errors.push(
+      `${orphanedCount} orphaned end marker(s) found without matching start markers`
+    )
+  }
+
+  // Determine overall validity based on TARGET markers only
+  // Valid if: no errors AND (has session-based target markers OR valid legacy format)
+  // Invalid if: has errors OR (no sessionId AND no valid markers)
+  const hasValidTargetMarkers =
+    targetMarkers.length > 0 && targetMarkers.some((m) => m.hasMatchingEnd)
+  const isValid = errors.length === 0 && hasValidTargetMarkers
+
+  return {
+    isValid,
+    sessionId,
+    fileCount: targetMarkers.filter((m) => m.hasMatchingEnd).length,
+    detectedFiles,
+    errors,
+    warnings,
+    // Segmented validation counts
+    targetFileCount: targetMarkers.filter((m) => m.hasMatchingEnd).length,
+    foreignFileCount: foreignMarkers.length,
+    totalMarkersFound: fileMarkers.length,
+    targetFiles,
+    foreignFiles,
+  }
+}
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: core\types.ts (ID: 41a781) >>>>>
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+export interface FileItem {
+  name: string
+  path: string
+  kind: 'file' | 'directory'
+  content?: string | ArrayBuffer
+  size?: number
+}
+
+export interface TreeItem {
+  name: string
+  path: string
+  kind: 'file' | 'directory'
+  children?: TreeItem[]
+}
+
+export type ViewMode = 'list' | 'tree'
+export type AppMode = 'concatenate' | 'deconcatenate'
+export type OutputFormat = 'text' | 'pdf'
+
+/**
+ * Result of validating a concatenated content string
+ */
+export interface ValidationResult {
+  isValid: boolean
+  sessionId: string | null
+  /**
+   * @deprecated Use targetFileCount instead
+   */
+  fileCount: number
+  detectedFiles: string[]
+  errors: string[]
+  warnings: string[]
+  // Segmented validation counts
+  targetFileCount: number
+  foreignFileCount: number
+  totalMarkersFound: number
+  targetFiles: string[]
+  foreignFiles: string[]
+}
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: core\validation.test.ts (ID: 41a781) >>>>>
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import { describe, it, expect } from 'vitest'
+import { validateConcatenation, concatenate } from './engine'
+
+describe('validateConcatenation', () => {
+  describe('valid concatenated strings', () => {
+    it('validates a perfectly valid concatenated string', () => {
+      const files = [
+        { path: 'file1.txt', content: 'Hello World' },
+        { path: 'file2.txt', content: 'Second file content' },
+      ]
+      const concatenated = concatenate(files, '2024-01-01', 'abc123')
+      const result = validateConcatenation(concatenated)
+
+      expect(result.isValid).toBe(true)
+      expect(result.sessionId).toBe('abc123')
+      expect(result.fileCount).toBe(2)
+      expect(result.detectedFiles).toEqual(['file1.txt', 'file2.txt'])
+      expect(result.errors).toHaveLength(0)
+      expect(result.warnings).toHaveLength(0)
+    })
+
+    it('validates legacy format without session ID', () => {
+      const legacyContent = `Concatenated on: 2024-01-01
+
+<<<<< FILE_START: legacy.txt >>>>>
+legacy content
+<<<<< FILE_END >>>>>
+`
+      const result = validateConcatenation(legacyContent)
+
+      expect(result.isValid).toBe(true)
+      expect(result.sessionId).toBeNull()
+      expect(result.fileCount).toBe(1)
+      expect(result.detectedFiles).toEqual(['legacy.txt'])
+      expect(result.errors).toHaveLength(0)
+      expect(result.warnings).toContain(
+        'No session manifest found - using legacy format validation'
+      )
+    })
+
+    it('detects empty files as warnings', () => {
+      const files = [
+        { path: 'empty.txt', content: '' },
+        { path: 'normal.txt', content: 'Has content' },
+      ]
+      const concatenated = concatenate(files, '2024-01-01', 'def456')
+      const result = validateConcatenation(concatenated)
+
+      expect(result.isValid).toBe(true)
+      expect(result.fileCount).toBe(2)
+      expect(result.warnings).toContain('Empty file detected: empty.txt')
+    })
+  })
+
+  describe('invalid concatenated strings', () => {
+    it('detects missing FILE_END marker', () => {
+      const invalidContent = `--- CONCATENATOR_SESSION_ID: abc123 ---
+Concatenated on: 2024-01-01
+
+<<<<< FILE_START: incomplete.txt (ID: abc123) >>>>>
+This content has no end marker
+
+<<<<< FILE_START: valid.txt (ID: abc123) >>>>>
+Valid content
+<<<<< FILE_END >>>>>
+`
+      const result = validateConcatenation(invalidContent)
+
+      expect(result.isValid).toBe(false)
+      expect(result.fileCount).toBe(1)
+      expect(result.errors).toContain(
+        'Missing end marker for file: incomplete.txt'
+      )
+      expect(result.detectedFiles).toContain('incomplete.txt')
+      expect(result.detectedFiles).toContain('valid.txt')
+    })
+
+    it('detects orphaned end markers', () => {
+      const invalidContent = `--- CONCATENATOR_SESSION_ID: abc123 ---
+Concatenated on: 2024-01-01
+
+<<<<< FILE_START: valid.txt (ID: abc123) >>>>>
+Valid content
+<<<<< FILE_END >>>>>
+<<<<< FILE_END >>>>>
+<<<<< FILE_END >>>>>
+`
+      const result = validateConcatenation(invalidContent)
+
+      expect(result.isValid).toBe(false)
+      expect(result.errors).toContain(
+        '2 orphaned end marker(s) found without matching start markers'
+      )
+    })
+
+    it('detects session ID mismatch', () => {
+      const invalidContent = `--- CONCATENATOR_SESSION_ID: abc123 ---
+Concatenated on: 2024-01-01
+
+<<<<< FILE_START: wrong.txt (ID: xyz789) >>>>>
+Content with wrong session ID
+<<<<< FILE_END >>>>>
+`
+      const result = validateConcatenation(invalidContent)
+
+      expect(result.isValid).toBe(false)
+      expect(result.errors).toContain(
+        'Session ID mismatch in marker for wrong.txt: expected abc123, found xyz789'
+      )
+    })
+
+    it('detects corrupted manifest header', () => {
+      const invalidContent = `--- CORRUPTED_HEADER: abc123 ---
+Concatenated on: 2024-01-01
+
+<<<<< FILE_START: file.txt (ID: abc123) >>>>>
+Content
+<<<<< FILE_END >>>>>
+`
+      const result = validateConcatenation(invalidContent)
+
+      expect(result.isValid).toBe(false)
+      expect(result.sessionId).toBeNull()
+      expect(result.errors).toContain('Corrupted manifest header detected')
+    })
+
+    it('detects completely invalid content', () => {
+      const result = validateConcatenation(
+        'This is just random text with no markers'
+      )
+
+      expect(result.isValid).toBe(false)
+      expect(result.fileCount).toBe(0)
+      expect(result.errors).toContain('No valid session manifest header found')
+    })
+  })
+
+  describe('edge cases', () => {
+    it('handles empty string', () => {
+      const result = validateConcatenation('')
+
+      expect(result.isValid).toBe(false)
+      expect(result.fileCount).toBe(0)
+      expect(result.errors).toContain('No valid session manifest header found')
+    })
+
+    it('handles multiple files with mixed validity', () => {
+      const files = [
+        { path: 'valid1.txt', content: 'First valid file' },
+        { path: 'valid2.txt', content: 'Second valid file' },
+      ]
+      let concatenated = concatenate(files, '2024-01-01', 'mix789')
+
+      // Inject a malformed file without end marker
+      concatenated = concatenated.replace(
+        '<<<<< FILE_START: valid2.txt (ID: mix789) >>>>>',
+        '<<<<< FILE_START: invalid.txt (ID: mix789) >>>>>\nNo end marker here\n\n<<<<< FILE_START: valid2.txt (ID: mix789) >>>>>'
+      )
+
+      const result = validateConcatenation(concatenated)
+
+      expect(result.isValid).toBe(false)
+      // 2 valid files (valid1 and valid2 still have their end markers)
+      // 1 invalid file (invalid.txt has no end marker)
+      expect(result.fileCount).toBe(2)
+      expect(result.detectedFiles).toHaveLength(3)
+      expect(result.errors).toContain(
+        'Missing end marker for file: invalid.txt'
+      )
+    })
+
+    it('preserves detected files list even with errors', () => {
+      const invalidContent = `--- CONCATENATOR_SESSION_ID: err001 ---
+Concatenated on: 2024-01-01
+
+<<<<< FILE_START: a.txt (ID: err001) >>>>>
+Content A
+<<<<< FILE_END >>>>>
+<<<<< FILE_START: b.txt (ID: wrong) >>>>>
+Content B
+<<<<< FILE_END >>>>>
+<<<<< FILE_START: c.txt (ID: err001) >>>>>
+Content C
+<<<<< FILE_END >>>>>
+`
+      const result = validateConcatenation(invalidContent)
+
+      expect(result.isValid).toBe(false)
+      expect(result.detectedFiles).toEqual(['a.txt', 'b.txt', 'c.txt'])
+      expect(result.errors).toHaveLength(1)
+      expect(result.errors[0]).toContain('b.txt')
+    })
+  })
+})
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: drivers\zip-driver.ts (ID: 41a781) >>>>>
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import JSZip from 'jszip'
+import type { VirtualFile } from '../core/engine.js'
+
+/**
+ * Create a ZIP archive from an array of virtual files
+ *
+ * Environment-agnostic: works in both Node.js and browser contexts
+ *
+ * @param files - Array of virtual files with path and content
+ * @returns Promise resolving to ZIP data as Uint8Array
+ */
+export async function createZipFromVirtualFiles(
+  files: VirtualFile[]
+): Promise<Uint8Array> {
+  const zip = new JSZip()
+
+  for (const file of files) {
+    zip.file(file.path, file.content)
+  }
+
+  const result = await zip.generateAsync({ type: 'uint8array' })
+  return result
+}
+
+/**
+ * Parse a ZIP archive and extract virtual files
+ *
+ * @param zipData - ZIP file data as ArrayBuffer, Uint8Array, or Buffer
+ * @returns Promise resolving to array of virtual files
+ */
+export async function extractVirtualFilesFromZip(
+  zipData: ArrayBuffer | Uint8Array | Buffer
+): Promise<VirtualFile[]> {
+  const zip = await JSZip.loadAsync(zipData)
+  const files: VirtualFile[] = []
+
+  for (const [path, zipEntry] of Object.entries(zip.files)) {
+    if (!zipEntry.dir) {
+      const content = await zipEntry.async('string')
+      files.push({ path, content })
+    }
+  }
+
+  return files
+}
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: lib\fileIcons.tsx (ID: 41a781) >>>>>
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React from 'react'
+import {
+  Folder,
+  FileText,
+  FileCode,
+  FileJson,
+  FileImage,
+  FileArchive,
+  FileAudio,
+  FileVideo,
+  FileSpreadsheet,
+  File,
+} from 'lucide-react'
+import { cn } from './utils'
+
+/**
+ * Returns the appropriate Lucide icon for a given file name and kind.
+ * @param fileName - The name of the file.
+ * @param kind - The kind of the item ('file' or 'directory').
+ * @returns A React component representing the icon.
+ */
+export const getFileIcon = (fileName: string, kind: 'file' | 'directory') => {
+  if (kind === 'directory')
+    return <Folder className="w-3.5 h-3.5 text-brand-500 shrink-0" />
+
+  const ext = fileName.split('.').pop()?.toLowerCase()
+  const iconClass = 'w-3.5 h-3.5 shrink-0'
+
+  switch (ext) {
+    case 'js':
+    case 'ts':
+    case 'tsx':
+    case 'jsx':
+    case 'html':
+    case 'css':
+    case 'scss':
+    case 'py':
+    case 'rb':
+    case 'go':
+    case 'rs':
+    case 'c':
+    case 'cpp':
+    case 'java':
+    case 'php':
+      return <FileCode className={cn(iconClass, 'text-blue-500')} />
+    case 'json':
+      return <FileJson className={cn(iconClass, 'text-yellow-500')} />
+    case 'md':
+    case 'txt':
+      return <FileText className={cn(iconClass, 'text-slate-400')} />
+    case 'jpg':
+    case 'jpeg':
+    case 'png':
+    case 'gif':
+    case 'svg':
+    case 'webp':
+      return <FileImage className={cn(iconClass, 'text-purple-500')} />
+    case 'zip':
+    case 'tar':
+    case 'gz':
+    case 'rar':
+    case '7z':
+      return <FileArchive className={cn(iconClass, 'text-orange-500')} />
+    case 'mp3':
+    case 'wav':
+    case 'ogg':
+      return <FileAudio className={cn(iconClass, 'text-pink-500')} />
+    case 'mp4':
+    case 'webm':
+    case 'mov':
+      return <FileVideo className={cn(iconClass, 'text-red-500')} />
+    case 'csv':
+    case 'xlsx':
+    case 'xls':
+      return <FileSpreadsheet className={cn(iconClass, 'text-green-500')} />
+    default:
+      return <File className={cn(iconClass, 'text-slate-400')} />
+  }
+}
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: lib\logger.ts (ID: 41a781) >>>>>
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
+
+const LEVELS: Record<LogLevel, number> = {
+  debug: 0,
+  info: 1,
+  warn: 2,
+  error: 3,
+}
+
+// Default level can be overridden via environment variable
+const DEFAULT_LEVEL: LogLevel = 'info'
+
+// Internal mutable state for testing
+let _testLevel: LogLevel | null = null
+
+function isLogLevel(value: string): value is LogLevel {
+  return value in LEVELS
+}
+
+function getCurrentLevel(): LogLevel {
+  // Test override takes precedence
+  if (_testLevel !== null) {
+    return _testLevel
+  }
+  // Then check environment variable
+  const envLevel = process.env.LOG_LEVEL
+  if (envLevel) {
+    if (isLogLevel(envLevel)) {
+      return envLevel
+    }
+    console.warn(
+      `[logger] Invalid LOG_LEVEL "${envLevel}". Falling back to default level "${DEFAULT_LEVEL}".`
+    )
+  }
+  return DEFAULT_LEVEL
+}
+
+function shouldLog(level: LogLevel): boolean {
+  return LEVELS[level] >= LEVELS[getCurrentLevel()]
+}
+
+function formatMessage(level: LogLevel, message: string): string {
+  const timestamp = new Date().toISOString()
+  return `[${timestamp}] [${level.toUpperCase()}] ${message}`
+}
+
+export const logger = {
+  debug: (message: string, ...args: unknown[]): void => {
+    if (shouldLog('debug')) {
+      console.debug(formatMessage('debug', message), ...args)
+    }
+  },
+  info: (message: string, ...args: unknown[]): void => {
+    if (shouldLog('info')) {
+      console.info(formatMessage('info', message), ...args)
+    }
+  },
+  warn: (message: string, ...args: unknown[]): void => {
+    if (shouldLog('warn')) {
+      console.warn(formatMessage('warn', message), ...args)
+    }
+  },
+  error: (message: string, ...args: unknown[]): void => {
+    if (shouldLog('error')) {
+      console.error(formatMessage('error', message), ...args)
+    }
+  },
+  // Internal method for testing only
+  _setLevel: (level: LogLevel | null): void => {
+    _testLevel = level
+  },
+}
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: lib\utils.ts (ID: 41a781) >>>>>
+import { clsx, type ClassValue } from 'clsx'
+import { twMerge } from 'tailwind-merge'
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
+}
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: main.tsx (ID: 41a781) >>>>>
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import posthog from 'posthog-js'
+import App from './App.tsx'
+import './web/index.css'
+
+posthog.init(import.meta.env.VITE_POSTHOG_KEY, {
+  api_host: import.meta.env.VITE_POSTHOG_HOST || 'https://us.i.posthog.com',
+  defaults: '2026-01-30',
+  persistence: 'localStorage+cookie',
+  person_profiles: 'always',
+  session_recording: {
+    maskAllInputs: true,
+    maskTextSelector: '.ph-no-capture',
+  },
+  loaded: (ph) => {
+    if (import.meta.env.DEV) ph.debug()
+    console.log('PostHog Loaded Successfully')
+  },
+})
+
+// if (import.meta.env.DEV) {
+;(window as Window & { posthog?: typeof posthog }).posthog = posthog
+// }
+
+import { ModeProvider } from './web/context/ModeContext.tsx'
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <ModeProvider>
+      <App />
+    </ModeProvider>
+  </StrictMode>
+)
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: vite-env.d.ts (ID: 41a781) >>>>>
+/// <reference types="vite/client" />
+
+interface ImportMetaEnv {
+  readonly VITE_POSTHOG_KEY: string
+  readonly VITE_POSTHOG_HOST: string
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv
+}
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: web\components\ModeSwitch.tsx (ID: 41a781) >>>>>
+import React from 'react'
+import { useWorkbench } from '../hooks/useWorkbench'
+import { AppMode } from '../types/workbench'
+
+export const ModeSwitch: React.FC = () => {
+  const { mode, setMode } = useWorkbench()
+
+  const handleModeChange = (newMode: AppMode) => {
+    setMode(newMode)
+  }
+
+  return (
+    <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-700 w-full">
+      <button
+        onClick={() => handleModeChange(AppMode.CONCATENATE)}
+        className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+          mode === AppMode.CONCATENATE
+            ? 'bg-blue-600 text-white shadow-sm'
+            : 'text-slate-400 hover:text-slate-200'
+        }`}
+      >
+        Concatenate
+      </button>
+      <button
+        onClick={() => handleModeChange(AppMode.DECONCATENATE)}
+        className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+          mode === AppMode.DECONCATENATE
+            ? 'bg-blue-600 text-white shadow-sm'
+            : 'text-slate-400 hover:text-slate-200'
+        }`}
+      >
+        De-concatenate
+      </button>
+    </div>
+  )
+}
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: web\context\ModeContext.tsx (ID: 41a781) >>>>>
+import React, { useCallback } from 'react'
+import { useLocalStorage } from '../hooks/useLocalStorage'
+import { AppMode, ViewPreference } from '../types/workbench'
+import { ModeContext } from './ModeContextCore'
+import { DEFAULT_IGNORE_LIST } from '../../core/constants'
+
+export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const [mode, setMode] = useLocalStorage<AppMode>(
+    'concat_mode',
+    AppMode.CONCATENATE
+  )
+  const [view, setView] = useLocalStorage<ViewPreference>(
+    'concat_view',
+    ViewPreference.LIST
+  )
+  const [ignoreList, setIgnoreList] = useLocalStorage<string[]>(
+    'concat_ignore',
+    [...DEFAULT_IGNORE_LIST]
+  )
+  const isInitialMount = React.useRef(true)
+
+  // Fetch initial ignore list from server and sync with local
+  React.useEffect(() => {
+    const fetchFromServer = async () => {
+      try {
+        const response = await fetch('/api/ignore-list')
+        if (response.ok) {
+          const serverList = await response.json()
+          if (Array.isArray(serverList)) {
+            // merge server list with local, but prefer local for consistency
+            setIgnoreList((prev) => {
+              const merged = Array.from(new Set([...prev, ...serverList]))
+              return merged.sort((a, b) => a.localeCompare(b))
+            })
+          }
+        }
+      } catch {
+        console.warn(
+          'Failed to fetch ignore list from server, using local only.'
+        )
+      }
+    }
+    fetchFromServer()
+  }, [setIgnoreList])
+
+  // Sync back to server on changes
+  React.useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false
+      return
+    }
+
+    const saveToServer = async () => {
+      try {
+        await fetch('/api/ignore-list', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(ignoreList),
+        })
+      } catch {
+        console.error('Failed to sync ignore list to server')
+      }
+    }
+    saveToServer()
+  }, [ignoreList])
+
+  const [isSidebarOpen, setIsSidebarOpen] = useLocalStorage<boolean>(
+    'concat_sidebar',
+    true
+  )
+
+  const resetWorkbench = useCallback(() => {
+    // Crucial for Task CONCAT-01: Clear buffers on mode switch to prevent memory leaks
+    setIgnoreList([])
+    // Trigger any additional cleanup for file streams here
+  }, [setIgnoreList])
+
+  const compiledIgnores = React.useMemo(() => {
+    return ignoreList.map((pattern) => {
+      if (pattern.startsWith('/')) {
+        const lastSlash = pattern.lastIndexOf('/')
+        if (lastSlash > 0) {
+          const body = pattern.slice(1, lastSlash)
+          const flags = pattern.slice(lastSlash + 1)
+          try {
+            return new RegExp(body, flags)
+          } catch {
+            return pattern
+          }
+        }
+      }
+      return pattern
+    })
+  }, [ignoreList])
+
+  const handleModeChange = (newMode: AppMode) => {
+    if (newMode !== mode) {
+      resetWorkbench()
+      setMode(newMode)
+    }
+  }
+
+  return (
+    <ModeContext.Provider
+      value={{
+        mode,
+        view,
+        ignoreList,
+        compiledIgnores,
+        isSidebarOpen,
+        setMode: handleModeChange,
+        setView,
+        setIgnoreList,
+        setSidebarOpen: setIsSidebarOpen,
+        resetWorkbench,
+      }}
+    >
+      {children}
+    </ModeContext.Provider>
+  )
+}
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: web\context\ModeContextCore.ts (ID: 41a781) >>>>>
+import { createContext } from 'react'
+import { AppMode, ViewPreference, WorkbenchState } from '../types/workbench'
+
+export interface ModeContextType extends WorkbenchState {
+  setMode: (mode: AppMode) => void
+  setView: (view: ViewPreference) => void
+  setIgnoreList: (tags: string[]) => void
+  setSidebarOpen: (isOpen: boolean) => void
+  resetWorkbench: () => void
+}
+
+export const ModeContext = createContext<ModeContextType | undefined>(undefined)
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: web\features\concatenator\components\ConcatenatorLogo.tsx (ID: 41a781) >>>>>
+interface ConcatenatorLogoProps {
+  className?: string
+}
+
+export function ConcatenatorLogo({ className }: ConcatenatorLogoProps) {
+  return (
+    <svg viewBox="0 0 100 109" className={className}>
+      <g transform="translate(0,109) scale(0.1,-0.1)">
+        {/* Main C */}
+        <path
+          className="fill-current text-slate-800 dark:text-slate-200"
+          d="M475 1085 c-5 -2 -23 -6 -38 -9 -22 -5 -27 -11 -22 -25 3 -11 0 -23
+-6 -27 -9 -5 -10 -2 -6 9 4 12 0 18 -17 23 -27 6 -84 -19 -93 -42 -3 -8 -13
+-12 -22 -9 -20 6 -81 -46 -81 -69 0 -9 -6 -13 -13 -10 -15 5 -67 -56 -71 -84
+-2 -9 -8 -18 -15 -20 -15 -5 -41 -56 -41 -82 0 -12 -7 -28 -15 -36 -14 -14
+-17 -29 -19 -89 -1 -11 -5 -26 -9 -33 -9 -13 -2 -127 9 -155 3 -10 10 -17 15
+-17 5 0 7 -11 3 -24 -6 -25 19 -86 36 -86 6 0 10 -10 10 -23 0 -23 51 -87 69
+-87 6 0 8 -6 5 -13 -6 -16 56 -67 81 -67 9 0 14 -4 10 -10 -7 -12 73 -53 91
+-46 8 3 14 -1 14 -8 0 -15 74 -38 96 -29 8 3 21 0 29 -7 18 -15 98 -7 103 10
+3 8 8 8 18 0 16 -14 82 4 101 27 6 8 17 12 23 8 13 -8 77 31 91 56 5 11 15 17
+20 13 14 -8 79 55 79 77 0 9 9 19 19 22 31 8 54 63 47 111 -6 35 -14 45 -56
+73 -27 18 -55 33 -62 33 -7 0 -31 -28 -53 -63 -43 -66 -74 -97 -139 -137 -36
+-22 -52 -25 -136 -25 -84 0 -101 3 -146 27 -64 33 -129 105 -162 178 -21 48
+-24 65 -19 135 9 138 80 250 194 306 68 33 189 32 253 -1 80 -41 151 -116 166
+-175 4 -15 13 -29 21 -32 13 -5 137 41 157 58 11 9 -11 74 -30 90 -13 10 -17
+10 -24 -2 -7 -11 -12 -11 -22 -1 -9 9 -9 12 4 12 9 0 18 6 21 14 7 18 -38 83
+-63 91 -11 4 -18 10 -15 15 8 13 -46 60 -77 67 -16 3 -28 11 -28 18 0 17 -84
+50 -100 40 -7 -4 -16 -2 -20 4 -11 20 -80 31 -101 18 -14 -9 -21 -9 -31 1 -12
+12 -15 13 -33 7z m28 -12 c4 -3 2 -12 -4 -20 -7 -7 -14 -45 -17 -83 l-5 -70
+-38 0 c-30 0 -39 4 -39 18 0 9 -3 33 -6 54 -6 33 -4 37 17 40 19 2 24 9 22 30
+-1 22 3 28 25 31 15 2 30 5 33 6 3 0 9 -2 12 -6z m123 -15 c3 -5 -1 -15 -10
+-21 -9 -7 -24 -37 -34 -67 -16 -47 -23 -55 -47 -58 -39 -5 -47 8 -39 65 6 46
+8 49 30 45 20 -4 25 1 30 25 5 26 9 29 35 25 16 -2 32 -9 35 -14z m-86 -8 c0
+-5 -5 -10 -11 -10 -5 0 -7 5 -4 10 3 6 8 10 11 10 2 0 4 -4 4 -10z m-163 -21
+c-3 -11 -1 -50 5 -85 5 -36 8 -67 6 -70 -3 -2 -18 -7 -35 -10 -29 -6 -32 -4
+-48 40 -18 46 -18 46 6 65 20 16 22 21 10 35 -16 19 -14 21 19 35 37 15 43 13
+37 -10z m373 -21 c0 -4 -6 -8 -14 -8 -15 0 -59 -53 -77 -94 -12 -24 -13 -25
+-43 -9 -17 8 -32 16 -33 18 -3 2 27 97 33 103 1 2 12 -1 23 -8 18 -9 23 -7 32
+14 11 24 12 24 45 8 19 -8 34 -19 34 -24z m-90 22 c0 -5 -4 -10 -10 -10 -5 0
+-10 5 -10 10 0 6 5 10 10 10 6 0 10 -4 10 -10z m-386 -55 c-6 -15 22 -100 40
+-124 8 -10 3 -19 -19 -37 -17 -13 -32 -24 -35 -24 -3 0 -17 19 -32 42 -25 40
+-26 44 -10 61 14 15 14 21 3 39 -12 20 -11 24 13 45 28 24 49 23 40 -2z m36
+15 c0 -5 -4 -10 -10 -10 -5 0 -10 5 -10 10 0 6 5 10 10 10 6 0 10 -4 10 -10z
+m460 -10 c0 -5 -4 -10 -10 -10 -5 0 -10 5 -10 10 0 6 5 10 10 10 6 0 10 -4 10
+-10z m80 -42 c0 -4 -8 -8 -17 -8 -10 0 -40 -21 -67 -45 l-49 -46 -26 23 c-14
+13 -28 24 -30 25 -1 1 10 19 25 40 16 21 30 40 32 43 1 2 13 -2 24 -9 20 -12
+24 -11 36 7 l14 21 29 -21 c16 -12 29 -25 29 -30z m-635 -17 c3 -5 1 -12 -5
+-16 -5 -3 -10 1 -10 9 0 18 6 21 15 7z m-35 -22 c0 -20 53 -107 73 -121 6 -3
+0 -19 -15 -37 l-26 -30 -41 35 c-39 34 -40 36 -25 59 14 21 14 24 -5 37 -20
+14 -20 14 2 46 26 37 37 40 37 11z m692 -13 c14 14 17 13 37 -12 27 -35 27
+-44 -4 -44 -14 0 -48 -11 -77 -25 -28 -14 -52 -24 -53 -22 0 1 -9 14 -18 29
+-17 27 -17 28 20 62 38 34 38 34 58 15 19 -17 22 -17 37 -3z m-2 14 c0 -5 -4
+-10 -9 -10 -6 0 -13 5 -16 10 -3 6 1 10 9 10 9 0 16 -4 16 -10z m-730 -81 c0
+-5 -4 -9 -10 -9 -5 0 -10 7 -10 16 0 8 5 12 10 9 6 -3 10 -10 10 -16z m760
+-12 c0 -23 21 -37 41 -26 14 7 21 5 29 -11 19 -36 7 -51 -61 -80 l-67 -28 -21
+55 c-12 31 -20 57 -19 58 8 7 84 44 91 45 4 0 7 -6 7 -13z m-790 -11 c0 -15
+84 -96 100 -96 8 0 -11 -51 -25 -68 -1 -2 -24 7 -49 20 -42 20 -46 25 -41 49
+5 21 2 30 -14 38 -17 9 -18 15 -8 41 12 30 37 42 37 16z m-25 -75 c3 -5 1 -12
+-4 -15 -5 -3 -11 1 -15 9 -6 16 9 21 19 6z m-18 -39 c6 -10 36 -30 68 -43 53
+-23 56 -26 50 -53 -3 -16 -7 -32 -10 -34 -2 -2 -26 0 -52 5 -45 8 -48 10 -48
+38 0 23 -5 31 -22 33 -23 3 -29 24 -17 56 8 21 17 20 31 -2z m-7 -83 c0 -5 -4
+-9 -10 -9 -5 0 -10 7 -10 16 0 8 5 12 10 9 6 -3 10 -10 10 -16z m-11 -33 c9
+-7 44 -19 79 -26 l62 -13 2 -43 c0 -24 1 -49 2 -56 1 -6 -10 -15 -24 -18 -80
+-21 -80 -21 -80 -1 0 23 -16 35 -45 36 -18 0 -20 8 -23 68 -2 70 1 76 27 53z
+m21 -146 c0 -5 -4 -10 -10 -10 -5 0 -10 5 -10 10 0 6 5 10 10 10 6 0 10 -4 10
+-10z m157 -45 l11 -35 -45 -20 c-49 -22 -63 -24 -63 -12 -1 23 -18 34 -38 23
+-19 -10 -23 -8 -37 18 -21 41 -20 42 22 36 22 -4 57 0 83 9 25 7 48 14 51 15
+3 1 10 -15 16 -34z m49 -67 l16 -31 -38 -33 c-44 -38 -52 -40 -60 -19 -7 17
+-40 20 -49 4 -5 -7 -16 -2 -31 12 -31 29 -30 39 4 39 22 0 96 31 139 59 1 0
+10 -13 19 -31z m583 -9 c31 -37 33 -41 17 -57 -14 -16 -14 -21 -2 -38 13 -17
+12 -22 -6 -41 -26 -28 -38 -29 -38 -3 0 10 -16 45 -35 77 l-34 58 27 22 c15
+13 29 23 32 22 3 0 20 -18 39 -40z m-739 11 c0 -5 -7 -10 -15 -10 -8 0 -15 5
+-15 10 0 6 7 10 15 10 8 0 15 -4 15 -10z m206 -126 c-30 -39 -32 -40 -54 -26
+-21 14 -24 13 -39 -7 l-15 -22 -24 22 c-30 28 -30 39 -1 39 12 0 44 20 71 44
+l50 43 22 -26 22 -25 -32 -42z m463 -15 c-18 -14 -20 -19 -9 -38 6 -13 10 -24
+8 -25 -25 -19 -54 -36 -61 -36 -5 0 -6 12 -3 28 4 16 -2 51 -14 86 -11 33 -19
+60 -18 61 2 1 16 9 33 18 l30 15 27 -46 27 -47 -20 -16z m111 56 c0 -8 -4 -15
+-10 -15 -5 0 -10 7 -10 15 0 8 5 15 10 15 6 0 10 -7 10 -15z m-720 -5 c0 -5
+-4 -10 -10 -10 -5 0 -10 5 -10 10 0 6 5 10 10 10 6 0 10 -4 10 -10z m230 -10
+l25 -19 -23 -46 c-19 -40 -25 -45 -46 -39 -18 4 -28 0 -37 -14 -12 -19 -15
+-19 -41 -6 -32 16 -37 34 -10 34 11 0 35 23 58 55 21 30 41 55 44 55 3 0 16
+-9 30 -20z m289 -36 c12 -49 9 -64 -16 -64 -12 0 -14 -7 -10 -29 5 -26 3 -31
+-25 -40 -17 -6 -31 -11 -32 -11 -1 0 -1 40 -1 90 0 94 1 96 51 99 18 1 24 -8
+33 -45z m-206 17 c25 -10 25 -11 13 -63 -11 -49 -14 -53 -38 -50 -20 2 -27 -2
+-32 -21 -5 -20 -10 -23 -36 -19 -37 5 -46 18 -23 31 10 5 32 37 48 70 31 65
+31 66 68 52z m102 -4 c1 -1 5 -25 9 -54 6 -51 6 -52 -21 -55 -22 -2 -28 -8
+-28 -28 0 -22 -5 -25 -38 -28 -38 -3 -47 7 -24 27 8 6 20 43 27 82 l14 71 30
+-6 c16 -4 30 -7 31 -9z m215 -36 c0 -6 -4 -13 -10 -16 -5 -3 -10 1 -10 9 0 9
+5 16 10 16 6 0 10 -4 10 -9z m-540 -11 c0 -5 -7 -10 -16 -10 -8 0 -12 5 -9 10
+3 6 10 10 16 10 5 0 9 -4 9 -10z m89 -61 c-16 -10 -23 -4 -14 10 3 6 11 8 17
+5 6 -4 5 -9 -3 -15z m345 6 c-4 -8 -10 -12 -15 -9 -11 6 -2 24 11 24 5 0 7 -7
+4 -15z m-122 -37 c-7 -7 -12 -8 -12 -2 0 14 12 26 19 19 2 -3 -1 -11 -7 -17z"
+        />
+
+        {/* Last Icon */}
+        <path
+          className="fill-current text-slate-400 dark:text-slate-600"
+          d="M-102 8 c0 -2 -7 -6 -15 -10 -8 -3 -15 -1 -15 4 0 6 7 10 15 10 8 0 15 -2 15
+-4z"
+        />
+      </g>
+    </svg>
+  )
+}
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: web\features\concatenator\components\FileView.tsx (ID: 41a781) >>>>>
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React from 'react'
+import {
+  Files,
+  List,
+  Network,
+  FileCode,
+  Ban,
+  X,
+  Download,
+  Trash2,
+  FolderArchive,
+} from 'lucide-react'
+import { cn } from '../../../../lib/utils'
+import { useWorkbench } from '../../../hooks/useWorkbench'
+import { AppMode as WorkbenchMode } from '../../../types/workbench'
+import {
+  FileItem,
+  TreeItem,
+  ViewMode,
+  OutputFormat,
+} from '../../../../core/types'
+import { getFileIcon } from '../../../../lib/fileIcons'
+import { TreeNode } from './TreeNode'
+import { OutputFormatToggle } from './OutputFormatToggle'
+
+interface FileViewProps {
+  files: FileItem[]
+  filteredFiles: FileItem[]
+  viewMode: ViewMode
+  setViewMode: (mode: ViewMode) => void
+  fileTree: TreeItem
+  expandedPaths: Set<string>
+  setExpandedPaths: (paths: Set<string>) => void
+  isProcessing: boolean
+  onConcatenate: () => void
+  onClearAll: () => void
+  onIgnoreFile: (name: string) => void
+  onRemoveFile: (file: FileItem) => void
+  onDownloadAsZip?: () => void
+  outputFormat: OutputFormat
+  setOutputFormat: (format: OutputFormat) => void
+}
+
+/**
+ * A component that displays the list or tree of selected files and provides actions like concatenate and clear.
+ */
+export const FileView: React.FC<FileViewProps> = ({
+  files,
+  filteredFiles,
+  viewMode,
+  setViewMode,
+  fileTree,
+  expandedPaths,
+  setExpandedPaths,
+  isProcessing,
+  onConcatenate,
+  onClearAll,
+  onIgnoreFile,
+  onRemoveFile,
+  onDownloadAsZip,
+  outputFormat,
+  setOutputFormat,
+}) => {
+  const { mode } = useWorkbench()
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between h-9">
+        <div className="flex items-center gap-2 text-slate-500">
+          <Files className="w-4 h-4" />
+          <h2 className="text-sm font-semibold uppercase tracking-wider ph-no-capture">
+            Selected Files
+            <span className="ml-2 tabular-nums opacity-60">
+              ({filteredFiles.filter((f) => f.kind === 'file').length})
+            </span>
+          </h2>
+        </div>
+
+        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-lg">
+          <button
+            onClick={() => setViewMode('list')}
+            aria-label="List view"
+            className={cn(
+              'p-1.5 rounded-md transition-all',
+              viewMode === 'list'
+                ? 'bg-white dark:bg-slate-800 shadow-sm text-brand-500'
+                : 'text-slate-400'
+            )}
+          >
+            <List className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => setViewMode('tree')}
+            aria-label="Tree view"
+            className={cn(
+              'p-1.5 rounded-md transition-all',
+              viewMode === 'tree'
+                ? 'bg-white dark:bg-slate-800 shadow-sm text-brand-500'
+                : 'text-slate-400'
+            )}
+          >
+            <Network className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden shadow-sm min-h-[300px]">
+        {files.length === 0 ? (
+          <div className="h-full flex flex-col items-center justify-center p-12 text-slate-400 gap-2">
+            <FileCode className="w-12 h-12 opacity-20" />
+            <p>No files selected</p>
+          </div>
+        ) : (
+          <div className="p-2">
+            {viewMode === 'list' ? (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+                {filteredFiles
+                  .filter((f) => f.kind === 'file')
+                  .map((file, index) => (
+                    <div
+                      key={`${file.path}-${index}`}
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all group min-w-0"
+                    >
+                      {getFileIcon(file.name, file.kind)}
+                      <div className="flex flex-col min-w-0 flex-1 ph-no-capture">
+                        <span className="text-sm font-medium truncate leading-tight">
+                          {file.name}
+                        </span>
+                        <span
+                          className="text-[10px] text-slate-400 truncate leading-tight cursor-help"
+                          title={file.path}
+                        >
+                          {file.path.substring(
+                            0,
+                            file.path.lastIndexOf('/') + 1
+                          ) || './'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => onIgnoreFile(file.name)}
+                          className="p-1 text-slate-400 hover:text-brand-500 transition-all"
+                          title={`Ignore ${file.name}`}
+                        >
+                          <Ban className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={() => onRemoveFile(file)}
+                          className="p-1 text-slate-400 hover:text-red-500 transition-all"
+                          title={`Remove ${file.name}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            ) : (
+              <TreeNode
+                node={fileTree}
+                expandedPaths={expandedPaths}
+                setExpandedPaths={setExpandedPaths}
+              />
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800/50">
+        <div className="flex items-center gap-4">
+          {mode === WorkbenchMode.CONCATENATE && (
+            <OutputFormatToggle
+              outputFormat={outputFormat}
+              setOutputFormat={setOutputFormat}
+            />
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {mode === WorkbenchMode.CONCATENATE ? (
+            <button
+              onClick={onConcatenate}
+              disabled={filteredFiles.length === 0 || isProcessing}
+              className="px-8 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-semibold shadow-lg shadow-brand-600/20 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95"
+            >
+              {isProcessing ? (
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <Download className="w-5 h-5" />
+              )}
+              Concatenate & Download
+            </button>
+          ) : (
+            <button
+              onClick={onDownloadAsZip}
+              disabled={
+                filteredFiles.length === 0 || isProcessing || !onDownloadAsZip
+              }
+              className="px-8 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-semibold shadow-lg shadow-brand-600/20 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95"
+              title="Download as ZIP"
+            >
+              <FolderArchive className="w-5 h-5" />
+              <span className="">Download ZIP</span>
+            </button>
+          )}
+
+          <button
+            onClick={onClearAll}
+            disabled={files.length === 0 || isProcessing}
+            className="ml-4 p-2.5 flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            title="Clear All"
+          >
+            <Trash2 className="w-5 h-5" />
+            <span className="hidden sm:inline text-xs uppercase tracking-wider font-bold">
+              Clear All
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: web\features\concatenator\components\Footer.tsx (ID: 41a781) >>>>>
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React from 'react'
+
+/**
+ * The application footer.
+ */
+export const Footer: React.FC = () => {
+  return (
+    <footer className="max-w-4xl mx-auto px-6 py-12 border-t border-slate-200 dark:border-slate-800">
+      <div className="flex flex-col items-center space-y-2">
+        <p className="text-center text-sm text-slate-400">
+          Minimalist File Concatenator &nbsp;•&nbsp; Built with React & Tailwind
+        </p>
+        <p>
+          <span
+            className="text-xs text-slate-400 cursor-help"
+            title="Your data never leaves this device. Clearing your browser cache will reset the app."
+          >
+            Storage: Local Only
+          </span>
+          <span className="text-sm text-slate-400">&nbsp; • &nbsp;</span>
+          <a
+            href="https://github.com/Kolla-Engineering-Labs/concatenator#Apache-2.0-1-ov-file"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-slate-400 hover:text-brand-500 transition-colors"
+          >
+            Apache 2.0
+          </a>
+          <span className="text-sm text-slate-400">&nbsp; • &nbsp;</span>
+          <a
+            href="https://posthog.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-slate-400 hover:text-brand-500 transition-colors"
+          >
+            Usage Analytics: Privacy-Preserving & Anonymous via PostHog
+          </a>
+        </p>
+        <p className="text-xs text-slate-400">
+          © 2026{' '}
+          <a
+            href="https://github.com/Kolla-Engineering-Labs/concatenator"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-brand-500 transition-colors"
+          >
+            Kolla Engineering Labs
+          </a>
+        </p>
+      </div>
+    </footer>
+  )
+}
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: web\features\concatenator\components\Header.tsx (ID: 41a781) >>>>>
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React from 'react'
+import { Sun, Moon } from 'lucide-react'
+import { ConcatenatorLogo } from './ConcatenatorLogo'
+
+interface HeaderProps {
+  isDarkMode: boolean
+  setIsDarkMode: (isDark: boolean) => void
+  compact?: boolean
+}
+
+/**
+ * The application header containing the logo and global actions.
+ */
+export const Header: React.FC<HeaderProps> = ({
+  isDarkMode,
+  setIsDarkMode,
+  compact = false,
+}) => {
+  return (
+    <header
+      className={`${compact ? '' : 'sticky top-0 z-50 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800'}`}
+    >
+      <div
+        className={`${compact ? 'flex items-center justify-between' : 'max-w-4xl mx-auto px-6 py-4 flex items-center justify-between'}`}
+      >
+        <div className="flex items-center gap-3">
+          <ConcatenatorLogo
+            className={compact ? 'h-6 w-auto' : 'h-12 w-auto'}
+          />
+          <h1
+            className={`${compact ? 'text-base' : 'text-xl'} font-display font-bold tracking-tight`}
+          >
+            Concatenator
+          </h1>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsDarkMode(!isDarkMode)}
+            className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 transition-colors"
+            tabIndex={0}
+            title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {isDarkMode ? (
+              <Sun className="w-5 h-5" />
+            ) : (
+              <Moon className="w-5 h-5" />
+            )}
+          </button>
+        </div>
+      </div>
+    </header>
+  )
+}
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: web\features\concatenator\components\IgnoreList.tsx (ID: 41a781) >>>>>
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React from 'react'
+import { motion, AnimatePresence } from 'motion/react'
+import { Settings2, Maximize2, Minimize2, X, Plus } from 'lucide-react'
+
+interface IgnoreListProps {
+  ignoreList: string[]
+  isIgnoreListMinimized: boolean
+  setIsIgnoreListMinimized: (minimized: boolean) => void
+  newIgnoreItem: string
+  setNewIgnoreItem: (item: string) => void
+  addIgnoreItem: () => void
+  removeIgnoreItem: (item: string) => void
+}
+
+/**
+ * A component for managing the list of files and folders to ignore during concatenation.
+ */
+export const IgnoreList: React.FC<IgnoreListProps> = ({
+  ignoreList,
+  isIgnoreListMinimized,
+  setIsIgnoreListMinimized,
+  newIgnoreItem,
+  setNewIgnoreItem,
+  addIgnoreItem,
+  removeIgnoreItem,
+}) => {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between h-9">
+        <div className="flex items-center gap-2 text-slate-500">
+          <Settings2 className="w-4 h-4" />
+          <h2 className="text-sm font-semibold uppercase tracking-wider">
+            Ignore List
+          </h2>
+          {!isIgnoreListMinimized && (
+            <span className="text-xs text-slate-400 font-normal normal-case hidden sm:inline">
+              (files/folders matching these names will be skipped)
+            </span>
+          )}
+        </div>
+        <button
+          onClick={() => setIsIgnoreListMinimized(!isIgnoreListMinimized)}
+          className="p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors text-slate-400 hover:text-brand-500"
+          title={
+            isIgnoreListMinimized
+              ? 'Expand ignore list'
+              : 'Minimize ignore list'
+          }
+        >
+          {isIgnoreListMinimized ? (
+            <Maximize2 className="w-4 h-4" />
+          ) : (
+            <Minimize2 className="w-4 h-4" />
+          )}
+        </button>
+      </div>
+
+      <AnimatePresence>
+        {!isIgnoreListMinimized && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 pb-8 shadow-sm">
+              <div className="flex flex-wrap gap-2 items-center">
+                <AnimatePresence mode="popLayout">
+                  {ignoreList.map((item, index) => (
+                    <motion.div
+                      key={`${item}-${index}`}
+                      layout
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      transition={{ duration: 0.15 }}
+                      className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-sm font-medium group border border-slate-200 dark:border-slate-700 hover:border-brand-300 dark:hover:border-brand-700 transition-colors"
+                    >
+                      <span>{item}</span>
+                      <button
+                        onClick={() => removeIgnoreItem(item)}
+                        className="p-0.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md text-slate-400 hover:text-red-500 transition-colors"
+                        title={`Remove ${item}`}
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+
+                <div className="relative flex-grow min-w-[150px] max-w-xs">
+                  <input
+                    type="text"
+                    value={newIgnoreItem}
+                    onChange={(e) => setNewIgnoreItem(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        addIgnoreItem()
+                      }
+                    }}
+                    placeholder="Add ignore pattern..."
+                    className="w-full bg-transparent border-none focus:ring-0 text-sm py-1 px-2 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500"
+                  />
+                  <div className="absolute top-full left-0 mt-1 text-[10px] text-slate-400 whitespace-nowrap">
+                    {newIgnoreItem.includes('*') &&
+                    !newIgnoreItem.startsWith('/') ? (
+                      <span className="text-brand-500 dark:text-brand-400 font-medium">
+                        Tip: For wildcards, use regex:{' '}
+                        <code className="bg-brand-50 dark:bg-brand-900/20 px-1 rounded">
+                          /{newIgnoreItem.replace(/\*/g, '.*')}/
+                        </code>
+                      </span>
+                    ) : (
+                      <>
+                        Tip: Use{' '}
+                        <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">
+                          /pattern/
+                        </code>{' '}
+                        for regex (e.g.{' '}
+                        <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">
+                          /\.test\.ts$/
+                        </code>
+                        )
+                      </>
+                    )}
+                  </div>
+                  {newIgnoreItem && (
+                    <button
+                      onClick={addIgnoreItem}
+                      className="absolute right-1 top-1/2 -translate-y-1/2 p-1 text-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded-md transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: web\features\concatenator\components\OutputFormatToggle.tsx (ID: 41a781) >>>>>
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React from 'react'
+import { cn } from '../../../../lib/utils'
+import { OutputFormat } from '../../../../core/types'
+
+interface OutputFormatToggleProps {
+  outputFormat: OutputFormat
+  setOutputFormat: (format: OutputFormat) => void
+}
+
+/**
+ * A toggle switch to choose between TEXT and PDF output formats.
+ */
+export const OutputFormatToggle: React.FC<OutputFormatToggleProps> = ({
+  outputFormat,
+  setOutputFormat,
+}) => {
+  return (
+    <div className="flex p-1 bg-slate-200 dark:bg-slate-900 rounded-lg w-fit">
+      <button
+        onClick={() => setOutputFormat('text')}
+        className={cn(
+          'px-4 py-1.5 rounded-md text-sm font-medium transition-all',
+          outputFormat === 'text'
+            ? 'bg-white dark:bg-slate-800 shadow-sm text-brand-600 dark:text-brand-400'
+            : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+        )}
+      >
+        TEXT
+      </button>
+      <button
+        onClick={() => setOutputFormat('pdf')}
+        className={cn(
+          'px-4 py-1.5 rounded-md text-sm font-medium transition-all',
+          outputFormat === 'pdf'
+            ? 'bg-white dark:bg-slate-800 shadow-sm text-brand-600 dark:text-brand-400'
+            : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+        )}
+      >
+        PDF
+      </button>
+    </div>
+  )
+}
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: web\features\concatenator\components\TreeNode.tsx (ID: 41a781) >>>>>
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React from 'react'
+import { ChevronRight, ChevronDown, Folder } from 'lucide-react'
+import { motion, AnimatePresence } from 'motion/react'
+import { cn } from '../../../../lib/utils'
+import { TreeItem } from '../../../../core/types'
+import { getFileIcon } from '../../../../lib/fileIcons'
+
+interface TreeNodeProps {
+  node: TreeItem
+  depth?: number
+  expandedPaths: Set<string>
+  setExpandedPaths: (paths: Set<string>) => void
+}
+
+/**
+ * A recursive component that renders a file tree structure.
+ */
+export const TreeNode: React.FC<TreeNodeProps> = ({
+  node,
+  depth = 0,
+  expandedPaths,
+  setExpandedPaths,
+}) => {
+  const isExpanded = expandedPaths.has(node.path)
+  const hasChildren = node.children && node.children.length > 0
+
+  const toggleExpand = () => {
+    const next = new Set(expandedPaths)
+    if (isExpanded) next.delete(node.path)
+    else next.add(node.path)
+    setExpandedPaths(next)
+  }
+
+  return (
+    <div className="select-none">
+      <div
+        className={cn(
+          'flex items-center py-1 px-2 rounded-md cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors',
+          depth === 0 && 'font-semibold text-slate-500'
+        )}
+        style={{ paddingLeft: `${depth * 1.25 + 0.5}rem` }}
+        onClick={hasChildren ? toggleExpand : undefined}
+      >
+        {hasChildren ? (
+          isExpanded ? (
+            <ChevronDown className="w-4 h-4 mr-1" />
+          ) : (
+            <ChevronRight className="w-4 h-4 mr-1" />
+          )
+        ) : (
+          <div className="w-4 h-4 mr-1" />
+        )}
+        {node.kind === 'directory' ? (
+          <Folder className="w-4 h-4 mr-2 text-brand-500" />
+        ) : (
+          <div className="w-4 h-4 mr-2 flex items-center justify-center">
+            {getFileIcon(node.name, 'file')}
+          </div>
+        )}
+        <span className="text-sm truncate ph-no-capture">
+          {node.name}
+          {node.kind === 'directory' && node.name !== 'Root' ? '/' : ''}
+        </span>
+      </div>
+
+      <AnimatePresence>
+        {isExpanded && hasChildren && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="overflow-hidden"
+          >
+            {node.children?.map((child, index) => (
+              <TreeNode
+                key={`${depth + 1}-${child.path}-${index}`}
+                node={child}
+                depth={depth + 1}
+                expandedPaths={expandedPaths}
+                setExpandedPaths={setExpandedPaths}
+              />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  )
+}
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: web\features\concatenator\components\UploadZone.tsx (ID: 41a781) >>>>>
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React from 'react'
+import { motion } from 'motion/react'
+import { Maximize2, Minimize2, X, Ban, Upload } from 'lucide-react'
+import { cn } from '../../../../lib/utils'
+import { AppMode } from '../../../../core/types'
+
+interface UploadZoneProps {
+  isProcessing: boolean
+  isDropzoneMinimized: boolean
+  setIsDropzoneMinimized: (minimized: boolean) => void
+  importProgress: { current: number; total: number }
+  cancelProcessing: () => void
+  importError: string | null
+  setImportError: (error: string | null) => void
+  appMode: AppMode
+  handleDrop: (e: React.DragEvent) => void
+  handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void
+}
+
+/**
+ * A component that provides a drag-and-drop area and file browser for uploading files.
+ */
+export const UploadZone: React.FC<UploadZoneProps> = ({
+  isProcessing,
+  isDropzoneMinimized,
+  setIsDropzoneMinimized,
+  importProgress,
+  cancelProcessing,
+  importError,
+  setImportError,
+  appMode,
+  handleDrop,
+  handleFileUpload,
+}) => {
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
+  return (
+    <div
+      className="relative group"
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
+    >
+      <button
+        onClick={() => setIsDropzoneMinimized(!isDropzoneMinimized)}
+        className="absolute -top-3 -right-3 z-20 p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-slate-400 hover:text-brand-500"
+        title={isDropzoneMinimized ? 'Expand dropzone' : 'Minimize dropzone'}
+      >
+        {isDropzoneMinimized ? (
+          <Maximize2 className="w-3 h-3" />
+        ) : (
+          <Minimize2 className="w-3 h-3" />
+        )}
+      </button>
+
+      {isProcessing ? (
+        <div
+          className={cn(
+            'border-2 border-brand-200 dark:border-brand-900/30 bg-brand-50/30 dark:bg-brand-900/5 rounded-2xl flex flex-col items-center justify-center gap-6 animate-in fade-in zoom-in duration-300',
+            isDropzoneMinimized ? 'p-6' : 'p-12'
+          )}
+        >
+          <div className="w-full max-w-md space-y-4">
+            <div className="flex items-center justify-between text-sm font-medium">
+              <span className="text-brand-600 dark:text-brand-400">
+                {importProgress.total === 0
+                  ? 'Scanning Folder...'
+                  : 'Reading Files...'}
+              </span>
+              <span className="text-slate-500">
+                {importProgress.current} / {importProgress.total}
+              </span>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="h-3 flex-grow bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                <motion.div
+                  className="h-full bg-brand-500"
+                  initial={{ width: 0 }}
+                  animate={{
+                    width:
+                      importProgress.total > 0
+                        ? `${(importProgress.current / importProgress.total) * 100}%`
+                        : '100%',
+                  }}
+                  transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
+                />
+              </div>
+              {isDropzoneMinimized && (
+                <button
+                  onClick={cancelProcessing}
+                  className="flex items-center gap-1.5 px-2 py-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors whitespace-nowrap"
+                  title="Cancel Import"
+                >
+                  <X className="w-4 h-4" />
+                  <span className="text-xs font-medium">Cancel Import</span>
+                </button>
+              )}
+            </div>
+            {!isDropzoneMinimized && (
+              <div className="flex justify-center">
+                <button
+                  onClick={cancelProcessing}
+                  className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors flex items-center gap-2"
+                >
+                  <X className="w-4 h-4" />
+                  Cancel Import
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <>
+          <div
+            className={cn(
+              'border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all group-hover:border-brand-400 group-hover:bg-brand-50/50 dark:group-hover:bg-brand-900/10',
+              isDropzoneMinimized ? 'p-4 gap-2' : 'p-12 gap-4',
+              importError
+                ? 'border-red-300 bg-red-50/30 dark:border-red-900/50 dark:bg-red-900/10'
+                : 'border-slate-300 dark:border-slate-700'
+            )}
+          >
+            {importError ? (
+              <div className="flex flex-col items-center gap-2 text-center max-w-md relative z-20 ph-no-capture">
+                <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-full text-red-600 dark:text-red-400">
+                  <Ban className="w-6 h-6" />
+                </div>
+                <p className="text-sm font-medium text-red-600 dark:text-red-400">
+                  {importError}
+                </p>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setImportError(null)
+                  }}
+                  className="text-xs text-slate-500 hover:text-brand-500 underline cursor-pointer p-2"
+                >
+                  Dismiss
+                </button>
+              </div>
+            ) : (
+              <>
+                <div
+                  className={cn(
+                    'bg-slate-100 dark:bg-slate-900 rounded-full group-hover:bg-brand-100 dark:group-hover:bg-brand-900/20 transition-colors',
+                    isDropzoneMinimized ? 'p-2' : 'p-4'
+                  )}
+                >
+                  <Upload
+                    className={cn(
+                      'text-slate-400 group-hover:text-brand-500',
+                      isDropzoneMinimized ? 'w-4 h-4' : 'w-8 h-8'
+                    )}
+                  />
+                </div>
+                <div className="text-center ph-no-capture">
+                  <p
+                    className={cn(
+                      'font-medium',
+                      isDropzoneMinimized ? 'text-sm' : 'text-lg'
+                    )}
+                  >
+                    {isDropzoneMinimized
+                      ? 'Drop here'
+                      : appMode === 'concatenate'
+                        ? 'Drop folder or files here'
+                        : 'Drop concatenated .txt file here'}
+                  </p>
+                  {!isDropzoneMinimized && (
+                    <p className="text-sm text-slate-500">or click to browse</p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+          {!importError && (
+            <input
+              // key={appMode} intentionally remounts input when mode changes to reset webkitdirectory attribute
+              key={appMode}
+              type="file"
+              multiple
+              {...(appMode === 'concatenate' ? { webkitdirectory: '' } : {})}
+              onChange={handleFileUpload}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 ph-no-capture"
+              disabled={isProcessing}
+              title=""
+            />
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: web\features\concatenator\hooks\useFileProcessing.ts (ID: 41a781) >>>>>
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useRef, useCallback } from 'react'
+import JSZip from 'jszip'
+import { FileItem, AppMode, OutputFormat } from '../../../../core/types'
+import {
+  START_DELIMITER,
+  END_DELIMITER,
+  FILE_END_DELIMITER,
+} from '../../../../core/constants'
+import {
+  deconcatenate,
+  concatenate,
+  generateFileTimestamp,
+  validateConcatenation,
+} from '../../../../core/engine'
+import type { ValidationResult } from '../../../../core/types'
+import { createZipFromVirtualFiles } from '../../../../drivers/zip-driver'
+import { logger } from '../../../../lib/logger'
+
+interface UseFileProcessingProps {
+  appMode: AppMode
+  compiledIgnores: (string | RegExp)[]
+  maxFileLimit: number
+  isIgnoreListLoading: boolean
+}
+
+/**
+ * Custom hook to handle file processing, concatenation, and de-concatenation.
+ */
+export const useFileProcessing = ({
+  appMode,
+  compiledIgnores,
+  maxFileLimit,
+  isIgnoreListLoading,
+}: UseFileProcessingProps) => {
+  const [files, setFiles] = useState<FileItem[]>([])
+  const [isProcessing, setIsProcessingState] = useState(false)
+  const isProcessingRef = useRef(false)
+  const [importProgress, setImportProgress] = useState({ current: 0, total: 0 })
+  const [importError, setImportError] = useState<string | null>(null)
+  const [validationResult, setValidationResult] =
+    useState<ValidationResult | null>(null)
+  const cancelImportRef = useRef(false)
+  const activeReaderRef = useRef<FileReader | null>(null)
+  const setIsProcessing = useCallback((processing: boolean) => {
+    isProcessingRef.current = processing
+    setIsProcessingState(processing)
+  }, [])
+
+  const cancelProcessing = useCallback(() => {
+    cancelImportRef.current = true
+    if (activeReaderRef.current) {
+      activeReaderRef.current.abort()
+    }
+  }, [])
+
+  const isIgnored = useCallback(
+    (path: string) => {
+      if (!path) return false
+      const normalizedPath = path.replace(/\\/g, '/')
+      const segments = normalizedPath.split('/').filter(Boolean)
+      const fileName = segments.length > 0 ? segments[segments.length - 1] : ''
+
+      if (segments.length === 0) return false
+
+      const result = compiledIgnores.some((ignore) => {
+        if (ignore instanceof RegExp) {
+          // Test regex against full path, filename, and each segment
+          if (ignore.test(normalizedPath)) return true
+          if (ignore.test(fileName)) return true
+          return segments.some((segment) => ignore.test(segment))
+        }
+
+        const ignoreStr =
+          typeof ignore === 'string' ? ignore.replace(/\/$/, '') : ignore
+
+        // Check if pattern contains glob characters
+        if (ignoreStr.includes('*') || ignoreStr.includes('?')) {
+          // Convert glob pattern to regex
+          const globToRegex = (glob: string) => {
+            const escaped = glob
+              .replace(/[.+^${}()|[\]\\]/g, '\\$&') // Escape regex special chars except * and ?
+              .replace(/\*/g, '.*') // * matches any sequence
+              .replace(/\?/g, '.') // ? matches single char
+            return new RegExp(`^${escaped}$`)
+          }
+
+          const patternRegex = globToRegex(ignoreStr)
+
+          // Match against filename for simple patterns (no / in pattern)
+          if (!ignoreStr.includes('/')) {
+            if (patternRegex.test(fileName)) return true
+          }
+
+          // Also match against full path and each segment
+          if (patternRegex.test(normalizedPath)) return true
+          return segments.some((segment) => patternRegex.test(segment))
+        }
+
+        // For non-glob patterns, use exact matching against segments and filename
+        return (
+          segments.some((segment) => segment === ignoreStr) ||
+          fileName === ignoreStr
+        )
+      })
+
+      return result
+    },
+    [compiledIgnores]
+  )
+
+  const handleDeconcatenate = useCallback(
+    async (inputFiles?: FileItem[]) => {
+      const targetFiles = inputFiles || files
+      if (targetFiles.length === 0) return
+
+      setIsProcessing(true)
+      let foundAnyTotal = false
+      const skippedFiles: string[] = []
+
+      try {
+        for (const fileItem of targetFiles) {
+          if (fileItem.kind !== 'file' || !fileItem.content) continue
+
+          const content = fileItem.content as string
+
+          // Use the core engine to parse concatenated content
+          const result = deconcatenate(content)
+
+          if (result.skippedPaths.length > 0) {
+            skippedFiles.push(...result.skippedPaths)
+            for (const path of result.skippedPaths) {
+              logger.warn(
+                `Missing end marker for file "${path || '(unknown)'}" - file will be skipped`
+              )
+            }
+          }
+
+          // Add extracted files to ZIP
+          const zip = new JSZip()
+          for (const file of result.files) {
+            zip.file(file.path, file.content)
+          }
+
+          if (result.foundAny) {
+            foundAnyTotal = true
+            const zipBlob = await zip.generateAsync({ type: 'blob' })
+            const url = URL.createObjectURL(zipBlob)
+            const a = document.createElement('a')
+            a.href = url
+            const baseName = fileItem.name.replace(/\.[^/.]+$/, '')
+            a.download = `${baseName || 'extracted_files'}.zip`
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            await new Promise((resolve) => setTimeout(resolve, 200))
+            URL.revokeObjectURL(url)
+          }
+        }
+
+        if (!foundAnyTotal) {
+          setImportError(
+            'No concatenated files were found in the uploaded file(s). Make sure you are uploading a file generated by this tool.'
+          )
+        } else if (skippedFiles.length > 0) {
+          const fileList = skippedFiles.slice(0, 3).join(', ')
+          const moreCount = skippedFiles.length - 3
+          const warningMsg =
+            moreCount > 0
+              ? `Warning: ${skippedFiles.length} file(s) were skipped due to missing end markers: ${fileList} and ${moreCount} more. Check the console for details.`
+              : `Warning: ${skippedFiles.length} file(s) were skipped due to missing end markers: ${fileList}. Check the console for details.`
+          logger.warn(
+            `Skipped ${skippedFiles.length} file(s) with missing end markers:`,
+            skippedFiles
+          )
+          setImportError(warningMsg)
+        }
+      } catch (error) {
+        logger.error('De-concatenation failed:', error)
+        setImportError(
+          'An error occurred during de-concatenation. Please check the console for details.'
+        )
+      } finally {
+        setIsProcessing(false)
+      }
+    },
+    [files, setIsProcessing]
+  )
+
+  const processUploadedFiles = useCallback(
+    async (uploadedFiles: File[]) => {
+      setIsProcessing(true)
+      cancelImportRef.current = false
+      activeReaderRef.current = null
+      setImportProgress({ current: 0, total: uploadedFiles.length })
+
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
+      const newFiles: FileItem[] = []
+      let lastRenderTime = Date.now()
+
+      for (let i = 0; i < uploadedFiles.length; i++) {
+        if (cancelImportRef.current) break
+
+        const file = uploadedFiles[i]
+        const path =
+          (file as { webkitRelativePath?: string }).webkitRelativePath ||
+          file.name
+
+        const content = await new Promise<string | ArrayBuffer | null>(
+          (resolve, reject) => {
+            const reader = new FileReader()
+            activeReaderRef.current = reader
+            reader.onload = () => resolve(reader.result as string)
+            reader.onerror = () =>
+              reject(new Error(`Failed to read file: ${file.name}`))
+            reader.onabort = () => resolve(null) // Resolve to null on abort for silent cleanup
+            reader.readAsText(file)
+          }
+        ).catch((err) => {
+          logger.error('Failed to read file:', err)
+          return null
+        })
+
+        activeReaderRef.current = null
+
+        if (content === null || cancelImportRef.current) {
+          const now = Date.now()
+          if (now - lastRenderTime > 50 || i === uploadedFiles.length - 1) {
+            setImportProgress((prev) => ({ ...prev, current: i + 1 }))
+            lastRenderTime = now
+          }
+          continue
+        }
+
+        newFiles.push({
+          name: file.name,
+          path: path,
+          kind: 'file',
+          content,
+          size: file.size,
+        })
+
+        const parts = path.split('/')
+        for (let j = 1; j < parts.length; j++) {
+          const dirPath = parts.slice(0, j).join('/')
+          if (!newFiles.some((f) => f.path === dirPath)) {
+            newFiles.push({
+              name: parts[j - 1],
+              path: dirPath,
+              kind: 'directory',
+            })
+          }
+        }
+
+        const now = Date.now()
+        if (now - lastRenderTime > 50 || i === uploadedFiles.length - 1) {
+          setImportProgress((prev) => ({ ...prev, current: i + 1 }))
+          lastRenderTime = now
+        }
+
+        if (i % 10 === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 0))
+        }
+      }
+
+      if (!cancelImportRef.current) {
+        if (appMode === 'deconcatenate') {
+          await handleDeconcatenate(newFiles)
+        } else {
+          setFiles((prev) => {
+            // Optimized Deduplication preventing Array [...spread] max call stack and Map loop limits
+            const newPaths = new Set(newFiles.map((f) => f.path))
+            const filteredPrev = prev.filter((f) => !newPaths.has(f.path))
+
+            const uniqueNewFilesMap = new Map()
+            for (const nf of newFiles) {
+              uniqueNewFilesMap.set(nf.path, nf)
+            }
+
+            return filteredPrev.concat(Array.from(uniqueNewFilesMap.values()))
+          })
+        }
+      }
+
+      setIsProcessing(false)
+      setImportProgress({ current: 0, total: 0 })
+      cancelImportRef.current = false
+      activeReaderRef.current = null
+    },
+    [appMode, handleDeconcatenate, setIsProcessing]
+  )
+
+  const handleFileUpload = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (isProcessingRef.current) {
+        e.preventDefault()
+        return
+      }
+
+      const uploadedFiles = e.target.files
+      if (!uploadedFiles) return
+
+      cancelImportRef.current = false
+
+      const filesToProcess = Array.from(uploadedFiles as FileList) as File[]
+
+      if (filesToProcess.length > 0) {
+        await processUploadedFiles(filesToProcess)
+      } else {
+        setImportError('No files were imported')
+      }
+
+      e.target.value = ''
+    },
+    [processUploadedFiles]
+  )
+
+  const handleDrop = useCallback(
+    async (e: React.DragEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+
+      if (isProcessingRef.current) return
+      if (isIgnoreListLoading) {
+        setImportError(
+          'Please wait for ignore patterns to load before importing files.'
+        )
+        return
+      }
+
+      const items = e.dataTransfer.items
+      if (!items) return
+
+      const entries: FileSystemEntry[] = []
+      for (let i = 0; i < items.length; i++) {
+        const entry = items[i].webkitGetAsEntry() as FileSystemEntry | null
+        if (entry) {
+          entries.push(entry)
+        }
+      }
+
+      if (entries.length === 0) return
+
+      setIsProcessing(true)
+      setImportError(null)
+      cancelImportRef.current = false
+      setImportProgress({ current: 0, total: 0 })
+
+      await new Promise((resolve) => setTimeout(resolve, 100))
+
+      const droppedFiles: File[] = []
+
+      const traverseEntry = async (entry: FileSystemEntry, path = '') => {
+        if (cancelImportRef.current) return
+
+        const fullPath = path + entry.name
+
+        // Skip directories (root or nested) that are explicitly blocked by ignore list
+        if (entry.isDirectory && isIgnored(fullPath)) {
+          return
+        }
+
+        // Skip files that are explicitly blocked by ignore list
+        if (entry.isFile && isIgnored(fullPath)) {
+          return
+        }
+
+        if (entry.isFile && 'file' in entry) {
+          // Check max file limit before adding (halt immediately when exceeded)
+          if (droppedFiles.length >= maxFileLimit) {
+            setImportError(
+              `Import halted: The folder contains more than ${maxFileLimit} files. Please increase the Max Files limit or select a folder with fewer files.`
+            )
+            cancelImportRef.current = true
+            return
+          }
+
+          setImportProgress((prev) => ({ ...prev, total: prev.total + 1 }))
+          const file = await new Promise<File>((resolve, reject) => {
+            const fileEntry = entry as FileSystemFileEntry
+            fileEntry.file(
+              (f: File) => resolve(f),
+              (err: Error) => reject(err)
+            )
+          })
+          if (cancelImportRef.current) return
+
+          Object.defineProperty(file, 'webkitRelativePath', {
+            value: fullPath,
+            writable: false,
+            configurable: true,
+          })
+          droppedFiles.push(file)
+        } else if (entry.isDirectory && 'createReader' in entry) {
+          let reader
+          try {
+            reader = (entry as FileSystemDirectoryEntry).createReader()
+          } catch (err) {
+            logger.error('Failed to create directory reader:', err)
+            return
+          }
+          const entriesBatch = await new Promise<FileSystemEntry[]>(
+            (resolve) => {
+              const allEntries: FileSystemEntry[] = []
+              const readBatch = () => {
+                if (cancelImportRef.current) {
+                  resolve([])
+                  return
+                }
+                reader.readEntries(
+                  (batch: FileSystemEntry[]) => {
+                    if (batch.length === 0) {
+                      resolve(allEntries)
+                    } else {
+                      allEntries.push(...batch)
+                      readBatch()
+                    }
+                  },
+                  () => resolve(allEntries)
+                )
+              }
+              readBatch()
+            }
+          )
+
+          for (const childEntry of entriesBatch) {
+            if (cancelImportRef.current) break
+            await traverseEntry(childEntry, fullPath + '/')
+          }
+        }
+      }
+
+      for (const entry of entries) {
+        if (cancelImportRef.current) break
+        await traverseEntry(entry, '')
+      }
+
+      // Check if user cancelled during traversal (Bug 2 fix)
+      if (cancelImportRef.current) {
+        setIsProcessing(false)
+        setImportProgress({ current: 0, total: 0 })
+        cancelImportRef.current = false
+        return
+      }
+
+      if (droppedFiles.length > 0) {
+        await processUploadedFiles(droppedFiles)
+      } else {
+        setIsProcessing(false)
+        if (!cancelImportRef.current) {
+          setImportError(
+            'No files were imported. This might be because all files matched your ignore list (check if any Regex is overly broad) or the folder was empty.'
+          )
+        }
+      }
+    },
+    [
+      processUploadedFiles,
+      setIsProcessing,
+      maxFileLimit,
+      isIgnored,
+      isIgnoreListLoading,
+    ]
+  )
+
+  const handleConcatenate = useCallback(
+    async (filteredFiles: FileItem[], outputFormat: OutputFormat = 'text') => {
+      if (filteredFiles.length === 0) return
+
+      if (filteredFiles.length > maxFileLimit) {
+        setImportError(
+          `Warning: You are attempting to concatenate over ${maxFileLimit} files. This exceeds safe UI thread memory parameters. Please split your architecture into smaller batch folders.`
+        )
+        return
+      }
+
+      setIsProcessing(true)
+      const now = new Date()
+      const timestamp = now.toLocaleString()
+      const fileTimestamp = generateFileTimestamp(now)
+
+      const fileList = filteredFiles.filter((f) => f.kind === 'file')
+
+      if (outputFormat === 'pdf') {
+        // Dynamically import jsPDF only when PDF is requested
+        const { default: jsPDF } = await import('jspdf')
+        const doc = new jsPDF()
+        const pageWidth = doc.internal.pageSize.getWidth()
+        const margin = 10
+        const contentWidth = pageWidth - 2 * margin
+        const lineHeight = 5
+
+        let yPosition = margin
+
+        // Add timestamp header
+        doc.setFontSize(12)
+        doc.setFont('helvetica', 'bold')
+        doc.text(`Concatenated on: ${timestamp}`, margin, yPosition)
+        yPosition += lineHeight * 2
+
+        doc.setFontSize(10)
+        doc.setFont('helvetica', 'normal')
+
+        fileList.forEach((file, index) => {
+          // Check if we need a new page
+          if (
+            yPosition >
+            doc.internal.pageSize.getHeight() - margin - lineHeight * 5
+          ) {
+            doc.addPage()
+            yPosition = margin
+          }
+
+          // Add file header with delimiters
+          doc.setFont('helvetica', 'bold')
+          const headerText = `${START_DELIMITER}${file.path}${END_DELIMITER}`
+          const headerLines = doc.splitTextToSize(headerText, contentWidth)
+          doc.text(headerLines, margin, yPosition)
+          yPosition += headerLines.length * lineHeight
+
+          // Add file content
+          doc.setFont('helvetica', 'normal')
+          const content = typeof file.content === 'string' ? file.content : ''
+          const contentLines = doc.splitTextToSize(content, contentWidth)
+
+          // Handle page breaks for long content
+          for (let i = 0; i < contentLines.length; i++) {
+            if (yPosition > doc.internal.pageSize.getHeight() - margin) {
+              doc.addPage()
+              yPosition = margin
+            }
+            doc.text(contentLines[i], margin, yPosition)
+            yPosition += lineHeight
+          }
+
+          // Add file end delimiter
+          if (
+            yPosition >
+            doc.internal.pageSize.getHeight() - margin - lineHeight
+          ) {
+            doc.addPage()
+            yPosition = margin
+          }
+
+          doc.setFont('helvetica', 'bold')
+          const endText = FILE_END_DELIMITER
+          doc.text(endText, margin, yPosition)
+          yPosition += lineHeight * 2 // Extra spacing between files
+
+          // Add separator line between files (except for last file)
+          if (index < fileList.length - 1) {
+            if (
+              yPosition >
+              doc.internal.pageSize.getHeight() - margin - lineHeight * 2
+            ) {
+              doc.addPage()
+              yPosition = margin
+            }
+            yPosition += lineHeight
+          }
+        })
+
+        // Save PDF
+        doc.save(`concatenator-${fileTimestamp}.pdf`)
+      } else {
+        // Generate text file (default) using the core engine
+        const result = concatenate(
+          fileList.map((f) => ({ path: f.path, content: f.content as string })),
+          timestamp
+        )
+
+        const blob = new Blob([result], { type: 'text/plain' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `concatenator-${fileTimestamp}.txt`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+      }
+
+      setIsProcessing(false)
+    },
+    [setIsProcessing, maxFileLimit]
+  )
+
+  const handleDownloadAsZip = useCallback(
+    async (filteredFiles: FileItem[]) => {
+      const fileList = filteredFiles.filter((f) => f.kind === 'file')
+
+      if (fileList.length === 0) return
+
+      setIsProcessing(true)
+
+      try {
+        const virtualFiles = fileList.map((f) => ({
+          path: f.path,
+          content: typeof f.content === 'string' ? f.content : '',
+        }))
+
+        const zipData = await createZipFromVirtualFiles(virtualFiles)
+        const blob = new Blob([zipData.buffer as ArrayBuffer], {
+          type: 'application/zip',
+        })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        const fileTimestamp = generateFileTimestamp()
+        a.download = `concatenator-${fileTimestamp}.zip`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+      } catch (error) {
+        logger.error('Failed to create ZIP:', error)
+        setImportError('Failed to create ZIP archive')
+      } finally {
+        setIsProcessing(false)
+      }
+    },
+    [setIsProcessing]
+  )
+
+  /**
+   * Validate concatenated content before extraction
+   * Performs pre-flight check and updates validation state
+   */
+  const validateContent = useCallback((content: string): ValidationResult => {
+    const result = validateConcatenation(content)
+    setValidationResult(result)
+    return result
+  }, [])
+
+  /**
+   * Clear validation result
+   */
+  const clearValidation = useCallback(() => {
+    setValidationResult(null)
+  }, [])
+
+  return {
+    files,
+    setFiles,
+    isProcessing,
+    importProgress,
+    importError,
+    setImportError,
+    cancelProcessing,
+    isIgnored,
+    handleFileUpload,
+    handleDrop,
+    handleConcatenate,
+    handleDeconcatenate,
+    handleDownloadAsZip,
+    validationResult,
+    validateContent,
+    clearValidation,
+  }
+}
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: web\features\concatenator\hooks\useFileTree.ts (ID: 41a781) >>>>>
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import { useMemo } from 'react'
+import { FileItem, TreeItem } from '../../../../core/types'
+
+/**
+ * Custom hook to construct a hierarchical tree structure from a flat list of files.
+ */
+export const useFileTree = (filteredFiles: FileItem[]) => {
+  const fileTree = useMemo(() => {
+    const root: TreeItem = {
+      name: 'Root',
+      path: '/',
+      kind: 'directory',
+      children: [],
+    }
+
+    filteredFiles.forEach((file) => {
+      const parts = file.path.split('/').filter((p) => p !== '')
+      let current = root
+
+      parts.forEach((part, index) => {
+        const isLast = index === parts.length - 1
+        const currentPath = '/' + parts.slice(0, index + 1).join('/')
+
+        let existing = current.children?.find((c) => c.name === part)
+
+        if (!existing) {
+          existing = {
+            name: part,
+            path: currentPath,
+            kind: isLast ? file.kind : 'directory',
+            children: isLast && file.kind === 'file' ? undefined : [],
+          }
+          current.children?.push(existing)
+        }
+        current = existing
+      })
+    })
+
+    const sortTree = (node: TreeItem) => {
+      if (node.children) {
+        node.children.sort((a, b) => {
+          if (a.kind === 'directory' && b.kind === 'file') return -1
+          if (a.kind === 'file' && b.kind === 'directory') return 1
+          return a.name.localeCompare(b.name)
+        })
+        node.children.forEach(sortTree)
+      }
+    }
+    sortTree(root)
+
+    if (
+      root.children &&
+      root.children.length === 1 &&
+      root.children[0].kind === 'directory'
+    ) {
+      return root.children[0]
+    }
+
+    return root
+  }, [filteredFiles])
+
+  return fileTree
+}
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: web\hooks\useLocalStorage.ts (ID: 41a781) >>>>>
+import { useState, useEffect } from 'react'
+
+export function useLocalStorage<T>(key: string, initialValue: T) {
+  const [storedValue, setStoredValue] = useState<T>(() => {
+    try {
+      const item = window.localStorage.getItem(key)
+      return item ? JSON.parse(item) : initialValue
+    } catch (error) {
+      console.error(`Error reading localStorage key "${key}":`, error)
+      return initialValue
+    }
+  })
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(key, JSON.stringify(storedValue))
+    } catch (error) {
+      console.error(`Error setting localStorage key "${key}":`, error)
+    }
+  }, [key, storedValue])
+
+  return [storedValue, setStoredValue] as const
+}
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: web\hooks\useWorkbench.ts (ID: 41a781) >>>>>
+import { useContext } from 'react'
+import { ModeContext } from '../context/ModeContextCore'
+
+export const useWorkbench = () => {
+  const context = useContext(ModeContext)
+  if (!context)
+    throw new Error('useWorkbench must be used within a ModeProvider')
+  return context
+}
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: web\index.css (ID: 41a781) >>>>>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+  --color-brand-50: #f0f9ff;
+  --color-brand-100: #e0f2fe;
+  --color-brand-200: #bae6fd;
+  --color-brand-300: #7dd3fc;
+  --color-brand-400: #38bdf8;
+  --color-brand-500: #0ea5e9;
+  --color-brand-600: #0284c7;
+  --color-brand-700: #0369a1;
+  --color-brand-800: #075985;
+  --color-brand-900: #0c4a6e;
+}
+
+/* Enable class-based dark mode for Tailwind v4 */
+@variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  html {
+    @apply transition-colors duration-300;
+  }
+  body {
+    @apply bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-50 transition-colors duration-300;
+  }
+}
+
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: web\types\workbench.ts (ID: 41a781) >>>>>
+export enum AppMode {
+  CONCATENATE = 'concatenate',
+  DECONCATENATE = 'deconcatenate',
+}
+
+export enum ViewPreference {
+  TREE = 'tree',
+  LIST = 'list',
+}
+
+export interface WorkbenchState {
+  mode: AppMode
+  view: ViewPreference
+  ignoreList: string[]
+  isSidebarOpen: boolean
+  compiledIgnores: (string | RegExp)[]
+}
+
+<<<<< FILE_END >>>>>
+

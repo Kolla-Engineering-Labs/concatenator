@@ -4,10 +4,27 @@ import '@testing-library/jest-dom'
 import React from 'react'
 import { Header } from '../src/web/features/concatenator/components/Header'
 import { Footer } from '../src/web/features/concatenator/components/Footer'
-import { ModeToggle } from '../src/web/features/concatenator/components/ModeToggle'
+import { ModeSwitch } from '../src/web/components/ModeSwitch'
 import { OutputFormatToggle } from '../src/web/features/concatenator/components/OutputFormatToggle'
 import { TreeNode } from '../src/web/features/concatenator/components/TreeNode'
 import { TreeItem } from '../src/core/types'
+import { AppMode } from '../src/web/types/workbench'
+
+import { useWorkbench } from '../src/web/hooks/useWorkbench'
+
+// Mock posthog
+vi.mock('posthog-js', () => ({
+  default: {
+    capture: vi.fn(),
+  },
+}))
+
+// Mock useWorkbench
+vi.mock('../src/web/hooks/useWorkbench', () => ({
+  useWorkbench: vi.fn(),
+}))
+
+const mockSetMode = vi.fn()
 
 describe('Header Component', () => {
   const mockSetIsDarkMode = vi.fn()
@@ -81,101 +98,120 @@ describe('Footer Component', () => {
   })
 })
 
-describe('ModeToggle Component', () => {
-  const mockSetAppMode = vi.fn()
-  const mockOnModeChange = vi.fn()
-
+describe('ModeSwitch Component', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Default mock implementation
+    vi.mocked(useWorkbench).mockReturnValue({
+      mode: AppMode.CONCATENATE,
+      setMode: mockSetMode,
+      view: 'list' as any,
+      ignoreList: [],
+      isSidebarOpen: true,
+      compiledIgnores: [],
+      forceMode: false,
+      resetWorkbench: vi.fn(),
+      setSidebarOpen: vi.fn(),
+      setView: vi.fn(),
+      setIgnoreList: vi.fn(),
+      setForceMode: vi.fn(),
+    })
   })
 
   it('renders both mode buttons', () => {
-    render(
-      <ModeToggle
-        appMode="concatenate"
-        setAppMode={mockSetAppMode}
-        onModeChange={mockOnModeChange}
-      />
-    )
+    render(<ModeSwitch />)
 
     expect(screen.getByText('Concatenate')).toBeInTheDocument()
     expect(screen.getByText('De-concatenate')).toBeInTheDocument()
   })
 
   it('concatenate button is active in concatenate mode', () => {
-    render(
-      <ModeToggle
-        appMode="concatenate"
-        setAppMode={mockSetAppMode}
-        onModeChange={mockOnModeChange}
-      />
-    )
+    render(<ModeSwitch />)
 
     const concatButton = screen.getByText('Concatenate').closest('button')
     const deconcatButton = screen.getByText('De-concatenate').closest('button')
 
-    expect(concatButton?.className).toContain('bg-white')
-    expect(deconcatButton?.className).not.toContain('bg-white')
+    expect(concatButton?.className).toContain('bg-blue-600')
+    expect(deconcatButton?.className).not.toContain('bg-blue-600')
   })
 
   it('deconcatenate button is active in deconcatenate mode', () => {
-    render(
-      <ModeToggle
-        appMode="deconcatenate"
-        setAppMode={mockSetAppMode}
-        onModeChange={mockOnModeChange}
-      />
-    )
+    vi.mocked(useWorkbench).mockReturnValue({
+      mode: AppMode.DECONCATENATE,
+      setMode: mockSetMode,
+      view: 'list' as any,
+      ignoreList: [],
+      isSidebarOpen: true,
+      compiledIgnores: [],
+      forceMode: false,
+      resetWorkbench: vi.fn(),
+      setSidebarOpen: vi.fn(),
+      setView: vi.fn(),
+      setIgnoreList: vi.fn(),
+      setForceMode: vi.fn(),
+    })
+
+    render(<ModeSwitch />)
 
     const concatButton = screen.getByText('Concatenate').closest('button')
     const deconcatButton = screen.getByText('De-concatenate').closest('button')
 
-    expect(deconcatButton?.className).toContain('bg-white')
-    expect(concatButton?.className).not.toContain('bg-white')
+    expect(deconcatButton?.className).toContain('bg-blue-600')
+    expect(concatButton?.className).not.toContain('bg-blue-600')
   })
 
-  it('calls setAppMode and onModeChange when concatenate clicked', () => {
-    render(
-      <ModeToggle
-        appMode="deconcatenate"
-        setAppMode={mockSetAppMode}
-        onModeChange={mockOnModeChange}
-      />
-    )
+  it('calls setMode when concatenate clicked', () => {
+    vi.mocked(useWorkbench).mockReturnValue({
+      mode: AppMode.DECONCATENATE,
+      setMode: mockSetMode,
+      view: 'list' as any,
+      ignoreList: [],
+      isSidebarOpen: true,
+      compiledIgnores: [],
+      forceMode: false,
+      resetWorkbench: vi.fn(),
+      setSidebarOpen: vi.fn(),
+      setView: vi.fn(),
+      setIgnoreList: vi.fn(),
+      setForceMode: vi.fn(),
+    })
+
+    render(<ModeSwitch />)
 
     fireEvent.click(screen.getByText('Concatenate'))
 
-    expect(mockSetAppMode).toHaveBeenCalledWith('concatenate')
-    expect(mockOnModeChange).toHaveBeenCalled()
+    expect(mockSetMode).toHaveBeenCalledWith(AppMode.CONCATENATE)
   })
 
-  it('calls setAppMode and onModeChange when deconcatenate clicked', () => {
-    render(
-      <ModeToggle
-        appMode="concatenate"
-        setAppMode={mockSetAppMode}
-        onModeChange={mockOnModeChange}
-      />
-    )
+  it('calls setMode when deconcatenate clicked', () => {
+    vi.mocked(useWorkbench).mockReturnValue({
+      mode: AppMode.CONCATENATE,
+      setMode: mockSetMode,
+      view: 'list' as any,
+      ignoreList: [],
+      compiledIgnores: [],
+      isSidebarOpen: true,
+      forceMode: false,
+      resetWorkbench: vi.fn(),
+      setSidebarOpen: vi.fn(),
+      setView: vi.fn(),
+      setIgnoreList: vi.fn(),
+      setForceMode: vi.fn(),
+    })
+
+    render(<ModeSwitch />)
 
     fireEvent.click(screen.getByText('De-concatenate'))
 
-    expect(mockSetAppMode).toHaveBeenCalledWith('deconcatenate')
-    expect(mockOnModeChange).toHaveBeenCalled()
+    expect(mockSetMode).toHaveBeenCalledWith(AppMode.DECONCATENATE)
   })
 
   it('has proper container styling classes', () => {
-    const { container } = render(
-      <ModeToggle
-        appMode="concatenate"
-        setAppMode={mockSetAppMode}
-        onModeChange={mockOnModeChange}
-      />
-    )
+    const { container } = render(<ModeSwitch />)
 
     const wrapper = container.firstChild as HTMLElement
     expect(wrapper?.classList.contains('flex')).toBe(true)
-    expect(wrapper?.classList.contains('rounded-xl')).toBe(true)
+    expect(wrapper?.classList.contains('bg-slate-900')).toBe(true)
   })
 })
 
