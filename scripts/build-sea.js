@@ -4,7 +4,7 @@
  * Requires Node.js 22+
  */
 
-import { execSync } from 'child_process'
+import { execSync, execFileSync } from 'child_process'
 import {
   writeFileSync,
   existsSync,
@@ -89,8 +89,18 @@ try {
   copyFileSync(nodePath, exePath)
 
   // Use postject to inject the blob
-  execSync(
-    `npx postject ${exePath} NODE_SEA_BLOB dist/sea/concatenator.blob --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 --macho-segment-name NODE_SEA`,
+  execFileSync(
+    'npx',
+    [
+      'postject',
+      exePath,
+      'NODE_SEA_BLOB',
+      'dist/sea/concatenator.blob',
+      '--sentinel-fuse',
+      'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2',
+      '--macho-segment-name',
+      'NODE_SEA',
+    ],
     {
       cwd: rootDir,
       stdio: 'inherit',

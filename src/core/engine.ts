@@ -43,12 +43,17 @@ export interface ConcatenateInputFile {
 /**
  * Generate a short, unique 6-character hex session ID
  *
+ * Uses cryptographically secure random number generation via Web Crypto API,
+ * which is available in both modern browsers and Node.js 15+.
+ *
  * @returns 6-character hexadecimal string
  */
 export function generateSessionId(): string {
-  return Math.floor(Math.random() * 0xffffff)
-    .toString(16)
-    .padStart(6, '0')
+  const bytes = new Uint8Array(3)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes)
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')
 }
 
 /**

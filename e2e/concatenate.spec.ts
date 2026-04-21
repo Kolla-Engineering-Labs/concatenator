@@ -270,15 +270,19 @@ test.describe('Concatenate Mode', () => {
         const ignoreInput = page.getByPlaceholder('Add ignore pattern...')
         await ignoreInput.waitFor({ state: 'visible', timeout: 10000 })
         await ignoreInput.fill('*.test.js')
-        await ignoreInput.press('Enter')
+        await Promise.all([
+          page.waitForResponse(
+            (resp) =>
+              resp.url().includes('/api/ignore-list') &&
+              resp.request().method() === 'POST'
+          ),
+          ignoreInput.press('Enter'),
+        ])
 
         // Verify pattern was added
         await expect(page.getByText('*.test.js')).toBeVisible({
           timeout: 10000,
         })
-
-        // Wait for network to be idle to ensure server save completes before asserting.
-        await page.waitForLoadState('networkidle')
 
         // Verify the test file is now filtered out. Playwright's retry engine polls
         // until the condition is true or the timeout expires — no arbitrary sleep needed.
@@ -339,13 +343,17 @@ test.describe('Concatenate Mode', () => {
         const ignoreInput = page.getByPlaceholder('Add ignore pattern...')
         await ignoreInput.waitFor({ state: 'visible', timeout: 10000 })
         await ignoreInput.fill('*.tmp')
-        await ignoreInput.press('Enter')
+        await Promise.all([
+          page.waitForResponse(
+            (resp) =>
+              resp.url().includes('/api/ignore-list') &&
+              resp.request().method() === 'POST'
+          ),
+          ignoreInput.press('Enter'),
+        ])
 
         // Verify pattern added
         await expect(page.getByText('*.tmp')).toBeVisible({ timeout: 10000 })
-
-        // Wait for network to be idle to ensure server save completes before asserting.
-        await page.waitForLoadState('networkidle')
 
         // temp.tmp should be filtered — Playwright's retry engine polls until true.
         await expect(
@@ -356,7 +364,14 @@ test.describe('Concatenate Mode', () => {
         const removeButton = page.locator('button[title="Remove *.tmp"]')
         await removeButton.waitFor({ state: 'visible', timeout: 10000 })
         // Use native Playwright click for better reliability
-        await removeButton.click({ timeout: 10000 })
+        await Promise.all([
+          page.waitForResponse(
+            (resp) =>
+              resp.url().includes('/api/ignore-list') &&
+              resp.request().method() === 'POST'
+          ),
+          removeButton.click({ timeout: 10000 }),
+        ])
 
         // Wait for the remove button to be removed from the DOM (indicates state updated)
         await expect(removeButton).toHaveCount(0, { timeout: 10000 })
@@ -365,9 +380,6 @@ test.describe('Concatenate Mode', () => {
         await expect(page.getByText('*.tmp')).not.toBeVisible({
           timeout: 15000,
         })
-
-        // Wait for network to be idle to ensure server save completes before asserting.
-        await page.waitForLoadState('networkidle')
 
         // Verify filtered files update — Playwright's retry engine polls until temp.tmp reappears.
         await expect(
@@ -412,15 +424,19 @@ test.describe('Concatenate Mode', () => {
         const ignoreInput = page.getByPlaceholder('Add ignore pattern...')
         await ignoreInput.waitFor({ state: 'visible', timeout: 10000 })
         await ignoreInput.fill('/\\.spec\\.ts$/')
-        await ignoreInput.press('Enter')
+        await Promise.all([
+          page.waitForResponse(
+            (resp) =>
+              resp.url().includes('/api/ignore-list') &&
+              resp.request().method() === 'POST'
+          ),
+          ignoreInput.press('Enter'),
+        ])
 
         // Verify pattern added
         await expect(page.getByText('/\\.spec\\.ts$/')).toBeVisible({
           timeout: 10000,
         })
-
-        // Wait for network to be idle to ensure server save completes before asserting.
-        await page.waitForLoadState('networkidle')
 
         // spec file should be filtered — Playwright's retry engine polls until true.
         await expect(
@@ -620,10 +636,14 @@ test.describe('Concatenate Mode', () => {
           `button[title="Ignore ${ignoreFileName}"]`
         )
         await ignoreButton.waitFor({ state: 'visible', timeout: 10000 })
-        await ignoreButton.click({ timeout: 10000 })
-
-        // Wait for network to be idle to ensure server save completes
-        await page.waitForLoadState('networkidle')
+        await Promise.all([
+          page.waitForResponse(
+            (resp) =>
+              resp.url().includes('/api/ignore-list') &&
+              resp.request().method() === 'POST'
+          ),
+          ignoreButton.click({ timeout: 10000 }),
+        ])
 
         // Wait for the ignored file text to disappear from the file list
         // Use a more specific locator to target only the file list (not the ignore list)
