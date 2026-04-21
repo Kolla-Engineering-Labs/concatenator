@@ -6,9 +6,9 @@
 import React from 'react'
 import { ChevronRight, ChevronDown, Folder } from 'lucide-react'
 import { motion, AnimatePresence } from 'motion/react'
-import { cn } from '../lib/utils'
-import { TreeItem } from '../types'
-import { getFileIcon } from '../lib/fileIcons'
+import { cn } from '../../../../lib/utils'
+import { TreeItem } from '../../../../core/types'
+import { getFileIcon } from '../../../../lib/fileIcons'
 
 interface TreeNodeProps {
   node: TreeItem

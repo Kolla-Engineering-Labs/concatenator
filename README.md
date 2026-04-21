@@ -189,7 +189,11 @@ LOG_LEVEL=info
 
 ## Usage
 
-### Concatenating Files
+### Web Interface
+
+The web UI provides a visual way to concatenate and de-concatenate files with drag-and-drop support.
+
+#### Concatenating Files
 
 1. Ensure the mode is set to **Concatenate**.
 2. (Optional) Adjust the **Max Files** dropdown to set a safety limit (500 - 20,000 files, default: 10,000). This prevents browser memory issues when processing large folders.
@@ -240,6 +244,115 @@ Warning: 3 file(s) were skipped due to missing end markers: src/utils.js, src/co
 ```
 
 The parser is designed to be **fault-tolerant**: valid files are always extracted even if others in the same bundle are corrupted. Check the browser console for a complete list of skipped files with their paths.
+
+### CLI (Command Line Interface)
+
+Concatenator also provides a professional CLI for automation and scripting workflows.
+
+#### Installation
+
+Link the CLI globally for system-wide access:
+
+```bash
+npm link
+```
+
+Or use the development script from the project directory:
+
+```bash
+npm run dev:cli -- [command] [options]
+```
+
+#### Commands
+
+**`concat <path>`** - Bundle a directory into a single LLM-ready file
+
+```bash
+# Output to stdout (default)
+concatenator concat ./src
+
+# Output to file
+concatenator concat -o context.txt ./src
+
+# With verbose logging and exclusions
+concatenator concat -o context.txt -v -e node_modules,dist ./src
+```
+
+Options:
+
+- `-o, --output <file>` - Specify output filename (default: stdout)
+- `-e, --exclude <pattern>` - Additional patterns to ignore (comma-separated)
+- `-v, --verbose` - Show detailed file processing logs
+
+**`extract <file>`** - Reconstruct a project from a concatenated file
+
+```bash
+# Extract to directory (default)
+concatenator extract -o ./restored bundle.txt
+
+# Extract as ZIP archive
+concatenator extract --zip -o restored.zip bundle.txt
+
+# Validate without extracting (dry-run)
+concatenator extract --dry-run bundle.txt
+
+# With verbose output
+concatenator extract -v -o ./restored bundle.txt
+
+# Dry-run with very verbose output (shows all foreign markers)
+concatenator extract --dry-run -vv bundle.txt
+```
+
+Options:
+
+- `-o, --output <dir>` - Destination directory (default: `.`)
+- `-z, --zip` - Output as a .zip archive instead of writing to disk
+- `-d, --dry-run` - Validate integrity without extracting
+- `-v, --verbose` - Show detailed file processing logs
+- `-vv` - Very verbose (shows all foreign markers in dry-run mode)
+
+**`validate <file>`** - Check the integrity of a concatenated file
+
+```bash
+concatenator validate bundle.txt
+
+# With verbose output
+concatenator validate bundle.txt -v
+
+# Very verbose (shows all foreign markers)
+concatenator validate -vv bundle.txt
+```
+
+Options:
+
+- `-v, --verbose` - Show detailed validation logs
+- `-vv` - Very verbose (shows all foreign markers and detailed breakdown)
+
+Validates session ID consistency, marker balance, and file structure. Exits with code 0 on success, 1 on failure.
+
+#### Global Options
+
+- `-V, --version` - Output the version number
+- `-h, --help` - Display help for command
+
+#### Examples
+
+```bash
+# Concatenate directory to file
+concatenator concat -o context.txt ./src
+
+# Concatenate with exclusions
+concatenator concat -o output.txt -e node_modules,dist ./project
+
+# Extract and restore files
+concatenator extract -o ./restored bundle.txt
+
+# Extract as ZIP archive
+concatenator extract --zip -o backup.zip bundle.txt
+
+# Validate file integrity
+concatenator validate bundle.txt
+```
 
 ## Contribution
 

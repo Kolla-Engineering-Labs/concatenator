@@ -9,7 +9,6 @@
 .terraform
 .vagrant
 .vscode
-/^\.concatenate-ignore-worker-\d+$/
 /\.class$/
 /\.exe$/
 /\.jar$/
@@ -19,6 +18,7 @@
 /\.swp$/
 /^__.*cache__$/
 /^\..*_cache$/
+/^\.concatenate-ignore-worker-\d+$/
 bin
 build
 desktop.ini
@@ -29,6 +29,7 @@ obj
 package-lock.json
 ruff_output.txt
 target
+temp-pattern
 Thumbs.db
 vendor
 venv

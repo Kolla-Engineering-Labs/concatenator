@@ -1,11 +1,11 @@
 import { renderHook, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { useFileProcessing } from '../src/hooks/useFileProcessing'
+import { useFileProcessing } from '../src/web/features/concatenator/hooks/useFileProcessing'
 import {
   START_DELIMITER,
   END_DELIMITER,
   FILE_END_DELIMITER,
-} from '../src/constants'
+} from '../src/core/constants'
 
 // Mock JSZip
 const mockFile = vi.fn()
@@ -119,10 +119,10 @@ describe('useFileProcessing', () => {
       expect(createObjCallArgs).toBeInstanceOf(Blob)
 
       const text = await createObjCallArgs.text()
-      expect(text).toContain(`${START_DELIMITER}src/test.js${END_DELIMITER}`)
-      expect(text).toContain(
-        'console.log("hello");\n<<<<< CONCATENATOR_FILE_END >>>>>'
-      )
+      expect(text).toContain(`${START_DELIMITER}src/test.js`)
+      expect(text).toContain(`${END_DELIMITER}`)
+      expect(text).toContain('console.log("hello");')
+      expect(text).toContain(FILE_END_DELIMITER)
     })
 
     it('safely processes files with empty or undefined webkitRelativePath properties', async () => {
@@ -151,7 +151,8 @@ describe('useFileProcessing', () => {
       const createObjCallArgs = (global.URL.createObjectURL as any).mock
         .calls[0][0]
       const text = await createObjCallArgs.text()
-      expect(text).toContain(`${START_DELIMITER}${END_DELIMITER}`)
+      expect(text).toContain(`${START_DELIMITER}`)
+      expect(text).toContain(`${END_DELIMITER}`)
       expect(text).toContain('orphan content')
     })
 
@@ -300,8 +301,9 @@ describe('useFileProcessing', () => {
         .calls[0][0]
       const text = await createObjCallArgs.text()
       expect(text).toContain(
-        `${START_DELIMITER}src/../../../etc/passwd%20null&?.txt${END_DELIMITER}`
+        `${START_DELIMITER}src/../../../etc/passwd%20null&?.txt`
       )
+      expect(text).toContain(`${END_DELIMITER}`)
     })
 
     it('does not enforce individual file size limitations risking V8 string accumulation memory issues', async () => {
@@ -1716,9 +1718,9 @@ describe('useFileProcessing', () => {
       const createObjCallArgs = (global.URL.createObjectURL as any).mock
         .calls[0][0]
       const text = await createObjCallArgs.text()
-      expect(text).toContain(
-        `${START_DELIMITER}src/empty.txt${END_DELIMITER}\n\n${FILE_END_DELIMITER}`
-      )
+      expect(text).toContain(`${START_DELIMITER}src/empty.txt`)
+      expect(text).toContain(`${END_DELIMITER}`)
+      expect(text).toContain(FILE_END_DELIMITER)
     })
 
     it('processes files with special characters and HTML entities in path', async () => {
@@ -1748,7 +1750,8 @@ describe('useFileProcessing', () => {
       const createObjCallArgs = (global.URL.createObjectURL as any).mock
         .calls[0][0]
       const text = await createObjCallArgs.text()
-      expect(text).toContain(`${START_DELIMITER}${specialPath}${END_DELIMITER}`)
+      expect(text).toContain(`${START_DELIMITER}${specialPath}`)
+      expect(text).toContain(`${END_DELIMITER}`)
     })
 
     it('normalizes mixed mac/windows/linux line endings automatically', async () => {

@@ -14,20 +14,28 @@ import React, {
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/react'
 import posthog from 'posthog-js'
-import { Header } from './components/Header'
-import { Footer } from './components/Footer'
-import { ModeToggle } from './components/ModeToggle'
-import { UploadZone } from './components/UploadZone'
-import { FileView } from './components/FileView'
+import { Header } from './web/features/concatenator/components/Header'
+import { Footer } from './web/features/concatenator/components/Footer'
+import { ModeToggle } from './web/features/concatenator/components/ModeToggle'
+import { UploadZone } from './web/features/concatenator/components/UploadZone'
+import { FileView } from './web/features/concatenator/components/FileView'
 
 // Lazy load components that aren't needed on initial render
 const IgnoreList = lazy(() =>
-  import('./components/IgnoreList').then((m) => ({ default: m.IgnoreList }))
+  import('./web/features/concatenator/components/IgnoreList').then((m) => ({
+    default: m.IgnoreList,
+  }))
 )
-import { useIgnoreList } from './hooks/useIgnoreList'
-import { useFileProcessing } from './hooks/useFileProcessing'
-import { useFileTree } from './hooks/useFileTree'
-import { ViewMode, AppMode, FileItem, TreeItem, OutputFormat } from './types'
+import { useIgnoreList } from './web/features/concatenator/hooks/useIgnoreList'
+import { useFileProcessing } from './web/features/concatenator/hooks/useFileProcessing'
+import { useFileTree } from './web/features/concatenator/hooks/useFileTree'
+import {
+  ViewMode,
+  AppMode,
+  FileItem,
+  TreeItem,
+  OutputFormat,
+} from './core/types'
 
 /**
  * The main application component that orchestrates the file concatenation and de-concatenation workflow.
@@ -85,6 +93,7 @@ export default function App() {
     handleFileUpload,
     handleDrop,
     handleConcatenate,
+    handleDownloadAsZip,
   } = useFileProcessing({
     appMode,
     compiledIgnores,
@@ -276,6 +285,7 @@ export default function App() {
               }
               onClearAll={handleClearAll}
               onIgnoreFile={addIgnoreItem}
+              onDownloadAsZip={() => handleDownloadAsZip?.(filteredFiles)}
               onRemoveFile={handleRemoveFile}
               outputFormat={outputFormat}
               setOutputFormat={setOutputFormat}

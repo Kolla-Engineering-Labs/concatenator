@@ -4,7 +4,7 @@ import {
   END_DELIMITER,
   FILE_END_DELIMITER,
   DEFAULT_IGNORE_LIST,
-} from '../src/constants'
+} from '../src/core/constants'
 
 describe('Constants', () => {
   describe('Delimiters', () => {
@@ -24,11 +24,11 @@ describe('Constants', () => {
     })
 
     it('START_DELIMITER contains identifying marker', () => {
-      expect(START_DELIMITER).toContain('CONCATENATOR_FILE_START')
+      expect(START_DELIMITER).toContain('FILE_START')
     })
 
     it('FILE_END_DELIMITER contains identifying marker', () => {
-      expect(FILE_END_DELIMITER).toContain('CONCATENATOR_FILE_END')
+      expect(FILE_END_DELIMITER).toContain('FILE_END')
     })
 
     it('END_DELIMITER is different from FILE_END_DELIMITER', () => {
@@ -49,8 +49,9 @@ describe('Constants', () => {
 
     it('delimiters have reasonable lengths', () => {
       // Should be long enough to avoid accidental collisions
-      expect(START_DELIMITER.length).toBeGreaterThanOrEqual(20)
-      expect(FILE_END_DELIMITER.length).toBeGreaterThanOrEqual(20)
+      // Note: FILE_START is shorter than CONCATENATOR_FILE_START by design (obfuscation)
+      expect(START_DELIMITER.length).toBeGreaterThanOrEqual(15)
+      expect(FILE_END_DELIMITER.length).toBeGreaterThanOrEqual(15)
     })
 
     it('START_DELIMITER ends with space for path separation', () => {

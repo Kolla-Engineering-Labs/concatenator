@@ -1,7 +1,7 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { useIgnoreList } from '../src/hooks/useIgnoreList'
-import { DEFAULT_IGNORE_LIST } from '../src/constants'
+import { useIgnoreList } from '../src/web/features/concatenator/hooks/useIgnoreList'
+import { DEFAULT_IGNORE_LIST } from '../src/core/constants'
 
 describe('useIgnoreList', () => {
   beforeEach(() => {

@@ -5,13 +5,21 @@
 
 import React, { useState, useRef, useCallback } from 'react'
 import JSZip from 'jszip'
-import { FileItem, AppMode, OutputFormat } from '../types'
+import { FileItem, AppMode, OutputFormat } from '../../../../core/types'
 import {
   START_DELIMITER,
   END_DELIMITER,
   FILE_END_DELIMITER,
-} from '../constants'
-import { logger } from '../lib/logger'
+} from '../../../../core/constants'
+import {
+  deconcatenate,
+  concatenate,
+  generateFileTimestamp,
+  validateConcatenation,
+} from '../../../../core/engine'
+import type { ValidationResult } from '../../../../core/types'
+import { createZipFromVirtualFiles } from '../../../../drivers/zip-driver'
+import { logger } from '../../../../lib/logger'
 
 interface UseFileProcessingProps {
   appMode: AppMode
@@ -34,6 +42,8 @@ export const useFileProcessing = ({
   const isProcessingRef = useRef(false)
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0 })
   const [importError, setImportError] = useState<string | null>(null)
+  const [validationResult, setValidationResult] =
+    useState<ValidationResult | null>(null)
   const cancelImportRef = useRef(false)
   const activeReaderRef = useRef<FileReader | null>(null)
   const setIsProcessing = useCallback((processing: boolean) => {
@@ -116,145 +126,28 @@ export const useFileProcessing = ({
         for (const fileItem of targetFiles) {
           if (fileItem.kind !== 'file' || !fileItem.content) continue
 
-          const zip = new JSZip()
-          let foundInThisFile = false
           const content = fileItem.content as string
 
-          // Track added paths to prevent duplicates in ZIP (some libraries error on duplicates)
-          const addedPaths = new Set<string>()
+          // Use the core engine to parse concatenated content
+          const result = deconcatenate(content)
 
-          let searchIndex = 0
-
-          /**
-           * De-concatenation Parser Logic
-           *
-           * Handles the parsing of concatenated files with fault tolerance for:
-           * - Missing FILE_END_DELIMITER (LLM hallucinations, deletions, truncation)
-           * - Malformed markers or nested delimiters
-           *
-           * Each file block follows the format:
-           *   <<<<< CONCATENATOR_FILE_START: {path} >>>>>
-           *   {content}
-           *   <<<<< CONCATENATOR_FILE_END >>>>>
-           *
-           * When an end marker is missing, the file is skipped and the parser
-           * resumes at the next valid START_DELIMITER to prevent delimiter bleeding.
-           */
-          while (true) {
-            const startIndex = content.indexOf(START_DELIMITER, searchIndex)
-            if (startIndex === -1) break
-
-            const pathStart = startIndex + START_DELIMITER.length
-            const pathEnd = content.indexOf(END_DELIMITER, pathStart)
-            if (pathEnd === -1) break
-
-            // Look ahead to detect if next file starts before current file ends
-            // This indicates a missing FILE_END_DELIMITER (e.g., LLM deleted it)
-            const nextStartDelimiter = content.indexOf(
-              START_DELIMITER,
-              pathStart
-            )
-
-            const contentStartRaw = pathEnd + END_DELIMITER.length
-            const fileEndIndex = content.indexOf(
-              FILE_END_DELIMITER,
-              contentStartRaw
-            )
-
-            const path = content.substring(pathStart, pathEnd).trim()
-
-            /**
-             * Partial File Detection
-             *
-             * A file is considered "partial" or corrupted if:
-             * 1. No FILE_END_DELIMITER found (fileEndIndex === -1), OR
-             * 2. Next file's START_DELIMITER appears before current file's END_DELIMITER
-             *    (indicates the end marker was deleted/hallucinated)
-             *
-             * Recovery Strategy:
-             * - Skip the corrupted file (don't add to ZIP)
-             * - Log the path for user visibility
-             * - Resume parsing at the next START_DELIMITER position
-             * - This prevents content from bleeding into adjacent files
-             */
-            if (
-              fileEndIndex === -1 ||
-              (nextStartDelimiter !== -1 && nextStartDelimiter < fileEndIndex)
-            ) {
-              skippedFiles.push(path || '(unknown path)')
+          if (result.skippedPaths.length > 0) {
+            skippedFiles.push(...result.skippedPaths)
+            for (const path of result.skippedPaths) {
               logger.warn(
                 `Missing end marker for file "${path || '(unknown)'}" - file will be skipped`
               )
-              // Resume at next file's start, or end of content if no more files
-              searchIndex =
-                nextStartDelimiter !== -1 ? nextStartDelimiter : content.length
-              continue
             }
-
-            // Comprehensive path traversal sanitization
-            let sanitizedPath = path
-              // Remove null bytes (using char code to avoid ESLint control-regex error)
-              .replace(new RegExp(String.fromCharCode(0), 'g'), '')
-              // Normalize backslashes to forward slashes for security
-              .replace(/\\/g, '/')
-              // Remove leading slashes (absolute path prevention)
-              .replace(/^\/+/, '')
-              // Remove Windows drive letters (C:, D:, etc.)
-              .replace(/^[a-zA-Z]:\//, '')
-              // Remove UNC path prefixes (\\?\)
-              .replace(/^\\?\//, '')
-
-            // Resolve all ../ sequences throughout the path using stack-based normalization
-            const parts = sanitizedPath.split('/')
-            const safeParts: string[] = []
-            for (const part of parts) {
-              if (part === '..') {
-                // Attempt to traverse up - pop the last safe directory if possible
-                // This prevents escaping the root while preserving valid relative navigation
-                if (safeParts.length > 0) {
-                  safeParts.pop()
-                }
-                // If at root, ignore the .. (can't go above root)
-              } else if (part === '.' || part === '') {
-                // Skip current directory references and empty parts
-                continue
-              } else {
-                safeParts.push(part)
-              }
-            }
-            sanitizedPath = safeParts.join('/')
-
-            let fileContent = content.substring(contentStartRaw, fileEndIndex)
-            fileContent = fileContent.replace(/^[\r\n]+|[\r\n]+$/g, '')
-
-            if (sanitizedPath) {
-              // Handle duplicate paths by appending a counter suffix (e.g., file(1).js)
-              let finalPath = sanitizedPath
-              let counter = 1
-              const lastDotIndex = sanitizedPath.lastIndexOf('.')
-              const hasExtension = lastDotIndex > sanitizedPath.lastIndexOf('/')
-              const baseName = hasExtension
-                ? sanitizedPath.slice(0, lastDotIndex)
-                : sanitizedPath
-              const extension = hasExtension
-                ? sanitizedPath.slice(lastDotIndex)
-                : ''
-
-              while (addedPaths.has(finalPath)) {
-                finalPath = `${baseName}(${counter})${extension}`
-                counter++
-              }
-
-              addedPaths.add(finalPath)
-              zip.file(finalPath, fileContent)
-              foundInThisFile = true
-              foundAnyTotal = true
-            }
-
-            searchIndex = fileEndIndex + FILE_END_DELIMITER.length
           }
 
-          if (foundInThisFile) {
+          // Add extracted files to ZIP
+          const zip = new JSZip()
+          for (const file of result.files) {
+            zip.file(file.path, file.content)
+          }
+
+          if (result.foundAny) {
+            foundAnyTotal = true
             const zipBlob = await zip.generateAsync({ type: 'blob' })
             const url = URL.createObjectURL(zipBlob)
             const a = document.createElement('a')
@@ -589,14 +482,7 @@ export const useFileProcessing = ({
       setIsProcessing(true)
       const now = new Date()
       const timestamp = now.toLocaleString()
-
-      const YYYY = now.getFullYear()
-      const MM = String(now.getMonth() + 1).padStart(2, '0')
-      const DD = String(now.getDate()).padStart(2, '0')
-      const HH = String(now.getHours()).padStart(2, '0')
-      const II = String(now.getMinutes()).padStart(2, '0')
-      const SS = String(now.getSeconds()).padStart(2, '0')
-      const fileTimestamp = `${YYYY}${MM}${DD}_${HH}${II}${SS}`
+      const fileTimestamp = generateFileTimestamp(now)
 
       const fileList = filteredFiles.filter((f) => f.kind === 'file')
 
@@ -682,14 +568,11 @@ export const useFileProcessing = ({
         // Save PDF
         doc.save(`concatenator-${fileTimestamp}.pdf`)
       } else {
-        // Generate text file (default)
-        let result = `Concatenated on: ${timestamp}\n\n`
-
-        fileList.forEach((file) => {
-          result += `${START_DELIMITER}${file.path}${END_DELIMITER}\n`
-          result += file.content
-          result += `\n${FILE_END_DELIMITER}\n\n`
-        })
+        // Generate text file (default) using the core engine
+        const result = concatenate(
+          fileList.map((f) => ({ path: f.path, content: f.content as string })),
+          timestamp
+        )
 
         const blob = new Blob([result], { type: 'text/plain' })
         const url = URL.createObjectURL(blob)
@@ -707,6 +590,60 @@ export const useFileProcessing = ({
     [setIsProcessing, maxFileLimit]
   )
 
+  const handleDownloadAsZip = useCallback(
+    async (filteredFiles: FileItem[]) => {
+      const fileList = filteredFiles.filter((f) => f.kind === 'file')
+
+      if (fileList.length === 0) return
+
+      setIsProcessing(true)
+
+      try {
+        const virtualFiles = fileList.map((f) => ({
+          path: f.path,
+          content: typeof f.content === 'string' ? f.content : '',
+        }))
+
+        const zipData = await createZipFromVirtualFiles(virtualFiles)
+        const blob = new Blob([zipData.buffer as ArrayBuffer], {
+          type: 'application/zip',
+        })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        const fileTimestamp = generateFileTimestamp()
+        a.download = `concatenator-${fileTimestamp}.zip`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+      } catch (error) {
+        logger.error('Failed to create ZIP:', error)
+        setImportError('Failed to create ZIP archive')
+      } finally {
+        setIsProcessing(false)
+      }
+    },
+    [setIsProcessing]
+  )
+
+  /**
+   * Validate concatenated content before extraction
+   * Performs pre-flight check and updates validation state
+   */
+  const validateContent = useCallback((content: string): ValidationResult => {
+    const result = validateConcatenation(content)
+    setValidationResult(result)
+    return result
+  }, [])
+
+  /**
+   * Clear validation result
+   */
+  const clearValidation = useCallback(() => {
+    setValidationResult(null)
+  }, [])
+
   return {
     files,
     setFiles,
@@ -720,5 +657,9 @@ export const useFileProcessing = ({
     handleDrop,
     handleConcatenate,
     handleDeconcatenate,
+    handleDownloadAsZip,
+    validationResult,
+    validateContent,
+    clearValidation,
   }
 }

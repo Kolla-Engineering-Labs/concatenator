@@ -4,7 +4,7 @@
  */
 
 import { useMemo } from 'react'
-import { FileItem, TreeItem } from '../types'
+import { FileItem, TreeItem } from '../../../../core/types'
 
 /**
  * Custom hook to construct a hierarchical tree structure from a flat list of files.

@@ -195,10 +195,14 @@ test.describe('UI Interactions and Edge Cases', () => {
         // Type in ignore input and press Enter
         const ignoreInput = page.getByPlaceholder('Add ignore pattern...')
         await ignoreInput.fill('*.tmp')
-        await ignoreInput.press('Enter')
-
-        // Wait for network idle and React re-render
-        await page.waitForLoadState('networkidle')
+        await Promise.all([
+          page.waitForResponse(
+            (resp) =>
+              resp.url().includes('/api/ignore-list') &&
+              resp.request().method() === 'POST'
+          ),
+          ignoreInput.press('Enter'),
+        ])
 
         // Additional delay for WebKit browsers (Mobile Safari) for rendering stability
         if (browserName === 'webkit') {

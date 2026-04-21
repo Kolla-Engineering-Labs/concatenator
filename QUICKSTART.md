@@ -28,7 +28,11 @@ The app will open at `http://localhost:3000`.
 
 ## 🚀 Quick Usage (1-Minute Guide)
 
-### 1. Concatenate Files
+Choose your preferred interface:
+
+### Option A: Web Interface (Recommended for First-Time Users)
+
+#### 1. Concatenate Files
 
 - **Drag & Drop**: Drop your project folder onto the upload zone.
 - **Filter**: Review the file tree. Use the **Ignore List** to filter out unwanted noise (e.g., `node_modules`, `.git`, or build artifacts).
@@ -49,6 +53,50 @@ The app will open at `http://localhost:3000`.
 
 > [!NOTE]
 > PDF exports are intended for final consumption; they do not support de-concatenation.
+
+---
+
+### Option B: CLI (For Automation & Scripting)
+
+Perfect for CI/CD pipelines, batch processing, or terminal-centric workflows.
+
+#### Setup
+
+```bash
+# Link the CLI globally
+npm link
+
+# Verify installation
+concatenator --help
+```
+
+#### Quick CLI Examples
+
+```bash
+# Concatenate directory to file
+concatenator concat -o context.txt ./src
+
+# Concatenate with exclusions
+concatenator concat -o output.txt -e node_modules,dist ./project
+
+# Extract and restore files
+concatenator extract -o ./restored bundle.txt
+
+# Extract as ZIP archive
+concatenator extract --zip -o backup.zip bundle.txt
+
+# Validate file integrity
+concatenator validate bundle.txt
+
+# Validate with detailed output (shows foreign markers)
+concatenator validate -v bundle.txt
+
+# Very verbose (shows all foreign markers)
+concatenator validate -vv bundle.txt
+```
+
+> [!TIP]
+> Use `npm run dev:cli -- [command]` from the project directory during development instead of `npm link`.
 
 ## Next Steps
 

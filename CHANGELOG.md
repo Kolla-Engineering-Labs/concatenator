@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Professional CLI Architecture**: Replaced manual `process.argv` parsing with structured [Commander.js](https://github.com/tj/commander.js/) implementation
+  - Three primary commands: `concat`, `extract`, `validate`
+  - Consistent flag syntax: `-o, --output`, `-e, --exclude`, `-v, --verbose`, `-z, --zip`, `-d, --dry-run`
+  - Global error handling with clean error messages
+  - Version display from `package.json`
+  - Shebang support for `#!/usr/bin/env npx tsx` execution
+  - Development script: `npm run dev:cli`
+- **ESM Module Resolution**: Updated all relative imports to use `.js` extensions for proper Node.js ESM compatibility
+
+### Changed
+
+- **CLI Command Structure**: Breaking change from flag-based interface (`--undo`, `--zip`, `--dry-run`) to explicit command structure:
+  - `concatenator <directory> [output]` → `concatenator concat <path> -o <file>`
+  - `concatenator --undo <file>` → `concatenator extract <file>`
+  - `concatenator --undo --dry-run <file>` → `concatenator validate <file>` or `extract --dry-run`
+
 ## [0.1.1] - 2026-04-20
 
 ### Added
