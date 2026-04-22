@@ -10,7 +10,10 @@ export const ModeSwitch: React.FC = () => {
   }
 
   return (
-    <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-700 w-full">
+    <div
+      className="flex bg-slate-900 p-1 rounded-lg border border-slate-700 w-full"
+      data-testid="mode-switch"
+    >
       <button
         onClick={() => handleModeChange(AppMode.CONCATENATE)}
         className={`flex-1 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${

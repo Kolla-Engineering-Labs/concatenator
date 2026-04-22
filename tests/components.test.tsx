@@ -8,7 +8,7 @@ import { ModeSwitch } from '../src/web/components/ModeSwitch'
 import { OutputFormatToggle } from '../src/web/features/concatenator/components/OutputFormatToggle'
 import { TreeNode } from '../src/web/features/concatenator/components/TreeNode'
 import { TreeItem } from '../src/core/types'
-import { AppMode } from '../src/web/types/workbench'
+import { AppMode, ViewPreference } from '../src/web/types/workbench'
 
 import { useWorkbench } from '../src/web/hooks/useWorkbench'
 
@@ -105,7 +105,7 @@ describe('ModeSwitch Component', () => {
     vi.mocked(useWorkbench).mockReturnValue({
       mode: AppMode.CONCATENATE,
       setMode: mockSetMode,
-      view: 'list' as any,
+      view: ViewPreference.LIST,
       ignoreList: [],
       isSidebarOpen: true,
       compiledIgnores: [],
@@ -118,6 +118,8 @@ describe('ModeSwitch Component', () => {
       setIgnoreList: vi.fn(),
       setForceMode: vi.fn(),
       setVirtualFileSystem: vi.fn(),
+      addIgnorePattern: vi.fn(),
+      removeIgnorePattern: vi.fn(),
     })
   })
 
@@ -142,7 +144,7 @@ describe('ModeSwitch Component', () => {
     vi.mocked(useWorkbench).mockReturnValue({
       mode: AppMode.DECONCATENATE,
       setMode: mockSetMode,
-      view: 'list' as any,
+      view: ViewPreference.LIST,
       ignoreList: [],
       isSidebarOpen: true,
       compiledIgnores: [],
@@ -155,6 +157,8 @@ describe('ModeSwitch Component', () => {
       setIgnoreList: vi.fn(),
       setForceMode: vi.fn(),
       setVirtualFileSystem: vi.fn(),
+      addIgnorePattern: vi.fn(),
+      removeIgnorePattern: vi.fn(),
     })
 
     render(<ModeSwitch />)
@@ -170,7 +174,7 @@ describe('ModeSwitch Component', () => {
     vi.mocked(useWorkbench).mockReturnValue({
       mode: AppMode.DECONCATENATE,
       setMode: mockSetMode,
-      view: 'list' as any,
+      view: ViewPreference.LIST,
       ignoreList: [],
       isSidebarOpen: true,
       compiledIgnores: [],
@@ -183,6 +187,8 @@ describe('ModeSwitch Component', () => {
       setIgnoreList: vi.fn(),
       setForceMode: vi.fn(),
       setVirtualFileSystem: vi.fn(),
+      addIgnorePattern: vi.fn(),
+      removeIgnorePattern: vi.fn(),
     })
 
     render(<ModeSwitch />)
@@ -196,7 +202,7 @@ describe('ModeSwitch Component', () => {
     vi.mocked(useWorkbench).mockReturnValue({
       mode: AppMode.CONCATENATE,
       setMode: mockSetMode,
-      view: 'list' as any,
+      view: ViewPreference.LIST,
       ignoreList: [],
       compiledIgnores: [],
       isSidebarOpen: true,
@@ -209,6 +215,8 @@ describe('ModeSwitch Component', () => {
       setIgnoreList: vi.fn(),
       setForceMode: vi.fn(),
       setVirtualFileSystem: vi.fn(),
+      addIgnorePattern: vi.fn(),
+      removeIgnorePattern: vi.fn(),
     })
 
     render(<ModeSwitch />)
@@ -249,6 +257,8 @@ describe('TreeNode Component', () => {
         node={node}
         expandedPaths={new Set()}
         setExpandedPaths={mockSetExpandedPaths}
+        onQuickLook={vi.fn()}
+        onRemoveFile={vi.fn()}
       />
     )
 
@@ -267,6 +277,8 @@ describe('TreeNode Component', () => {
         node={node}
         expandedPaths={new Set()}
         setExpandedPaths={mockSetExpandedPaths}
+        onQuickLook={vi.fn()}
+        onRemoveFile={vi.fn()}
       />
     )
 
@@ -285,6 +297,8 @@ describe('TreeNode Component', () => {
         node={node}
         expandedPaths={new Set()}
         setExpandedPaths={mockSetExpandedPaths}
+        onQuickLook={vi.fn()}
+        onRemoveFile={vi.fn()}
       />
     )
 
@@ -304,6 +318,8 @@ describe('TreeNode Component', () => {
         node={node}
         expandedPaths={new Set(['/test'])}
         setExpandedPaths={mockSetExpandedPaths}
+        onQuickLook={vi.fn()}
+        onRemoveFile={vi.fn()}
       />
     )
 
@@ -323,6 +339,8 @@ describe('TreeNode Component', () => {
         node={node}
         expandedPaths={new Set()}
         setExpandedPaths={mockSetExpandedPaths}
+        onQuickLook={vi.fn()}
+        onRemoveFile={vi.fn()}
       />
     )
 
@@ -339,6 +357,8 @@ describe('TreeNode Component', () => {
         node={node}
         expandedPaths={new Set()}
         setExpandedPaths={mockSetExpandedPaths}
+        onQuickLook={vi.fn()}
+        onRemoveFile={vi.fn()}
       />
     )
 
@@ -371,6 +391,8 @@ describe('TreeNode Component', () => {
         node={node}
         expandedPaths={new Set(['/parent'])}
         setExpandedPaths={mockSetExpandedPaths}
+        onQuickLook={vi.fn()}
+        onRemoveFile={vi.fn()}
       />
     )
 
@@ -387,6 +409,8 @@ describe('TreeNode Component', () => {
         depth={2}
         expandedPaths={new Set()}
         setExpandedPaths={mockSetExpandedPaths}
+        onQuickLook={vi.fn()}
+        onRemoveFile={vi.fn()}
       />
     )
 
@@ -408,6 +432,8 @@ describe('TreeNode Component', () => {
         depth={0}
         expandedPaths={new Set()}
         setExpandedPaths={mockSetExpandedPaths}
+        onQuickLook={vi.fn()}
+        onRemoveFile={vi.fn()}
       />
     )
 
@@ -429,6 +455,8 @@ describe('TreeNode Component', () => {
         node={node}
         expandedPaths={new Set()}
         setExpandedPaths={mockSetExpandedPaths}
+        onQuickLook={vi.fn()}
+        onRemoveFile={vi.fn()}
       />
     )
 

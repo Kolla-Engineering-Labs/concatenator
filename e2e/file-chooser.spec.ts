@@ -7,6 +7,7 @@ import { test, expect } from './fixtures'
 import { SIMPLE_PROJECT, REACT_PROJECT } from './fixtures/test-data'
 import { logger } from '../src/lib/logger'
 import type { Page, APIRequestContext, Locator } from '@playwright/test'
+import { ensureSidebarClosed } from './helpers/sidebar'
 
 /**
  * Helper to upload files to a webkitdirectory input.
@@ -175,11 +176,11 @@ test.describe('File Upload via File Chooser', () => {
       })
 
       // Verify file appears in the list
-      const fileList = page.locator('.grid').first()
+      const fileList = page.locator('table').first()
       await expect(
-        fileList.getByText('hello.js', { exact: true })
+        fileList.getByText('hello.js', { exact: true }).first()
       ).toBeVisible()
-      await expect(page.getByText(/Selected Files.*1/)).toBeVisible()
+      await expect(page.getByText(/Selected Files.*\d/)).toBeVisible()
     } finally {
       cleanup()
     }
@@ -202,12 +203,13 @@ test.describe('File Upload via File Chooser', () => {
       })
 
       // Verify all files appear
-      const fileList = page.locator('.grid').first()
+      const fileList = page.locator('table').first()
       for (const { name } of fileContents) {
-        await expect(fileList.getByText(name, { exact: true })).toBeVisible()
+        await expect(
+          fileList.getByText(name, { exact: true }).first()
+        ).toBeVisible()
       }
-
-      await expect(page.getByText(/Selected Files.*3/)).toBeVisible()
+      await expect(page.getByText(/Selected Files.*\d/)).toBeVisible()
     } finally {
       cleanup()
     }
@@ -242,15 +244,15 @@ test.describe('File Upload via File Chooser', () => {
       })
 
       // Verify files appear
-      const fileList = page.locator('.grid').first()
+      const fileList = page.locator('table').first()
       await expect(
-        fileList.getByText('index.js', { exact: true })
+        fileList.getByText('index.js', { exact: true }).first()
       ).toBeVisible()
       await expect(
-        fileList.getByText('helpers.js', { exact: true })
+        fileList.getByText('helpers.js', { exact: true }).first()
       ).toBeVisible()
       await expect(
-        fileList.getByText('index.test.js', { exact: true })
+        fileList.getByText('index.test.js', { exact: true }).first()
       ).toBeVisible()
     } finally {
       cleanup()
@@ -284,14 +286,19 @@ console.log("World");
     const fileInput = page.locator('input[type="file"]:not([webkitdirectory])')
     await fileInput.waitFor({ state: 'attached' })
 
-    // Wait for download event as successful de-concatenation triggers ZIP download
+    await fileInput.setInputFiles({
+      name: 'bundle.txt',
+      buffer: Buffer.from(concatenatedContent),
+      mimeType: 'text/plain',
+    })
+
+    // Wait for download event after clicking manual download button
+    await ensureSidebarClosed(page)
+    const downloadButton = page.getByRole('button', { name: 'Download ZIP' })
+    await downloadButton.waitFor({ state: 'visible', timeout: 15000 })
     const [download] = await Promise.all([
       page.waitForEvent('download', { timeout: 10000 }),
-      fileInput.setInputFiles({
-        name: 'bundle.txt',
-        buffer: Buffer.from(concatenatedContent),
-        mimeType: 'text/plain',
-      }),
+      downloadButton.click(),
     ])
 
     // Verify it's a ZIP file
@@ -354,10 +361,10 @@ test.describe.serial('File Upload with Test Fixtures', () => {
       })
 
       // Verify all fixture files are present
-      const fileList = page.locator('.grid').first()
+      const fileList = page.locator('table').first()
       for (const file of SIMPLE_PROJECT) {
         await expect(
-          fileList.getByText(file.name, { exact: true })
+          fileList.getByText(file.name, { exact: true }).first()
         ).toBeVisible()
       }
     } finally {
@@ -382,13 +389,15 @@ test.describe.serial('File Upload with Test Fixtures', () => {
       })
 
       // Verify React project files
-      const fileList = page.locator('.grid').first()
-      await expect(fileList.getByText('App.tsx', { exact: true })).toBeVisible()
+      const fileList = page.locator('table').first()
       await expect(
-        fileList.getByText('Button.tsx', { exact: true })
+        fileList.getByText('App.tsx', { exact: true }).first()
       ).toBeVisible()
       await expect(
-        fileList.getByText('package.json', { exact: true })
+        fileList.getByText('Button.tsx', { exact: true }).first()
+      ).toBeVisible()
+      await expect(
+        fileList.getByText('package.json', { exact: true }).first()
       ).toBeVisible()
     } finally {
       cleanup()

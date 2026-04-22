@@ -707,14 +707,17 @@ export function validateConcatenation(input: string): ValidationResult {
 }
 
 /**
- * High-level parser that takes concatenated content and returns a file-map.
+ * High-level parser that takes concatenated content and returns a file-map and skipped paths.
  * Includes "un-neutralization" logic for escaped backticks and special markers.
  *
  * @param content - The concatenated string content
- * @returns Map of path -> content
+ * @returns Object containing fileMap (path -> content) and skippedPaths
  */
-export function parseBundle(content: string): Record<string, string> {
-  const { files } = deconcatenate(content)
+export function parseBundle(content: string): {
+  fileMap: Record<string, string>
+  skippedPaths: string[]
+} {
+  const { files, skippedPaths } = deconcatenate(content)
   const fileMap: Record<string, string> = {}
 
   for (const file of files) {
@@ -729,5 +732,5 @@ export function parseBundle(content: string): Record<string, string> {
     fileMap[file.path] = processedContent
   }
 
-  return fileMap
+  return { fileMap, skippedPaths }
 }

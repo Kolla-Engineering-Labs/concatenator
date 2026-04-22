@@ -8,6 +8,8 @@ export interface ModeContextType extends WorkbenchState {
   setSidebarOpen: (isOpen: boolean) => void
   setForceMode: (force: boolean) => void
   setVirtualFileSystem: (vfs: Record<string, string>) => void
+  addIgnorePattern: (pattern: string) => void
+  removeIgnorePattern: (pattern: string) => void
   resetWorkbench: () => void
 }
 

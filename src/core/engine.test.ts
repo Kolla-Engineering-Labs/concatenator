@@ -294,12 +294,13 @@ legacy content
         { path: 'dir/file2.js', content: 'console.log("hello")' },
       ]
       const bundle = concatenate(files)
-      const result = parseBundle(bundle)
+      const { fileMap, skippedPaths } = parseBundle(bundle)
 
-      expect(result).toEqual({
+      expect(fileMap).toEqual({
         'file1.txt': 'content1',
         'dir/file2.js': 'console.log("hello")',
       })
+      expect(skippedPaths).toEqual([])
     })
 
     it('should un-neutralize escaped backticks', () => {
@@ -307,9 +308,9 @@ legacy content
         { path: 'test.md', content: 'Here is some code: \\`console.log(1)\\`' },
       ]
       const bundle = concatenate(files)
-      const result = parseBundle(bundle)
+      const { fileMap } = parseBundle(bundle)
 
-      expect(result['test.md']).toBe('Here is some code: `console.log(1)`')
+      expect(fileMap['test.md']).toBe('Here is some code: `console.log(1)`')
     })
 
     it('should un-neutralize escaped special markers', () => {
@@ -317,9 +318,9 @@ legacy content
         { path: 'meta.txt', content: 'Look at this: \\<<<<< and \\>>>>>' },
       ]
       const bundle = concatenate(files)
-      const result = parseBundle(bundle)
+      const { fileMap } = parseBundle(bundle)
 
-      expect(result['meta.txt']).toBe('Look at this: <<<<< and >>>>>')
+      expect(fileMap['meta.txt']).toBe('Look at this: <<<<< and >>>>>')
     })
   })
 })

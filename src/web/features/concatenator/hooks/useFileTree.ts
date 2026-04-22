@@ -9,13 +9,14 @@ import { FileItem, TreeItem } from '../../../../core/types'
 /**
  * Custom hook to construct a hierarchical tree structure from a flat list of files.
  */
-export const useFileTree = (filteredFiles: FileItem[]) => {
+export const useFileTree = (filteredFiles: FileItem[], isIgnored: (path: string) => boolean) => {
   const fileTree = useMemo(() => {
     const root: TreeItem = {
       name: 'Root',
-      path: '/',
+      path: '',
       kind: 'directory',
       children: [],
+      isIgnored: false,
     }
 
     filteredFiles.forEach((file) => {
@@ -24,7 +25,7 @@ export const useFileTree = (filteredFiles: FileItem[]) => {
 
       parts.forEach((part, index) => {
         const isLast = index === parts.length - 1
-        const currentPath = '/' + parts.slice(0, index + 1).join('/')
+        const currentPath = parts.slice(0, index + 1).join('/')
 
         let existing = current.children?.find((c) => c.name === part)
 
@@ -34,7 +35,8 @@ export const useFileTree = (filteredFiles: FileItem[]) => {
             path: currentPath,
             kind: isLast ? file.kind : 'directory',
             children: isLast && file.kind === 'file' ? undefined : [],
-            isIgnored: isLast ? file.isIgnored : false,
+            isIgnored: isLast ? file.isIgnored : isIgnored(currentPath),
+            file: isLast ? file : undefined,
           }
           current.children?.push(existing)
         }

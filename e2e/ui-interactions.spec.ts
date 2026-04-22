@@ -132,7 +132,9 @@ test.describe('UI Interactions and Edge Cases', () => {
         ])
 
         // Wait for upload to complete
-        await expect(page.getByText('test.js')).toBeVisible({ timeout: 10000 })
+        await expect(
+          page.getByText('test.js', { exact: true }).first()
+        ).toBeVisible({ timeout: 10000 })
 
         // Find ignore list minimize button and wait for it
         const ignoreSection = page
@@ -177,9 +179,9 @@ test.describe('UI Interactions and Edge Cases', () => {
         ])
 
         // Scope to file list and use exact matching for filename
-        const fileList = page.locator('.grid').first()
+        const fileList = page.locator('table').first()
         await expect(
-          fileList.getByText('temp.tmp', { exact: true })
+          fileList.getByText('temp.tmp', { exact: true }).first()
         ).toBeVisible({ timeout: 10000 })
 
         // Expand ignore list if needed
@@ -288,7 +290,7 @@ test.describe('UI Interactions and Edge Cases', () => {
         ])
 
         // File should be visible even with long name
-        await expect(page.getByText('very-long-filename')).toBeVisible({
+        await expect(page.getByText('very-long-filename').first()).toBeVisible({
           timeout: 10000,
         })
       } finally {
@@ -396,7 +398,9 @@ test.describe('UI Interactions and Edge Cases', () => {
         ])
 
         // Wait for file and ignore list to be visible
-        await expect(page.getByText('test.js')).toBeVisible({ timeout: 10000 })
+        await expect(
+          page.getByText('test.js', { exact: true }).first()
+        ).toBeVisible({ timeout: 10000 })
 
         const ignoreSection = page
           .locator('div')
@@ -419,7 +423,9 @@ test.describe('UI Interactions and Edge Cases', () => {
         ])
 
         // Wait for file to appear
-        await expect(page.getByText('test2.js')).toBeVisible({ timeout: 10000 })
+        await expect(
+          page.getByText('test2.js', { exact: true }).first()
+        ).toBeVisible({ timeout: 10000 })
 
         // Ignore list should still be minimized
         await expect(

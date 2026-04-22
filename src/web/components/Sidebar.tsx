@@ -1,5 +1,6 @@
 import React, { Suspense, lazy } from 'react'
 import { PanelLeftClose } from 'lucide-react'
+import { cn } from '../../lib/utils'
 import { Header } from '../features/concatenator/components/Header'
 import { Footer } from '../features/concatenator/components/Footer'
 import { ModeSwitch } from './ModeSwitch'
@@ -41,14 +42,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
     forceMode,
     setForceMode,
     ignoreList,
-    setIgnoreList,
+    addIgnorePattern,
+    removeIgnorePattern,
   } = useWorkbench()
 
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-transform lg:translate-x-0 flex flex-col h-auto lg:h-screen ${
-        isSidebarOpen ? 'translate-x-0' : '-translate-x-full hidden lg:flex'
-      }`}
+      className={cn(
+        'fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-transform flex flex-col h-screen',
+        isSidebarOpen
+          ? 'translate-x-0'
+          : '-translate-x-full invisible lg:visible lg:translate-x-0'
+      )}
     >
       {/* Sidebar Header */}
       <div className="p-6 flex items-center justify-between shrink-0">
@@ -144,13 +149,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
               newIgnoreItem={newIgnoreItem}
               setNewIgnoreItem={setNewIgnoreItem}
               addIgnoreItem={() => {
-                if (newIgnoreItem && !ignoreList.includes(newIgnoreItem)) {
-                  setIgnoreList([...ignoreList, newIgnoreItem])
+                if (newIgnoreItem) {
+                  addIgnorePattern(newIgnoreItem)
                 }
                 setNewIgnoreItem('')
               }}
               removeIgnoreItem={(item) => {
-                setIgnoreList(ignoreList.filter((i) => i !== item))
+                removeIgnorePattern(item)
               }}
             />
           </Suspense>

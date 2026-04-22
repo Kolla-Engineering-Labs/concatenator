@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { Menu } from 'lucide-react'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/react'
@@ -13,7 +13,7 @@ import { FileView } from './web/features/concatenator/components/FileView'
 
 import { useFileProcessing } from './web/features/concatenator/hooks/useFileProcessing'
 import { useFileTree } from './web/features/concatenator/hooks/useFileTree'
-import { FileItem, TreeItem, OutputFormat, ViewMode } from './core/types'
+import { FileItem, OutputFormat, TreeItem } from './core/types'
 import { useWorkbench } from './web/hooks/useWorkbench'
 import { AppMode } from './web/types/workbench'
 
@@ -48,10 +48,6 @@ export default function App() {
   const [newIgnoreItem, setNewIgnoreItem] = useState('')
   const {
     mode: appMode,
-    view: viewMode,
-    setView: setViewMode,
-    ignoreList,
-    setIgnoreList,
     isIgnored,
     isSidebarOpen,
     setSidebarOpen,
@@ -62,7 +58,7 @@ export default function App() {
   const isIgnoreListLoading = false // ModeContext is local-first
 
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(
-    new Set(['/', 'root'])
+    new Set([''])
   )
 
   // --- Custom Hooks ---
@@ -112,7 +108,44 @@ export default function App() {
       })
   }, [files, virtualFileSystem, appMode, isIgnored])
 
-  const fileTree = useFileTree(displayFiles)
+  const fileTree = useFileTree(displayFiles, isIgnored)
+
+  // Track previously seen paths to only auto-expand new ones
+  const seenPathsRef = useRef<Set<string>>(new Set(['']))
+
+  useEffect(() => {
+    if (files.length === 0 && Object.keys(virtualFileSystem).length === 0) {
+      seenPathsRef.current = new Set([''])
+      setExpandedPaths(new Set(['']))
+    }
+  }, [files.length, virtualFileSystem])
+
+  // Auto-expand all directories when fileTree changes
+  useEffect(() => {
+    if (!fileTree) return
+
+    const allPaths = new Set<string>()
+    const collectPaths = (node: TreeItem) => {
+      if (node.kind === 'directory') {
+        allPaths.add(node.path)
+        node.children?.forEach(collectPaths)
+      }
+    }
+    collectPaths(fileTree)
+
+    setExpandedPaths((prev) => {
+      const next = new Set(prev)
+      let addedAny = false
+      allPaths.forEach((p) => {
+        if (!seenPathsRef.current.has(p)) {
+          next.add(p)
+          seenPathsRef.current.add(p)
+          addedAny = true
+        }
+      })
+      return addedAny ? next : prev
+    })
+  }, [fileTree])
 
   // --- Effects ---
   // View mode and Mode persistence is handled by ModeContext
@@ -147,20 +180,6 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('concatenator-max-files', maxFileLimit.toString())
   }, [maxFileLimit])
-
-  useEffect(() => {
-    setExpandedPaths((prev) => {
-      const next = new Set(prev)
-      const addDirectoryPaths = (node: TreeItem) => {
-        if (node.kind === 'directory') {
-          next.add(node.path)
-          node.children?.forEach(addDirectoryPaths)
-        }
-      }
-      addDirectoryPaths(fileTree)
-      return next
-    })
-  }, [fileTree])
 
   // Clear files and errors when switching modes
   useEffect(() => {
@@ -218,9 +237,7 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <div
-        className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${isSidebarOpen ? 'lg:pl-72' : ''}`}
-      >
+      <div className="flex-1 flex flex-col min-w-0 transition-all duration-300 lg:pl-72">
         {!isSidebarOpen && (
           <div className="fixed top-0 left-0 right-0 z-30 lg:hidden bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 p-3 h-16 flex items-center gap-4 transition-all duration-300">
             <button
@@ -264,8 +281,6 @@ export default function App() {
             <FileView
               files={files}
               filteredFiles={displayFiles}
-              viewMode={viewMode as ViewMode}
-              setViewMode={setViewMode as unknown as (mode: ViewMode) => void}
               fileTree={fileTree}
               expandedPaths={expandedPaths}
               setExpandedPaths={setExpandedPaths}
@@ -277,11 +292,6 @@ export default function App() {
                 )
               }
               onClearAll={handleClearAll}
-              onIgnoreFile={(item) => {
-                if (item && !ignoreList.includes(item)) {
-                  setIgnoreList([...ignoreList, item])
-                }
-              }}
               onDownloadAsZip={() =>
                 handleDownloadAsZip?.(displayFiles.filter((f) => !f.isIgnored))
               }

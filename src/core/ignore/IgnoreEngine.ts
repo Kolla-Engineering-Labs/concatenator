@@ -11,7 +11,8 @@ export class IgnoreEngine {
   private compiledPatterns: (string | RegExp)[]
 
   constructor(patterns: string[]) {
-    this.compiledPatterns = patterns.map((pattern) => {
+    this.compiledPatterns = patterns.map((rawPattern) => {
+      const pattern = rawPattern.replace(/^\//, '')
       if (pattern.startsWith('/') && pattern.endsWith('/')) {
         // Simple heuristic for regex: /pattern/
         try {
@@ -48,7 +49,7 @@ export class IgnoreEngine {
    */
   isIgnored(path: string): boolean {
     if (!path) return false
-    const normalizedPath = path.replace(/\\/g, '/')
+    const normalizedPath = path.replace(/\\/g, '/').replace(/^\//, '')
     const segments = normalizedPath.split('/').filter(Boolean)
     const fileName = segments.length > 0 ? segments[segments.length - 1] : ''
 
@@ -85,6 +86,15 @@ export class IgnoreEngine {
 
         // Also match against full path and each segment
         if (patternRegex.test(normalizedPath)) return true
+        
+        // Special case: if pattern is "path/**", then "path" itself should be ignored
+        if (ignoreStr.endsWith('/**')) {
+          const parentPath = ignoreStr.slice(0, -3)
+          if (normalizedPath === parentPath || normalizedPath.startsWith(parentPath + '/')) {
+            return true
+          }
+        }
+        
         return segments.some((segment) => patternRegex.test(segment))
       }
 

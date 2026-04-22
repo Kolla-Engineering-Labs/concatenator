@@ -87,6 +87,24 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
     // Trigger any additional cleanup for file streams here
   }, [setForceMode, setVirtualFileSystem])
 
+  const addIgnorePattern = useCallback(
+    (pattern: string) => {
+      setIgnoreList((prev) => {
+        if (prev.includes(pattern)) return prev
+        const next = [...prev, pattern].sort((a, b) => a.localeCompare(b))
+        return next
+      })
+    },
+    [setIgnoreList]
+  )
+
+  const removeIgnorePattern = useCallback(
+    (pattern: string) => {
+      setIgnoreList((prev) => prev.filter((p) => p !== pattern))
+    },
+    [setIgnoreList]
+  )
+
   const ignoreEngine = React.useMemo(() => {
     return new IgnoreEngine(ignoreList)
   }, [ignoreList])
@@ -117,6 +135,8 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
         setMode: handleModeChange,
         setView,
         setIgnoreList,
+        addIgnorePattern,
+        removeIgnorePattern,
         setSidebarOpen: setIsSidebarOpen,
         setForceMode,
         setVirtualFileSystem,

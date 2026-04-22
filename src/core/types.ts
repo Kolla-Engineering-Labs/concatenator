@@ -18,6 +18,7 @@ export interface TreeItem {
   kind: 'file' | 'directory'
   children?: TreeItem[]
   isIgnored?: boolean
+  file?: FileItem
 }
 
 export type ViewMode = 'list' | 'tree'
