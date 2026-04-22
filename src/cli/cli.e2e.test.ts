@@ -590,4 +590,106 @@ Zip content
       expect(zipHeader.toString('hex')).toBe('504b') // 'PK' in hex
     })
   })
+
+  describe('Ignore File Support', () => {
+    it('should auto-discover .concatignore in CWD and ignore files', () => {
+      // Create source directory
+      const srcDir = join(tempDir, 'src')
+      mkdirSync(srcDir, { recursive: true })
+      writeFileSync(join(srcDir, 'keep.txt'), 'keep')
+      writeFileSync(join(srcDir, 'ignore.txt'), 'ignore')
+
+      // Create .concatignore in CURRENT directory (we need to be careful with CWD)
+      // Since runCLI runs with process.cwd(), we should create it there or change CWD
+      // Actually, runCLI uses process.cwd(). Let's change it to tempDir for this test.
+      const runCLIInTemp = (args: string[]) => {
+        const result = spawnSync(
+          'npx',
+          ['tsx', join(process.cwd(), 'src/cli/index.ts'), ...args],
+          {
+            encoding: 'utf-8',
+            cwd: tempDir,
+            timeout: 30000,
+            shell: true,
+          }
+        )
+        return {
+          status: result.status === null ? 1 : result.status,
+          stdout: result.stdout || '',
+          stderr: result.stderr || '',
+        }
+      }
+
+      writeFileSync(join(tempDir, '.concatignore'), 'ignore.txt')
+
+      const result = runCLIInTemp(['concat', 'src'])
+      expect(result.status).toBe(0)
+      expect(result.stdout).toContain('keep.txt')
+      expect(result.stdout).not.toContain('ignore.txt')
+    })
+
+    it('should use explicit --ignore-file and merge with --exclude', () => {
+      const srcDir = join(tempDir, 'src')
+      mkdirSync(srcDir, { recursive: true })
+      writeFileSync(join(srcDir, 'file1.txt'), '1')
+      writeFileSync(join(srcDir, 'file2.txt'), '2')
+      writeFileSync(join(srcDir, 'file3.txt'), '3')
+
+      const ignorePath = join(tempDir, 'custom-ignore.txt')
+      writeFileSync(ignorePath, 'file1.txt')
+
+      const result = runCLI([
+        'concat',
+        srcDir,
+        '-i',
+        ignorePath,
+        '-e',
+        'file2.txt',
+      ])
+      expect(result.status).toBe(0)
+      expect(result.stdout).not.toContain('file1.txt')
+      expect(result.stdout).not.toContain('file2.txt')
+      expect(result.stdout).toContain('file3.txt')
+    })
+
+    it('should filter files during extraction using an ignore file', () => {
+      const sessionId = 'ext001'
+      const bundleContent = `--- CONCATENATOR_SESSION_ID: ${sessionId} ---
+Concatenated on: 2024-01-01
+
+<<<<< FILE_START: keep.txt (ID: ${sessionId}) >>>>>
+content
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: skip.txt (ID: ${sessionId}) >>>>>
+content
+<<<<< FILE_END >>>>>
+`
+      const bundlePath = join(tempDir, 'bundle.txt')
+      writeFileSync(bundlePath, bundleContent)
+
+      const ignorePath = join(tempDir, 'extract-ignore.txt')
+      writeFileSync(ignorePath, 'skip.txt')
+
+      const outputDir = join(tempDir, 'extracted')
+      const result = runCLI([
+        'extract',
+        bundlePath,
+        '-o',
+        outputDir,
+        '-i',
+        ignorePath,
+      ])
+
+      expect(result.status).toBe(0)
+      expect(existsSync(join(outputDir, 'keep.txt'))).toBe(true)
+      expect(existsSync(join(outputDir, 'skip.txt'))).toBe(false)
+    })
+
+    it('should error out if explicit ignore file does not exist', () => {
+      const result = runCLI(['concat', tempDir, '-i', 'non-existent.txt'])
+      expect(result.status).toBe(1)
+      expect(result.stderr + result.stdout).toContain('does not exist')
+    })
+  })
 })

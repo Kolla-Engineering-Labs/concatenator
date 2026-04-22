@@ -70,14 +70,14 @@ npm link
 concatenator --help
 ```
 
-#### Quick CLI Examples
+# Quick CLI Examples
 
 ```bash
-# Concatenate directory to file
+# Concatenate directory to file (auto-discovers .concatignore or .gitignore)
 concatenator concat -o context.txt ./src
 
-# Concatenate with exclusions
-concatenator concat -o output.txt -e node_modules,dist ./project
+# Concatenate with explicit ignore file and exclusions
+concatenator concat -o output.txt -i .gitignore -e dist ./project
 
 # Extract and restore files
 concatenator extract -o ./restored bundle.txt

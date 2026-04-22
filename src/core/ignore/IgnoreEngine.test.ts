@@ -68,4 +68,30 @@ describe('IgnoreEngine', () => {
       expect(engine.isIgnored('dist')).toBe(true)
     })
   })
+
+  describe('parseIgnoreFile', () => {
+    it('parses newline-separated patterns', () => {
+      const content = 'node_modules\ndist\n*.log'
+      const patterns = IgnoreEngine.parseIgnoreFile(content)
+      expect(patterns).toEqual(['node_modules', 'dist', '*.log'])
+    })
+
+    it('ignores comments and empty lines', () => {
+      const content =
+        '# This is a comment\n\nnode_modules\n  \n# Another comment\ndist'
+      const patterns = IgnoreEngine.parseIgnoreFile(content)
+      expect(patterns).toEqual(['node_modules', 'dist'])
+    })
+
+    it('trims whitespace from patterns', () => {
+      const content = '  node_modules  \n  dist  '
+      const patterns = IgnoreEngine.parseIgnoreFile(content)
+      expect(patterns).toEqual(['node_modules', 'dist'])
+    })
+
+    it('returns empty array for empty content', () => {
+      expect(IgnoreEngine.parseIgnoreFile('')).toEqual([])
+      expect(IgnoreEngine.parseIgnoreFile('   \n\n  ')).toEqual([])
+    })
+  })
 })

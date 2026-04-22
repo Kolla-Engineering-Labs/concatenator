@@ -56,7 +56,9 @@ graph LR
   - **Text (default)**: Save concatenated files as a plain `.txt` file.
   - **PDF**: Export concatenated files as a formatted PDF document with proper pagination and delimiters.
 - **Smart Ignore System**:
-  - Exclude common noise (e.g., `node_modules`, `.git`, `package-lock.json`) using simple string matches or powerful Regular Expressions. Syncs between `localStorage` and server-side `.concatenate-ignore`.
+  - Exclude common noise (e.g., `node_modules`, `.git`, `package-lock.json`) using simple string matches or powerful Regular Expressions.
+  - **Auto-Discovery**: CLI automatically respects `.concatignore` or `.gitignore` in your current working directory.
+  - **CLI Persistence**: Use `-i, --ignore-file <path>` to leverage existing project configurations for both bundling and extraction. Syncs between `localStorage` and server-side `.concatenate-ignore` in the web UI.
 - **Advanced Visualization**:
   - Switch between **List View** for flat file management and **Tree View** for hierarchical directory inspection.
   - Real-time filtering and sorting (directories first, then alphabetical).
@@ -281,8 +283,10 @@ concatenator concat -o context.txt -v -e node_modules,dist ./src
 Options:
 
 - `-o, --output <file>` - Specify output filename (default: stdout)
-- `-e, --exclude <pattern>` - Additional patterns to ignore (comma-separated)
+- `-e, --exclude <patterns>` - Additional patterns to ignore (comma-separated)
+- `-i, --ignore-file <path>` - Path to an ignore file (.concatignore, .gitignore, etc.)
 - `-v, --verbose` - Show detailed file processing logs
+- `-f, --force` - Overwrite existing files without prompting
 
 **`extract <file>`** - Reconstruct a project from a concatenated file
 
@@ -306,10 +310,13 @@ concatenator extract --dry-run -vv bundle.txt
 Options:
 
 - `-o, --output <dir>` - Destination directory (default: `.`)
+- `-e, --exclude <patterns>` - Patterns to ignore during extraction (comma-separated)
+- `-i, --ignore-file <path>` - Path to an ignore file to use during extraction
 - `-z, --zip` - Output as a .zip archive instead of writing to disk
 - `-d, --dry-run` - Validate integrity without extracting
 - `-v, --verbose` - Show detailed file processing logs
 - `-vv` - Very verbose (shows all foreign markers in dry-run mode)
+- `-f, --force` - Overwrite existing files without prompting
 
 **`validate <file>`** - Check the integrity of a concatenated file
 

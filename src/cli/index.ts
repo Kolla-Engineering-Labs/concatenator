@@ -27,6 +27,7 @@ import { isDirectoryTainted } from '../core/utils/fs-utils.js'
 import { UserError } from '../core/errors.js'
 import { createZipFromVirtualFiles } from '../drivers/zip-driver.js'
 import { logger } from '../lib/logger.js'
+import { IgnoreEngine } from '../core/ignore/IgnoreEngine.js'
 
 // Load version from package.json
 const __filename = fileURLToPath(import.meta.url)
@@ -41,8 +42,8 @@ const packageJson = JSON.parse(
 function collectFiles(
   dir: string,
   baseDir: string,
-  files: Array<{ path: string; content: string }> = [],
-  excludePatterns: string[] = []
+  ignoreEngine: IgnoreEngine,
+  files: Array<{ path: string; content: string }> = []
 ): Array<{ path: string; content: string }> {
   const entries = readdirSync(dir, { withFileTypes: true })
 
@@ -50,13 +51,13 @@ function collectFiles(
     const fullPath = join(dir, entry.name)
     const relativePath = relative(baseDir, fullPath)
 
-    // Check if path matches any exclude pattern
-    if (excludePatterns.some((pattern) => relativePath.includes(pattern))) {
+    // Check if path is ignored
+    if (ignoreEngine.isIgnored(relativePath)) {
       continue
     }
 
     if (entry.isDirectory()) {
-      collectFiles(fullPath, baseDir, files, excludePatterns)
+      collectFiles(fullPath, baseDir, ignoreEngine, files)
     } else if (entry.isFile()) {
       try {
         const content = readFileSync(fullPath, 'utf-8')
@@ -68,6 +69,60 @@ function collectFiles(
   }
 
   return files
+}
+
+/**
+ * Resolve ignore patterns from explicit flags and auto-discovery
+ * @returns Array of ignore patterns
+ */
+function getIgnorePatterns(options: {
+  exclude?: string
+  ignoreFile?: string
+}): string[] {
+  let patterns: string[] = []
+
+  // 1. Parse explicit --exclude patterns (comma-separated)
+  if (options.exclude) {
+    patterns = patterns.concat(
+      options.exclude
+        .split(',')
+        .map((p) => p.trim())
+        .filter(Boolean)
+    )
+  }
+
+  // 2. Determine which ignore file to use
+  let ignoreFilePath = options.ignoreFile
+  const isExplicit = !!options.ignoreFile
+
+  if (!ignoreFilePath) {
+    // Auto-discovery: .concatignore then .gitignore
+    if (existsSync('.concatignore')) {
+      ignoreFilePath = '.concatignore'
+    } else if (existsSync('.gitignore')) {
+      ignoreFilePath = '.gitignore'
+    }
+  }
+
+  // 3. Load patterns from file
+  if (ignoreFilePath) {
+    if (existsSync(ignoreFilePath)) {
+      try {
+        const content = readFileSync(ignoreFilePath, 'utf-8')
+        const filePatterns = IgnoreEngine.parseIgnoreFile(content)
+        patterns = patterns.concat(filePatterns)
+      } catch (error) {
+        logger.warn(
+          `Could not read ignore file ${ignoreFilePath}: ${error instanceof Error ? error.message : String(error)}`
+        )
+      }
+    } else if (isExplicit) {
+      // Explicitly requested but missing
+      throw new Error(`Ignore file ${ignoreFilePath} does not exist.`)
+    }
+  }
+
+  return patterns
 }
 
 /**
@@ -308,9 +363,13 @@ program
   .description('Bundle a directory into a single LLM-ready file')
   .option('-o, --output <file>', 'Specify output filename (default: stdout)')
   .option(
-    '-e, --exclude <pattern>',
+    '-e, --exclude <patterns>',
     'Additional patterns to ignore (comma-separated)',
     ''
+  )
+  .option(
+    '-i, --ignore-file <path>',
+    'Path to an ignore file (.concatignore, .gitignore, etc.)'
   )
   .option('-v, --verbose', 'Show detailed file processing logs', false)
   .option(
@@ -324,6 +383,7 @@ program
       options: {
         output?: string
         exclude: string
+        ignoreFile?: string
         verbose: boolean
         force: boolean
       }
@@ -334,15 +394,11 @@ program
           throw new Error(`${inputPath} is not a directory`)
         }
 
-        // Parse exclude patterns
-        const excludePatterns = options.exclude
-          ? options.exclude
-              .split(',')
-              .map((p) => p.trim())
-              .filter(Boolean)
-          : []
+        // Get ignore patterns and initialize engine
+        const ignorePatterns = getIgnorePatterns(options)
+        const ignoreEngine = new IgnoreEngine(ignorePatterns)
 
-        const files = collectFiles(inputPath, inputPath, [], excludePatterns)
+        const files = collectFiles(inputPath, inputPath, ignoreEngine)
 
         if (files.length === 0) {
           throw new Error(`No readable files found in ${inputPath}`)
@@ -380,6 +436,15 @@ program
   .description('Reconstruct a project from a concatenated file')
   .option('-o, --output <dir>', 'Destination directory', '.')
   .option(
+    '-e, --exclude <patterns>',
+    'Patterns to ignore during extraction (comma-separated)',
+    ''
+  )
+  .option(
+    '-i, --ignore-file <path>',
+    'Path to an ignore file to use during extraction'
+  )
+  .option(
     '-z, --zip',
     'Output as a .zip archive instead of writing to disk',
     false
@@ -405,6 +470,8 @@ program
       inputFile: string,
       options: {
         output: string
+        exclude: string
+        ignoreFile?: string
         zip: boolean
         dryRun: boolean
         verbose: number
@@ -419,13 +486,24 @@ program
           throw new Error('No concatenated files found in input')
         }
 
+        // Filter files using ignore patterns
+        const ignorePatterns = getIgnorePatterns(options)
+        const ignoreEngine = new IgnoreEngine(ignorePatterns)
+        const filteredFiles = result.files.filter(
+          (file) => !ignoreEngine.isIgnored(file.path)
+        )
+
+        if (filteredFiles.length === 0 && result.files.length > 0) {
+          logger.warn('All files were filtered out by ignore patterns.')
+        }
+
         const totalFiles = result.files.length + result.skippedPaths.length
 
         if (options.verbose > 0) {
           logger.info(
-            `Found ${result.files.length}/${totalFiles} file(s) to extract`
+            `Found ${filteredFiles.length}/${totalFiles} file(s) to extract`
           )
-          for (const file of result.files) {
+          for (const file of filteredFiles) {
             logger.info(`  - ${file.path}`)
           }
           if (result.skippedPaths.length > 0) {
@@ -456,7 +534,7 @@ program
           // Check for directory collision before writing zip
           checkOutputPath(zipPath, options.force, 'file')
 
-          const zipData = await createZipFromVirtualFiles(result.files)
+          const zipData = await createZipFromVirtualFiles(filteredFiles)
           writeFileSync(zipPath, zipData)
 
           if (result.skippedPaths.length > 0) {
@@ -466,7 +544,7 @@ program
           }
 
           logger.info(
-            `Created ${zipPath} with ${result.files.length}/${totalFiles} file(s)`
+            `Created ${zipPath} with ${filteredFiles.length}/${totalFiles} file(s)`
           )
         } else {
           // File explosion mode (default)
@@ -477,7 +555,7 @@ program
             )
           }
 
-          reconstructFiles(result.files, options.output, options.force)
+          reconstructFiles(filteredFiles, options.output, options.force)
 
           if (result.skippedPaths.length > 0) {
             logger.warn(
@@ -486,7 +564,7 @@ program
           }
 
           logger.info(
-            `Restored ${result.files.length}/${totalFiles} file(s) to ${options.output}`
+            `Restored ${filteredFiles.length}/${totalFiles} file(s) to ${options.output}`
           )
         }
       } catch (error) {

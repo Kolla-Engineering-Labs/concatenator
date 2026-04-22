@@ -102,4 +102,18 @@ export class IgnoreEngine {
       )
     })
   }
+
+  /**
+   * Parse a standard ignore-style file content (newline-separated patterns, comments starting with #).
+   * @param content The string content of the ignore file
+   * @returns An array of ignore patterns
+   */
+  static parseIgnoreFile(content: string): string[] {
+    if (!content) return []
+
+    return content
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter((line) => line !== '' && !line.startsWith('#'))
+  }
 }
