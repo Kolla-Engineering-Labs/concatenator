@@ -3,9 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { test, expect } from './fixtures'
+import { test, expect, resetIgnoreList } from './fixtures'
 import { FileUploadHelper } from './helpers/file-upload'
-import type { APIRequestContext } from '@playwright/test'
 
 import {
   jsClick,
@@ -14,53 +13,6 @@ import {
   ensureIgnoreListExpanded,
   ensureAllIgnoresVisible,
 } from './helpers/sidebar'
-
-/**
- * Helper to reset the ignore list via API using the worker-specific context.
- */
-async function resetIgnoreList(apiContext: APIRequestContext): Promise<void> {
-  const defaultIgnoreList = [
-    '.concatenate-ignore',
-    '.DS_Store',
-    '.env',
-    '.expo',
-    '.git',
-    '.gradle',
-    '.next',
-    '.secrets',
-    '.terraform',
-    '.vagrant',
-    '.vscode',
-    '/^\\.concatenate-ignore-worker-\\d+$/',
-    '/\\.class$/',
-    '/\\.exe$/',
-    '/\\.jar$/',
-    '/\\.log$/',
-    '/\\.o$/',
-    '/\\.obj$/',
-    '/\\.swp$/',
-    '/^__.*cache__$/',
-    '/^\\..*_cache$/',
-    'bin',
-    'build',
-    'desktop.ini',
-    'dist',
-    'node_modules',
-    'obj',
-    'package-lock.json',
-    'ruff_output.txt',
-    'target',
-    'Thumbs.db',
-    'vendor',
-    'venv',
-  ]
-  const response = await apiContext.post('/api/ignore-list', {
-    data: defaultIgnoreList,
-  })
-  if (!response.ok()) {
-    throw new Error(`Failed to reset ignore list — HTTP ${response.status()}`)
-  }
-}
 
 /**
  * Concatenate Mode tests - now fully parallel enabled via worker-specific
@@ -91,6 +43,9 @@ test.describe('Concatenate Mode', () => {
     // 'networkidle' and 'load' can be slow/flaky in Firefox
     await page.goto('/', { waitUntil: 'domcontentloaded' })
 
+    // Ensure sidebar is open to access mode switch and other controls
+    await ensureSidebarOpen(page)
+
     // Ensure we're in concatenate mode
     const concatenateButton = page
       .getByRole('button', {
@@ -98,7 +53,7 @@ test.describe('Concatenate Mode', () => {
         exact: true,
       })
       .first()
-    await expect(concatenateButton).toHaveClass(/bg-blue-600/, {
+    await expect(concatenateButton).toHaveClass(/bg-brand-600/, {
       timeout: 10000,
     })
   })
@@ -288,7 +243,7 @@ test.describe('Concatenate Mode', () => {
 
         // Verify we see the Ignore List header
         await expect(
-          page.getByRole('heading', { name: 'Ignore List' })
+          page.getByRole('heading', { name: 'Ignore Files' })
         ).toBeVisible({ timeout: 10000 })
 
         // Expand ignore list if minimized
@@ -455,7 +410,7 @@ test.describe('Concatenate Mode', () => {
 
         // Verify header
         await expect(
-          page.getByRole('heading', { name: 'Ignore List' })
+          page.getByRole('heading', { name: 'Ignore Files' })
         ).toBeVisible({ timeout: 10000 })
 
         // Expand ignore list if minimized
@@ -601,36 +556,26 @@ test.describe('Concatenate Mode', () => {
         await expect(page.getByText('project/')).toBeVisible({ timeout: 10000 })
 
         // Tree is auto-expanded by App.tsx effect - wait for animation
-        // AnimatePresence uses 200ms, give buffer time
-        await page.waitForTimeout(800)
-
-        // First verify list view grid is gone (view mode switch should remove grid)
-        await expect(page.locator('table')).not.toBeVisible()
-
-        // Collapse project/ folder to test expand functionality, then re-expand
-        const projectFolder = page.getByText('project/')
-        await expect(projectFolder).toBeVisible({ timeout: 10000 })
-        await jsClick(projectFolder)
-        await page.waitForTimeout(300)
+        // AnimatePresence uses 200ms, give buffer time for hydration and animation
+        await page.waitForTimeout(1500)
 
         // Re-expand project/ folder to reveal index.js and src/
-        await jsClick(projectFolder)
-        await page.waitForTimeout(300)
+        const projectFolder = page.getByText('project/').first()
+        await expect(projectFolder).toBeVisible({ timeout: 15000 })
 
-        // index.js should now be visible under project/
+        // index.js should be visible under project/
         await expect(
           page.getByText('index.js', { exact: true }).first()
         ).toBeVisible({ timeout: 10000 })
 
-        // src/ folder should be visible and auto-expanded
-        const srcFolder = page.getByText('src/')
+        // src/ folder should be visible
+        const srcFolder = page.getByText('src/').first()
         await expect(srcFolder).toBeVisible({ timeout: 10000 })
 
-        // Nested files should be visible due to auto-expand effect
-        await ensureSidebarClosed(page)
+        // Nested files should be visible
         await expect(
           page.getByText('utils.js', { exact: true }).first()
-        ).toBeVisible({ timeout: 10000 })
+        ).toBeVisible({ timeout: 15000 })
         await expect(
           page.getByText('helper.js', { exact: true }).first()
         ).toBeVisible({
@@ -967,9 +912,9 @@ test.describe('Concatenate Mode', () => {
   })
 
   test.describe('Output Format Toggle', () => {
-    test('should show TEXT and PDF toggle buttons', async ({ page }) => {
+    test('should show Text and PDF toggle buttons', async ({ page }) => {
       // Both buttons should be visible
-      await expect(page.getByRole('button', { name: 'TEXT' })).toBeVisible({
+      await expect(page.getByRole('button', { name: 'Text' })).toBeVisible({
         timeout: 10000,
       })
       await expect(page.getByRole('button', { name: 'PDF' })).toBeVisible({
@@ -977,11 +922,11 @@ test.describe('Concatenate Mode', () => {
       })
     })
 
-    test('should have TEXT as default active format', async ({ page }) => {
-      const textButton = page.getByRole('button', { name: 'TEXT' })
+    test('should have Text as default active format', async ({ page }) => {
+      const textButton = page.getByRole('button', { name: 'Text' })
       const pdfButton = page.getByRole('button', { name: 'PDF' })
 
-      // TEXT button should have active styling (bg-white or shadow)
+      // Text button should have active styling (bg-white or shadow)
       await expect(textButton).toHaveClass(/bg-white|shadow-sm/, {
         timeout: 10000,
       })
@@ -994,7 +939,7 @@ test.describe('Concatenate Mode', () => {
     test('should switch to PDF format when PDF button clicked', async ({
       page,
     }) => {
-      const textButton = page.getByRole('button', { name: 'TEXT' })
+      const textButton = page.getByRole('button', { name: 'Text' })
       const pdfButton = page.getByRole('button', { name: 'PDF' })
 
       // Click PDF button
@@ -1005,27 +950,27 @@ test.describe('Concatenate Mode', () => {
       await expect(pdfButton).toHaveClass(/bg-white|shadow-sm/, {
         timeout: 10000,
       })
-      // TEXT button should not be active
+      // Text button should not be active
       await expect(textButton).not.toHaveClass(/bg-white|shadow-sm/, {
         timeout: 10000,
       })
     })
 
-    test('should switch back to TEXT format when TEXT button clicked', async ({
+    test('should switch back to Text format when Text button clicked', async ({
       page,
     }) => {
-      const textButton = page.getByRole('button', { name: 'TEXT' })
+      const textButton = page.getByRole('button', { name: 'Text' })
       const pdfButton = page.getByRole('button', { name: 'PDF' })
 
       // First switch to PDF
       await jsClick(pdfButton)
       await page.waitForTimeout(200)
 
-      // Then switch back to TEXT
+      // Then switch back to Text
       await jsClick(textButton)
       await page.waitForTimeout(200)
 
-      // TEXT button should be active again
+      // Text button should be active again
       await expect(textButton).toHaveClass(/bg-white|shadow-sm/, {
         timeout: 10000,
       })

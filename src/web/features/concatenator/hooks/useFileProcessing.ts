@@ -21,7 +21,11 @@ import {
 } from '../../../../core/engine'
 import type { ValidationResult } from '../../../../core/types'
 import { logger } from '../../../../lib/logger'
-import { isImageFile, isPdfFile } from '../../../../lib/utils'
+import {
+  isImageFile,
+  isPdfFile,
+  estimateTokenCount,
+} from '../../../../lib/utils'
 
 interface UseFileProcessingProps {
   appMode: AppMode
@@ -149,6 +153,7 @@ export const useFileProcessing = ({
   const processUploadedFiles = useCallback(
     async (uploadedFiles: File[]) => {
       setIsProcessing(true)
+      setImportError(null)
       cancelImportRef.current = false
       activeReaderRef.current = null
       setImportProgress({ current: 0, total: uploadedFiles.length })
@@ -174,7 +179,7 @@ export const useFileProcessing = ({
             reader.onerror = () =>
               reject(new Error(`Failed to read file: ${file.name}`))
             reader.onabort = () => resolve(null) // Resolve to null on abort for silent cleanup
-            
+
             if (isImageFile(file.name) || isPdfFile(file.name)) {
               reader.readAsDataURL(file)
             } else {
@@ -203,6 +208,7 @@ export const useFileProcessing = ({
           kind: 'file',
           content,
           size: file.size,
+          tokens: estimateTokenCount(content, file.size),
         })
 
         const parts = path.split('/')
@@ -266,9 +272,22 @@ export const useFileProcessing = ({
               setIsProcessing(false)
               return
             }
+
+            // Convert fileMap to FileItem[] for consistent state
+            const vfsFiles: FileItem[] = Object.entries(fileMap).map(
+              ([path, content]) => ({
+                name: path.split('/').pop() || '',
+                path,
+                kind: 'file',
+                content,
+                size: content.length,
+                tokens: estimateTokenCount(content, content.length),
+              })
+            )
+
             setVirtualFileSystem(fileMap)
-            // Also keep the bundle file in files state for breadcrumb/reference if needed
-            setFiles([bundle])
+            // Store the extracted files in the state for the UI to display
+            setFiles(vfsFiles)
 
             // Show warnings for skipped files if any
             if (skippedPaths.length > 0) {
@@ -495,6 +514,7 @@ export const useFileProcessing = ({
   const handleConcatenate = useCallback(
     async (filteredFiles: FileItem[], outputFormat: OutputFormat = 'text') => {
       if (filteredFiles.length === 0) return
+      setImportError(null)
 
       if (filteredFiles.length > maxFileLimit) {
         setImportError(

@@ -136,8 +136,8 @@ describe('ModeSwitch Component', () => {
     const concatButton = screen.getByText('Concatenate').closest('button')
     const deconcatButton = screen.getByText('De-concatenate').closest('button')
 
-    expect(concatButton?.className).toContain('bg-blue-600')
-    expect(deconcatButton?.className).not.toContain('bg-blue-600')
+    expect(concatButton?.className).toContain('bg-brand-600')
+    expect(deconcatButton?.className).not.toContain('bg-brand-600')
   })
 
   it('deconcatenate button is active in deconcatenate mode', () => {
@@ -166,8 +166,8 @@ describe('ModeSwitch Component', () => {
     const concatButton = screen.getByText('Concatenate').closest('button')
     const deconcatButton = screen.getByText('De-concatenate').closest('button')
 
-    expect(deconcatButton?.className).toContain('bg-blue-600')
-    expect(concatButton?.className).not.toContain('bg-blue-600')
+    expect(deconcatButton?.className).toContain('bg-brand-600')
+    expect(concatButton?.className).not.toContain('bg-brand-600')
   })
 
   it('calls setMode when concatenate clicked', () => {
@@ -231,7 +231,10 @@ describe('ModeSwitch Component', () => {
 
     const wrapper = container.firstChild as HTMLElement
     expect(wrapper?.classList.contains('flex')).toBe(true)
-    expect(wrapper?.classList.contains('bg-slate-900')).toBe(true)
+    expect(
+      wrapper?.classList.contains('bg-slate-100') ||
+        wrapper?.classList.contains('dark:bg-slate-900')
+    ).toBe(true)
   })
 })
 
@@ -481,11 +484,11 @@ describe('OutputFormatToggle Component', () => {
       />
     )
 
-    expect(screen.getByText('TEXT')).toBeInTheDocument()
+    expect(screen.getByText('Text')).toBeInTheDocument()
     expect(screen.getByText('PDF')).toBeInTheDocument()
   })
 
-  it('TEXT button is active in text mode', () => {
+  it('Text button is active in text mode', () => {
     render(
       <OutputFormatToggle
         outputFormat="text"
@@ -493,7 +496,7 @@ describe('OutputFormatToggle Component', () => {
       />
     )
 
-    const textButton = screen.getByText('TEXT').closest('button')
+    const textButton = screen.getByText('Text').closest('button')
     const pdfButton = screen.getByText('PDF').closest('button')
 
     expect(textButton?.className).toContain('bg-white')
@@ -508,14 +511,14 @@ describe('OutputFormatToggle Component', () => {
       />
     )
 
-    const textButton = screen.getByText('TEXT').closest('button')
+    const textButton = screen.getByText('Text').closest('button')
     const pdfButton = screen.getByText('PDF').closest('button')
 
     expect(pdfButton?.className).toContain('bg-white')
     expect(textButton?.className).not.toContain('bg-white')
   })
 
-  it('calls setOutputFormat when TEXT clicked', () => {
+  it('calls setOutputFormat when Text clicked', () => {
     render(
       <OutputFormatToggle
         outputFormat="pdf"
@@ -523,7 +526,7 @@ describe('OutputFormatToggle Component', () => {
       />
     )
 
-    fireEvent.click(screen.getByText('TEXT'))
+    fireEvent.click(screen.getByText('Text'))
 
     expect(mockSetOutputFormat).toHaveBeenCalledWith('text')
   })

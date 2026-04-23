@@ -45,6 +45,7 @@ export const Header: React.FC<HeaderProps> = ({
             className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 transition-colors"
             tabIndex={0}
             title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+            data-testid="theme-toggle"
           >
             {isDarkMode ? (
               <Sun className="w-5 h-5" />

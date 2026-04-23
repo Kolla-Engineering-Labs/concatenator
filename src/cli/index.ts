@@ -28,6 +28,8 @@ import { UserError } from '../core/errors.js'
 import { createZipFromVirtualFiles } from '../drivers/zip-driver.js'
 import { logger } from '../lib/logger.js'
 import { IgnoreEngine } from '../core/ignore/IgnoreEngine.js'
+import { TokenService } from '../core/TokenService.js'
+import { formatFileSize } from '../lib/utils.js'
 
 // Load version from package.json
 const __filename = fileURLToPath(import.meta.url)
@@ -37,15 +39,27 @@ const packageJson = JSON.parse(
 )
 
 /**
- * Recursively collect all files from a directory
+ * File metadata with token and size info
+ */
+interface FileWithMetadata {
+  path: string
+  content: string
+  tokens: number
+  size: number
+}
+
+/**
+ * Recursively collect all files from a directory and calculate tokens
  */
 function collectFiles(
   dir: string,
   baseDir: string,
   ignoreEngine: IgnoreEngine,
-  files: Array<{ path: string; content: string }> = []
-): Array<{ path: string; content: string }> {
+  verbose: number = 0,
+  files: FileWithMetadata[] = []
+): { files: FileWithMetadata[]; totalTokens: number } {
   const entries = readdirSync(dir, { withFileTypes: true })
+  let dirTokens = 0
 
   for (const entry of entries) {
     const fullPath = join(dir, entry.name)
@@ -57,18 +71,46 @@ function collectFiles(
     }
 
     if (entry.isDirectory()) {
-      collectFiles(fullPath, baseDir, ignoreEngine, files)
+      const subResult = collectFiles(
+        fullPath,
+        baseDir,
+        ignoreEngine,
+        verbose,
+        files
+      )
+      dirTokens += subResult.totalTokens
     } else if (entry.isFile()) {
       try {
+        const stats = statSync(fullPath)
         const content = readFileSync(fullPath, 'utf-8')
-        files.push({ path: relativePath, content })
+        const tokens = TokenService.getTokenEstimate(content)
+
+        files.push({
+          path: relativePath,
+          content,
+          tokens,
+          size: stats.size,
+        })
+
+        dirTokens += tokens
+
+        if (verbose >= 2) {
+          logger.info(
+            `  [${tokens.toLocaleString().padStart(8)} tokens] ${relativePath}`
+          )
+        }
       } catch {
         // Skip files that can't be read (binary, permissions, etc.)
       }
     }
   }
 
-  return files
+  if (verbose >= 1) {
+    const relDir = relative(baseDir, dir) || '.'
+    logger.info(`Dir: ${relDir} (~${dirTokens.toLocaleString()} tokens)`)
+  }
+
+  return { files, totalTokens: dirTokens }
 }
 
 /**
@@ -371,7 +413,15 @@ program
     '-i, --ignore-file <path>',
     'Path to an ignore file (.concatignore, .gitignore, etc.)'
   )
-  .option('-v, --verbose', 'Show detailed file processing logs', false)
+  .option(
+    '-v, --verbose',
+    'Verbosity level. -v: total tokens per dir, -vv: individual file tokens',
+    (v, p) => p + 1,
+    0
+  )
+  .option('--max-tokens <number>', 'Budget guard: warn if exceeded', (val) =>
+    parseInt(val, 10)
+  )
   .option(
     '-f, --force',
     'Overwrite existing files or directories without prompting',
@@ -384,7 +434,8 @@ program
         output?: string
         exclude: string
         ignoreFile?: string
-        verbose: boolean
+        verbose: number
+        maxTokens?: number
         force: boolean
       }
     ) => {
@@ -398,27 +449,35 @@ program
         const ignorePatterns = getIgnorePatterns(options)
         const ignoreEngine = new IgnoreEngine(ignorePatterns)
 
-        const files = collectFiles(inputPath, inputPath, ignoreEngine)
+        const { files, totalTokens } = collectFiles(
+          inputPath,
+          inputPath,
+          ignoreEngine,
+          options.verbose
+        )
 
         if (files.length === 0) {
           throw new Error(`No readable files found in ${inputPath}`)
         }
 
-        if (options.verbose) {
-          logger.info(`Processing ${files.length} file(s)...`)
-          for (const file of files) {
-            logger.info(`  - ${file.path}`)
-          }
+        // Budget Guard
+        if (options.maxTokens && totalTokens > options.maxTokens) {
+          logger.warn('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+          logger.warn('BUDGET WARNING: Token limit exceeded')
+          logger.warn(`Limit:   ${options.maxTokens.toLocaleString()}`)
+          logger.warn(`Current: ${totalTokens.toLocaleString()}`)
+          logger.warn('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
         }
 
         const result = concatenate(files)
+        const bundleSize = Buffer.byteLength(result, 'utf-8')
 
         if (options.output) {
           // Check for directory collision before writing
           checkOutputPath(options.output, options.force, 'file')
           writeFileSync(options.output, result)
           logger.info(
-            `Concatenated ${files.length} file(s) to ${options.output}`
+            `✔ Created ${options.output} (${formatFileSize(bundleSize)} | ~${totalTokens.toLocaleString()} tokens).`
           )
         } else {
           process.stdout.write(result)
@@ -576,24 +635,97 @@ program
 // Validate command
 program
   .command('validate')
-  .argument('<file>', 'Path to the concatenated file')
-  .description('Check the integrity of a concatenated file')
+  .argument('<path>', 'Path to a directory (pre-flight) or a concatenated file')
+  .description(
+    'Check the integrity of a concatenated file or perform a pre-flight dry run on a directory'
+  )
+  .option('-t, --tokens', 'Show individual token counts for all files', false)
   .option(
     '-v, --verbose',
     'Show detailed validation logs (use -vv for very verbose)',
     (value, previous) => previous + 1,
     0
   )
-  .action(async (inputFile: string, options: { verbose: number }) => {
-    try {
-      const content = readFileSync(inputFile, 'utf-8')
-      const result = validateConcatenation(content)
-      formatValidationReport(result, inputFile, options.verbose, false)
-      process.exit(result.isValid ? 0 : 1)
-    } catch (error) {
-      handleError(error)
+  .option(
+    '-e, --exclude <patterns>',
+    'Additional patterns to ignore (comma-separated)',
+    ''
+  )
+  .option(
+    '-i, --ignore-file <path>',
+    'Path to an ignore file (.concatignore, .gitignore, etc.)'
+  )
+  .action(
+    async (
+      inputPath: string,
+      options: {
+        tokens: boolean
+        verbose: number
+        exclude: string
+        ignoreFile?: string
+      }
+    ) => {
+      try {
+        if (existsSync(inputPath) && statSync(inputPath).isDirectory()) {
+          // Pre-flight directory dry-run
+          const ignorePatterns = getIgnorePatterns(options)
+          const ignoreEngine = new IgnoreEngine(ignorePatterns)
+
+          if (options.tokens) {
+            logger.info(`[DRY RUN] Pre-flight Analysis for: ${inputPath}`)
+            const { files, totalTokens } = collectFiles(
+              inputPath,
+              inputPath,
+              ignoreEngine,
+              options.verbose
+            )
+
+            logger.info(
+              '--------------------------------------------------------------------------------'
+            )
+            logger.info(String('File Path').padEnd(60) + ' | ' + 'Tokens')
+            logger.info(
+              '--------------------------------------------------------------------------------'
+            )
+            for (const file of files) {
+              logger.info(
+                file.path.padEnd(60) +
+                  ' | ' +
+                  file.tokens.toLocaleString().padStart(10)
+              )
+            }
+            logger.info(
+              '--------------------------------------------------------------------------------'
+            )
+            logger.info(
+              `TOTAL CONTEXT WEIGHT (tokens): ${totalTokens.toLocaleString()}`
+            )
+            logger.info(
+              '--------------------------------------------------------------------------------'
+            )
+          } else {
+            const { files, totalTokens } = collectFiles(
+              inputPath,
+              inputPath,
+              ignoreEngine,
+              options.verbose
+            )
+            logger.info(
+              `✓ Pre-flight check passed: ${files.length} files, ~${totalTokens.toLocaleString()} tokens.`
+            )
+          }
+        } else {
+          // File validation
+          const content = readFileSync(inputPath, 'utf-8')
+          const result = validateConcatenation(content)
+          formatValidationReport(result, inputPath, options.verbose, false)
+          process.exit(result.isValid ? 0 : 1)
+        }
+      } catch (error) {
+        handleError(error)
+      }
     }
-  })
+  )
 
 // Add custom help text with examples
 program.on('--help', () => {

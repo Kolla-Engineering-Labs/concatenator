@@ -5,15 +5,9 @@
 
 import React from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import {
-  Settings2,
-  Maximize2,
-  Minimize2,
-  X,
-  Plus,
-  ChevronUp,
-} from 'lucide-react'
+import { Maximize2, Minimize2, X, Plus, ChevronUp } from 'lucide-react'
 import { useLocalStorage } from '../../../hooks/useLocalStorage'
+import { cn } from '../../../../lib/utils'
 
 interface IgnoreListProps {
   ignoreList: string[]
@@ -23,6 +17,8 @@ interface IgnoreListProps {
   setNewIgnoreItem: (item: string) => void
   addIgnoreItem: () => void
   removeIgnoreItem: (item: string) => void
+  ignoredTokens?: number
+  ignoredIsPrecise?: boolean
 }
 
 /**
@@ -36,6 +32,8 @@ export const IgnoreList: React.FC<IgnoreListProps> = ({
   setNewIgnoreItem,
   addIgnoreItem,
   removeIgnoreItem,
+  ignoredTokens,
+  ignoredIsPrecise,
 }) => {
   const [isIgnoreListExpanded, setIsIgnoreListExpanded] = useLocalStorage(
     'concat_ignore_expanded',
@@ -50,17 +48,29 @@ export const IgnoreList: React.FC<IgnoreListProps> = ({
   const remainder = ignoreList.length - TRUNCATE_LIMIT
 
   return (
-    <div className="flex flex-col h-full space-y-4">
-      <div className="flex items-center justify-between h-9 shrink-0">
-        <div className="flex items-center gap-2 text-slate-500">
-          <Settings2 className="w-4 h-4" />
-          <h2 className="text-sm font-semibold uppercase tracking-wider">
-            Ignore List
+    <div className="flex flex-col h-full space-y-1">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">
+            Ignore Files
           </h2>
           {!isIgnoreListMinimized && (
-            <span className="text-xs text-slate-400 font-normal normal-case hidden sm:inline">
-              ({ignoreList.length} items)
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-slate-400/60 font-bold uppercase tracking-tight hidden sm:inline">
+                ({ignoreList.length})
+              </span>
+              {ignoredTokens !== undefined && ignoredTokens > 0 && (
+                <span
+                  className={cn(
+                    'text-[10px] font-bold transition-opacity',
+                    ignoredIsPrecise ? 'text-brand-500/80' : 'text-brand-500/40'
+                  )}
+                >
+                  {!ignoredIsPrecise && '~'}
+                  {ignoredTokens.toLocaleString()}
+                </span>
+              )}
+            </div>
           )}
         </div>
         <button
@@ -113,6 +123,13 @@ export const IgnoreList: React.FC<IgnoreListProps> = ({
                   <Plus className="w-4 h-4" />
                 </button>
               </div>
+              <p className="mt-2 text-[10px] text-slate-400 px-1">
+                Tip: Use{' '}
+                <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded font-mono">
+                  /regex/
+                </code>{' '}
+                for advanced matching
+              </p>
             </div>
 
             {/* Scrollable Tag List */}
@@ -135,7 +152,9 @@ export const IgnoreList: React.FC<IgnoreListProps> = ({
                       className="flex items-center gap-1.5 px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-[11px] font-medium group border border-slate-200 dark:border-slate-700 hover:border-brand-300 dark:hover:border-brand-700 transition-colors"
                       data-testid={`ignore-item-${item}`}
                     >
-                      <span className="truncate max-w-[120px]">{item}</span>
+                      <span className="truncate max-w-[120px]" title={item}>
+                        {item}
+                      </span>
                       <button
                         onClick={() => removeIgnoreItem(item)}
                         className="p-0.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md text-slate-400 hover:text-red-500 transition-colors"
@@ -167,19 +186,6 @@ export const IgnoreList: React.FC<IgnoreListProps> = ({
                 </button>
               )}
             </div>
-
-            {/* Help text */}
-            {!isIgnoreListExpanded && (
-              <div className="px-3 py-2 bg-slate-50/50 dark:bg-slate-800/20 border-t border-slate-100 dark:border-slate-800">
-                <p className="text-[10px] text-slate-400">
-                  Tip: Use{' '}
-                  <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">
-                    /regex/
-                  </code>{' '}
-                  for advanced matching
-                </p>
-              </div>
-            )}
           </motion.div>
         )}
       </AnimatePresence>

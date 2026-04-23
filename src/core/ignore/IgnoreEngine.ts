@@ -12,28 +12,37 @@ export class IgnoreEngine {
 
   constructor(patterns: string[]) {
     this.compiledPatterns = patterns.map((rawPattern) => {
-      const pattern = rawPattern.replace(/^\//, '')
-      if (pattern.startsWith('/') && pattern.endsWith('/')) {
-        // Simple heuristic for regex: /pattern/
+      // Simple heuristic for regex: /pattern/
+      if (
+        rawPattern.startsWith('/') &&
+        rawPattern.endsWith('/') &&
+        rawPattern.length > 2
+      ) {
         try {
-          return new RegExp(pattern.slice(1, -1))
+          return new RegExp(rawPattern.slice(1, -1))
         } catch {
-          return pattern
+          // Fall through to string handling if invalid regex
         }
       }
+
       // Check for advanced regex format with flags: /pattern/gi
-      if (pattern.startsWith('/')) {
-        const lastSlash = pattern.lastIndexOf('/')
-        if (lastSlash > 0) {
-          const body = pattern.slice(1, lastSlash)
-          const flags = pattern.slice(lastSlash + 1)
-          try {
-            return new RegExp(body, flags)
-          } catch {
-            return pattern
+      if (rawPattern.startsWith('/') && rawPattern.includes('/', 1)) {
+        const lastSlash = rawPattern.lastIndexOf('/')
+        if (lastSlash > 1 && lastSlash < rawPattern.length - 1) {
+          const body = rawPattern.slice(1, lastSlash)
+          const flags = rawPattern.slice(lastSlash + 1)
+          // Simple check if flags are valid regex flags
+          if (/^[gimsuy]+$/.test(flags)) {
+            try {
+              return new RegExp(body, flags)
+            } catch {
+              // Fall through
+            }
           }
         }
       }
+
+      const pattern = rawPattern.replace(/^\//, '')
       return pattern
     })
   }
@@ -86,15 +95,18 @@ export class IgnoreEngine {
 
         // Also match against full path and each segment
         if (patternRegex.test(normalizedPath)) return true
-        
+
         // Special case: if pattern is "path/**", then "path" itself should be ignored
         if (ignoreStr.endsWith('/**')) {
           const parentPath = ignoreStr.slice(0, -3)
-          if (normalizedPath === parentPath || normalizedPath.startsWith(parentPath + '/')) {
+          if (
+            normalizedPath === parentPath ||
+            normalizedPath.startsWith(parentPath + '/')
+          ) {
             return true
           }
         }
-        
+
         return segments.some((segment) => patternRegex.test(segment))
       }
 

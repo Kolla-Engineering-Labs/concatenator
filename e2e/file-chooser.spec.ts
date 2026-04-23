@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { test, expect } from './fixtures'
+import { test, expect, resetIgnoreList } from './fixtures'
 import { SIMPLE_PROJECT, REACT_PROJECT } from './fixtures/test-data'
 import { logger } from '../src/lib/logger'
-import type { Page, APIRequestContext, Locator } from '@playwright/test'
+import type { Page, Locator } from '@playwright/test'
 import { ensureSidebarClosed } from './helpers/sidebar'
 
 /**
@@ -80,53 +80,6 @@ async function setFilesForWebkitDirectory(
   // No temp directory was created, so cleanup is a no-op.
   return () => {
     /* no-op */
-  }
-}
-
-/**
- * Helper to reset the ignore list via API using the worker-specific context.
- */
-async function resetIgnoreList(apiContext: APIRequestContext): Promise<void> {
-  const defaultIgnoreList = [
-    '.concatenate-ignore',
-    '.DS_Store',
-    '.env',
-    '.expo',
-    '.git',
-    '.gradle',
-    '.next',
-    '.secrets',
-    '.terraform',
-    '.vagrant',
-    '.vscode',
-    '/^\\.concatenate-ignore-worker-\\d+$/',
-    '/\\.class$/',
-    '/\\.exe$/',
-    '/\\.jar$/',
-    '/\\.log$/',
-    '/\\.o$/',
-    '/\\.obj$/',
-    '/\\.swp$/',
-    '/^__.*cache__$/',
-    '/^\\..*_cache$/',
-    'bin',
-    'build',
-    'desktop.ini',
-    'dist',
-    'node_modules',
-    'obj',
-    'package-lock.json',
-    'ruff_output.txt',
-    'target',
-    'Thumbs.db',
-    'vendor',
-    'venv',
-  ]
-  const response = await apiContext.post('/api/ignore-list', {
-    data: defaultIgnoreList,
-  })
-  if (!response.ok()) {
-    throw new Error(`Failed to reset ignore list — HTTP ${response.status()}`)
   }
 }
 
@@ -265,7 +218,7 @@ test.describe('File Upload via File Chooser', () => {
     await deconcatButton.waitFor({ state: 'visible', timeout: 10000 })
     await jsClick(deconcatButton)
     // Wait for mode switch to complete
-    await expect(deconcatButton).toHaveClass(/bg-blue-600/, {
+    await expect(deconcatButton).toHaveClass(/bg-brand-600/, {
       timeout: 10000,
     })
 
@@ -316,7 +269,7 @@ console.log("World");
     await deconcatButton.waitFor({ state: 'visible', timeout: 10000 })
     await jsClick(deconcatButton)
     // Wait for mode switch to complete
-    await expect(deconcatButton).toHaveClass(/bg-blue-600/, {
+    await expect(deconcatButton).toHaveClass(/bg-brand-600/, {
       timeout: 10000,
     })
 

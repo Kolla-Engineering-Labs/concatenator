@@ -8,6 +8,7 @@ import {
   expect,
   type APIRequestContext,
 } from '@playwright/test'
+import { DEFAULT_IGNORE_LIST as CORE_IGNORE_LIST } from '../src/core/constants'
 
 type TestFixtures = {
   apiContext: APIRequestContext
@@ -63,43 +64,9 @@ export { expect }
 
 /**
  * Default ignore list items for resetting the ignore list in tests.
- * Matches the default values from .concatenate-ignore file.
+ * Matches the default values from core constants.
  */
-export const DEFAULT_IGNORE_LIST = [
-  '.concatenate-ignore',
-  '.DS_Store',
-  '.env',
-  '.expo',
-  '.git',
-  '.gradle',
-  '.next',
-  '.secrets',
-  '.terraform',
-  '.vagrant',
-  '.vscode',
-  '/^\\.concatenate-ignore-worker-\\d+$/',
-  '/\\.class$/',
-  '/\\.exe$/',
-  '/\\.jar$/',
-  '/\\.log$/',
-  '/\\.o$/',
-  '/\\.obj$/',
-  '/\\.swp$/',
-  '/^__.*cache__$/',
-  '/^\\..*_cache$/',
-  'bin',
-  'build',
-  'desktop.ini',
-  'dist',
-  'node_modules',
-  'obj',
-  'package-lock.json',
-  'ruff_output.txt',
-  'target',
-  'Thumbs.db',
-  'vendor',
-  'venv',
-]
+export const DEFAULT_IGNORE_LIST = CORE_IGNORE_LIST
 
 /**
  * Helper to reset the ignore list via API using the worker-specific context.

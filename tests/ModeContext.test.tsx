@@ -52,7 +52,7 @@ describe('ModeContext (Workbench State)', () => {
       result.current.setIgnoreList(['/[invalid/'])
     })
 
-    expect(result.current.compiledIgnores).toContain('/[invalid/')
+    expect(result.current.compiledIgnores).toContain('[invalid/')
   })
 
   it('syncs ignore list to server on changes', async () => {

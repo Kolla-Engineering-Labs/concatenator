@@ -3,9 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { test, expect } from './fixtures'
+import { test, expect, resetIgnoreList } from './fixtures'
 import { FileUploadHelper } from './helpers/file-upload'
-import type { APIRequestContext } from '@playwright/test'
 
 import {
   jsClick,
@@ -13,53 +12,6 @@ import {
   ensureIgnoreListExpanded,
   ensureAllIgnoresVisible,
 } from './helpers/sidebar'
-
-/**
- * Helper to reset the ignore list via API using the worker-specific context.
- */
-async function resetIgnoreList(apiContext: APIRequestContext): Promise<void> {
-  const defaultIgnoreList = [
-    '.concatenate-ignore',
-    '.DS_Store',
-    '.env',
-    '.expo',
-    '.git',
-    '.gradle',
-    '.next',
-    '.secrets',
-    '.terraform',
-    '.vagrant',
-    '.vscode',
-    '/^\\.concatenate-ignore-worker-\\d+$/',
-    '/\\.class$/',
-    '/\\.exe$/',
-    '/\\.jar$/',
-    '/\\.log$/',
-    '/\\.o$/',
-    '/\\.obj$/',
-    '/\\.swp$/',
-    '/^__.*cache__$/',
-    '/^\\..*_cache$/',
-    'bin',
-    'build',
-    'desktop.ini',
-    'dist',
-    'node_modules',
-    'obj',
-    'package-lock.json',
-    'ruff_output.txt',
-    'target',
-    'Thumbs.db',
-    'vendor',
-    'venv',
-  ]
-  const response = await apiContext.post('/api/ignore-list', {
-    data: defaultIgnoreList,
-  })
-  if (!response.ok()) {
-    throw new Error(`Failed to reset ignore list — HTTP ${response.status()}`)
-  }
-}
 
 /**
  * UI Interactions and Edge Cases tests - now fully parallel enabled via
@@ -139,7 +91,7 @@ test.describe('UI Interactions and Edge Cases', () => {
         // Find ignore list minimize button and wait for it
         const ignoreSection = page
           .locator('div')
-          .filter({ hasText: /^Ignore List/ })
+          .filter({ hasText: /^Ignore Files/ })
           .first()
         const minimizeButton = ignoreSection.locator('button').first()
         await minimizeButton.waitFor({ state: 'visible', timeout: 10000 })
@@ -254,7 +206,7 @@ test.describe('UI Interactions and Edge Cases', () => {
       })
       await deconcatButton.waitFor({ state: 'visible', timeout: 10000 })
       await jsClick(deconcatButton)
-      await expect(deconcatButton).toHaveClass(/bg-blue-600/, {
+      await expect(deconcatButton).toHaveClass(/bg-brand-600/, {
         timeout: 10000,
       })
     })
@@ -404,7 +356,7 @@ test.describe('UI Interactions and Edge Cases', () => {
 
         const ignoreSection = page
           .locator('div')
-          .filter({ hasText: /^Ignore List/ })
+          .filter({ hasText: /^Ignore Files/ })
           .first()
         const minimizeButton = ignoreSection.locator('button').first()
         await minimizeButton.waitFor({ state: 'visible', timeout: 10000 })
@@ -464,7 +416,7 @@ test.describe('UI Interactions and Edge Cases', () => {
       }
 
       // Should end in concatenate mode
-      await expect(concatButton).toHaveClass(/bg-blue-600/, {
+      await expect(concatButton).toHaveClass(/bg-brand-600/, {
         timeout: 10000,
       })
 
@@ -508,7 +460,7 @@ test.describe('UI Interactions and Edge Cases', () => {
         await jsClick(deconcatButton)
 
         // Should switch mode (files will be cleared)
-        await expect(deconcatButton).toHaveClass(/bg-blue-600/, {
+        await expect(deconcatButton).toHaveClass(/bg-brand-600/, {
           timeout: 10000,
         })
       } finally {
@@ -519,8 +471,9 @@ test.describe('UI Interactions and Edge Cases', () => {
 
   test.describe('Accessibility', () => {
     test('should have proper button titles', async ({ page }) => {
+      await ensureSidebarOpen(page)
       // Theme button should be present
-      const themeButton = page.locator('header button')
+      const themeButton = page.getByTestId('theme-toggle').first()
       await expect(themeButton).toBeVisible()
     })
 
@@ -531,8 +484,9 @@ test.describe('UI Interactions and Edge Cases', () => {
         'Focus/Tab navigation tests skipped on WebKit due to different focus behavior'
       )
 
+      await ensureSidebarOpen(page)
       // First, click on a focusable element to ensure document has focus
-      const themeButton = page.locator('header button')
+      const themeButton = page.getByTestId('theme-toggle').first()
       await themeButton.waitFor({ state: 'visible', timeout: 5000 })
 
       // Use JavaScript click for Firefox compatibility

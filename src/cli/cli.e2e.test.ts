@@ -626,7 +626,7 @@ Zip content
       expect(result.status).toBe(0)
       expect(result.stdout).toContain('keep.txt')
       expect(result.stdout).not.toContain('ignore.txt')
-    })
+    }, 20000)
 
     it('should use explicit --ignore-file and merge with --exclude', () => {
       const srcDir = join(tempDir, 'src')
@@ -690,6 +690,81 @@ content
       const result = runCLI(['concat', tempDir, '-i', 'non-existent.txt'])
       expect(result.status).toBe(1)
       expect(result.stderr + result.stdout).toContain('does not exist')
+    })
+  })
+
+  describe('Token-Aware Metrics and Budget Guard', () => {
+    it('should include token count and size in concatenation summary', () => {
+      writeFileSync(join(tempDir, 'file1.txt'), 'Hello World') // ~3 tokens
+
+      const outputPath = join(tempDir, 'output.txt')
+      const result = runCLI(['concat', tempDir, '-o', outputPath])
+
+      expect(result.status).toBe(0)
+      // Check summary format: ✔ Created [filename] ([size] | ~[tokenCount] tokens).
+      // Note: logger adds timestamps and prefix
+      expect(result.stdout).toMatch(
+        /✔ Created .*output\.txt \(.* | ~3 tokens\)\./
+      )
+    })
+
+    it('should show directory tokens with -v and file tokens with -vv', () => {
+      const subDir = join(tempDir, 'sub')
+      mkdirSync(subDir)
+      writeFileSync(join(subDir, 'test.txt'), 'Individual file tokens') // ~6 tokens
+
+      // Test -v (directory tokens)
+      const resultV = runCLI([
+        'concat',
+        tempDir,
+        '-o',
+        join(tempDir, 'out1.txt'),
+        '-v',
+      ])
+      expect(resultV.stdout).toContain('Dir: sub (~6 tokens)')
+      expect(resultV.stdout).toContain('Dir: .')
+
+      // Test -vv (individual file tokens)
+      const resultVV = runCLI([
+        'concat',
+        tempDir,
+        '-o',
+        join(tempDir, 'out2.txt'),
+        '-vv',
+      ])
+      // Use regex to handle both / and \ in paths
+      expect(resultVV.stdout).toMatch(/tokens\] sub[\\/]test\.txt/)
+    })
+
+    it('should output high-visibility warning when max-tokens budget exceeded', () => {
+      writeFileSync(join(tempDir, 'large.txt'), 'A'.repeat(400)) // ~100 tokens
+
+      const result = runCLI([
+        'concat',
+        tempDir,
+        '-o',
+        join(tempDir, 'out.txt'),
+        '--max-tokens',
+        '50',
+      ])
+
+      const output = result.stdout + result.stderr
+      expect(output).toContain('BUDGET WARNING: Token limit exceeded')
+      expect(output).toContain('Limit:   50')
+      expect(output).toContain('Current: 100')
+      expect(output).toContain('Created') // Should still complete the write
+    })
+
+    it('should perform pre-flight analysis with validate --tokens', () => {
+      writeFileSync(join(tempDir, 'preflight.txt'), 'Preflight content') // 17 chars -> 5 tokens
+
+      const result = runCLI(['validate', tempDir, '--tokens'])
+      const output = result.stdout + result.stderr
+
+      expect(output).toContain('[DRY RUN] Pre-flight Analysis for')
+      expect(output).toContain('preflight.txt')
+      expect(output).toContain('5')
+      expect(output).toContain('TOTAL CONTEXT WEIGHT (tokens): 5')
     })
   })
 })

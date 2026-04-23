@@ -73,7 +73,21 @@ export const FileView: React.FC<FileViewProps> = ({
               filteredFiles.filter((f) => f.kind === 'file' && !f.isIgnored)
                 .length
             }
-            )
+            )<span className="mx-2 opacity-20">|</span>
+            <span
+              className={cn(
+                'transition-opacity',
+                !filteredFiles.every((f) => f.isPrecise || f.isIgnored) &&
+                  'opacity-60'
+              )}
+            >
+              {!filteredFiles.every((f) => f.isPrecise || f.isIgnored) && '~'}
+              {filteredFiles
+                .filter((f) => !f.isIgnored)
+                .reduce((acc, f) => acc + (f.tokens || 0), 0)
+                .toLocaleString()}{' '}
+              tokens
+            </span>
           </h2>
         </div>
 
@@ -89,7 +103,7 @@ export const FileView: React.FC<FileViewProps> = ({
               Clear All
             </button>
           )}
-          
+
           <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg border border-slate-200 dark:border-slate-800 shadow-inner">
             <button
               onClick={() => setViewMode(ViewPreference.LIST)}
@@ -130,7 +144,7 @@ export const FileView: React.FC<FileViewProps> = ({
             </p>
           </div>
         ) : (
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-auto h-full max-h-[600px]">
             {viewMode === 'list' ? (
               <FileTable
                 files={filteredFiles.filter((f) => f.kind === 'file')}
@@ -138,7 +152,7 @@ export const FileView: React.FC<FileViewProps> = ({
                 onQuickLook={setQuickLookFile}
               />
             ) : (
-              <div className="p-2 overflow-auto h-full max-h-[600px]">
+              <div className="p-2">
                 <TreeNode
                   node={fileTree}
                   expandedPaths={expandedPaths}

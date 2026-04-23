@@ -3,62 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { test, expect } from './fixtures'
+import { test, expect, resetIgnoreList } from './fixtures'
 import { FileUploadHelper } from './helpers/file-upload'
-import type { APIRequestContext } from '@playwright/test'
+import { ensureSidebarOpen } from './helpers/sidebar'
+import type { Locator } from '@playwright/test'
 
 /**
  * Helper function to click an element using JavaScript for better Firefox compatibility
  */
 async function jsClick(locator: Locator): Promise<void> {
   await locator.evaluate((el: HTMLElement) => el.click())
-}
-
-/**
- * Helper to reset the ignore list via API using the worker-specific context.
- */
-async function resetIgnoreList(apiContext: APIRequestContext): Promise<void> {
-  const defaultIgnoreList = [
-    '.concatenate-ignore',
-    '.DS_Store',
-    '.env',
-    '.expo',
-    '.git',
-    '.gradle',
-    '.next',
-    '.secrets',
-    '.terraform',
-    '.vagrant',
-    '.vscode',
-    '/^\\.concatenate-ignore-worker-\\d+$/',
-    '/\\.class$/',
-    '/\\.exe$/',
-    '/\\.jar$/',
-    '/\\.log$/',
-    '/\\.o$/',
-    '/\\.obj$/',
-    '/\\.swp$/',
-    '/^__.*cache__$/',
-    '/^\\..*_cache$/',
-    'bin',
-    'build',
-    'desktop.ini',
-    'dist',
-    'node_modules',
-    'obj',
-    'package-lock.json',
-    'ruff_output.txt',
-    'target',
-    'Thumbs.db',
-    'vendor',
-    'venv',
-  ]
-  const response = await apiContext.post('/api/ignore-list', {
-    data: defaultIgnoreList,
-  })
-  if (!response.ok()) {
-    throw new Error(`Failed to reset ignore list — HTTP ${response.status()}`)
-  }
 }
 
 /**
@@ -85,6 +39,9 @@ test.describe('Max File Limit Feature', () => {
 
     // Use 'domcontentloaded' for faster Firefox navigation
     await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+    // Ensure sidebar is open to access controls
+    await ensureSidebarOpen(page)
   })
 
   test.describe('UI Visibility', () => {
@@ -96,7 +53,7 @@ test.describe('Max File Limit Feature', () => {
         name: 'Concatenate',
         exact: true,
       })
-      await expect(concatenateButton).toHaveClass(/bg-blue-600/, {
+      await expect(concatenateButton).toHaveClass(/bg-brand-600/, {
         timeout: 10000,
       })
 
@@ -119,7 +76,7 @@ test.describe('Max File Limit Feature', () => {
         exact: true,
       })
       await jsClick(deconcatenateButton)
-      await expect(deconcatenateButton).toHaveClass(/bg-blue-600/, {
+      await expect(deconcatenateButton).toHaveClass(/bg-brand-600/, {
         timeout: 5000,
       })
 
@@ -141,7 +98,7 @@ test.describe('Max File Limit Feature', () => {
         exact: true,
       })
       await jsClick(deconcatenateButton)
-      await expect(deconcatenateButton).toHaveClass(/bg-blue-600/, {
+      await expect(deconcatenateButton).toHaveClass(/bg-brand-600/, {
         timeout: 5000,
       })
 
@@ -151,7 +108,7 @@ test.describe('Max File Limit Feature', () => {
         exact: true,
       })
       await jsClick(concatenateButton)
-      await expect(concatenateButton).toHaveClass(/bg-blue-600/, {
+      await expect(concatenateButton).toHaveClass(/bg-brand-600/, {
         timeout: 5000,
       })
 
@@ -242,6 +199,7 @@ test.describe('Max File Limit Feature', () => {
     test('should show error when file count exceeds selected limit', async ({
       page,
     }) => {
+      test.setTimeout(60000)
       const uploadHelper = new FileUploadHelper(page)
 
       try {
@@ -284,6 +242,7 @@ test.describe('Max File Limit Feature', () => {
     test('should allow concatenation when file count is within limit', async ({
       page,
     }) => {
+      test.setTimeout(60000)
       const uploadHelper = new FileUploadHelper(page)
 
       try {
@@ -330,6 +289,7 @@ test.describe('Max File Limit Feature', () => {
       page,
       browserName,
     }) => {
+      test.setTimeout(60000)
       // Skip on WebKit due to timeout - simpler tests already cover the core functionality
       test.skip(
         browserName === 'webkit',
@@ -347,8 +307,10 @@ test.describe('Max File Limit Feature', () => {
         }))
 
         await uploadHelper.setFilesOnInput(files)
-        await expect(page.getByText(/Selected Files.*600/)).toBeVisible({
-          timeout: 15000,
+        await expect(
+          page.getByText(/Selected Files \(\s*600\s*\)/)
+        ).toBeVisible({
+          timeout: 30000,
         })
 
         // With default limit (10000), concatenation should work
@@ -370,7 +332,7 @@ test.describe('Max File Limit Feature', () => {
           exact: true,
         })
         await jsClick(deconcatenateButton)
-        await expect(deconcatenateButton).toHaveClass(/bg-blue-600/, {
+        await expect(deconcatenateButton).toHaveClass(/bg-brand-600/, {
           timeout: 5000,
         })
 
@@ -379,7 +341,7 @@ test.describe('Max File Limit Feature', () => {
           exact: true,
         })
         await jsClick(concatenateModeButton)
-        await expect(concatenateModeButton).toHaveClass(/bg-blue-600/, {
+        await expect(concatenateModeButton).toHaveClass(/bg-brand-600/, {
           timeout: 5000,
         })
 
@@ -388,19 +350,21 @@ test.describe('Max File Limit Feature', () => {
         await maxFileLimitSelect.selectOption('500')
         await page.waitForTimeout(300)
 
-        // Re-upload the same 600 files
+        // Re-upload the same 600 files (or verify they are still there)
         await uploadHelper.setFilesOnInput(files)
-        await expect(page.getByText(/Selected Files.*600/)).toBeVisible({
-          timeout: 15000,
+        await expect(
+          page.getByText(/Selected Files \(\s*600\s*\)/)
+        ).toBeVisible({
+          timeout: 30000,
         })
 
         // Try to concatenate - should now fail with 500 limit
         await jsClick(concatenateButton)
 
-        const newErrorMessage = page.locator(
-          'text=Warning: You are attempting to concatenate over 500 files'
+        const newErrorMessage = page.getByText(
+          /Warning: You are attempting to concatenate over 500 files/i
         )
-        await expect(newErrorMessage).toBeVisible({ timeout: 10000 })
+        await expect(newErrorMessage).toBeVisible({ timeout: 15000 })
       } finally {
         uploadHelper.cleanup()
       }

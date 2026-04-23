@@ -11,6 +11,7 @@
 .vscode
 *.test.js
 /\.class$
+/\.class$/
 /\.exe$/
 /\.jar$/
 /\.log$/
@@ -50,6 +51,8 @@ package-lock.json
 ruff_output.txt
 target
 temp_ignore_files
+this_is_a_very_long_ignore_pattern_that_should_test_if_the_remove_button_is_pushed_off_the_screen
 Thumbs.db
 vendor
 venv
+very_long_tag_name_that_should_test_the_layout_of_the_action_icons_in_the_sidebar_and_beyond_it_goes

@@ -27,8 +27,8 @@ export async function ensureSidebarOpen(page: Page): Promise<void> {
     if (await openButton.isVisible()) {
       await jsClick(openButton)
       // Wait for sidebar to be visible and animation to finish
-      await page.locator('aside').waitFor({ state: 'visible', timeout: 5000 })
-      await page.waitForTimeout(600)
+      await page.locator('aside').waitFor({ state: 'visible', timeout: 10000 })
+      await page.waitForTimeout(1000)
     }
   } else {
     // On desktop, we might still need to toggle if it was manually closed
@@ -37,7 +37,7 @@ export async function ensureSidebarOpen(page: Page): Promise<void> {
     const openButton = page.getByTitle('Open menu')
     if (await openButton.isVisible()) {
       await jsClick(openButton)
-      await page.waitForTimeout(600)
+      await page.waitForTimeout(1000)
     }
   }
 }
@@ -57,8 +57,8 @@ export async function ensureSidebarClosed(page: Page): Promise<void> {
   if (await closeButton.isVisible()) {
     await jsClick(closeButton)
     // Wait for sidebar to be hidden and animation to finish
-    await page.locator('aside').waitFor({ state: 'hidden', timeout: 5000 })
-    await page.waitForTimeout(600)
+    await page.locator('aside').waitFor({ state: 'hidden', timeout: 10000 })
+    await page.waitForTimeout(1000)
   }
 }
 

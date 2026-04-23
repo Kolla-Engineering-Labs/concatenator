@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
+import { TokenService } from '../core/TokenService'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -14,15 +15,30 @@ export function formatFileSize(bytes?: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
 
-export function estimateTokenCount(content: string | undefined, size: number = 0): number {
-  const chars = typeof content === 'string' ? content.length : size
-  return Math.ceil(chars / 4)
+export function estimateTokenCount(
+  content: string | ArrayBuffer | undefined,
+  size: number = 0
+): number {
+  if (content === undefined) return Math.ceil(size / 4)
+  if (content instanceof ArrayBuffer) {
+    return Math.ceil(content.byteLength / 4)
+  }
+  return TokenService.getTokenEstimate(content)
 }
 
 export function isImageFile(fileName: string): boolean {
-  const imageExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.ico', '.bmp']
+  const imageExtensions = [
+    '.png',
+    '.jpg',
+    '.jpeg',
+    '.gif',
+    '.webp',
+    '.svg',
+    '.ico',
+    '.bmp',
+  ]
   const lowerName = fileName.toLowerCase()
-  return imageExtensions.some(ext => lowerName.endsWith(ext))
+  return imageExtensions.some((ext) => lowerName.endsWith(ext))
 }
 
 export function isPdfFile(fileName: string): boolean {

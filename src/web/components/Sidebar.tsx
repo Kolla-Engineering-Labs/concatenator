@@ -23,6 +23,8 @@ interface SidebarProps {
   setIsIgnoreListMinimized: (minimized: boolean) => void
   newIgnoreItem: string
   setNewIgnoreItem: (item: string) => void
+  ignoredTokens?: number
+  ignoredIsPrecise?: boolean
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -34,6 +36,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setIsIgnoreListMinimized,
   newIgnoreItem,
   setNewIgnoreItem,
+  ignoredTokens,
+  ignoredIsPrecise,
 }) => {
   const {
     mode: appMode,
@@ -49,7 +53,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <aside
       className={cn(
-        'fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-transform flex flex-col h-screen',
+        'fixed lg:relative inset-y-0 left-0 z-50 w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-transform flex flex-col h-screen shrink-0',
         isSidebarOpen
           ? 'translate-x-0'
           : '-translate-x-full invisible lg:visible lg:translate-x-0'
@@ -148,6 +152,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               setIsIgnoreListMinimized={setIsIgnoreListMinimized}
               newIgnoreItem={newIgnoreItem}
               setNewIgnoreItem={setNewIgnoreItem}
+              ignoredTokens={ignoredTokens}
+              ignoredIsPrecise={ignoredIsPrecise}
               addIgnoreItem={() => {
                 if (newIgnoreItem) {
                   addIgnorePattern(newIgnoreItem)

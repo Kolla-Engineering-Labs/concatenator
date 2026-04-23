@@ -14,7 +14,7 @@ import {
   X,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'motion/react'
-import { cn, formatFileSize, estimateTokenCount } from '../../../../lib/utils'
+import { cn, formatFileSize } from '../../../../lib/utils'
 import { TreeItem, FileItem } from '../../../../core/types'
 import { getFileIcon } from '../../../../lib/fileIcons'
 import { useWorkbench } from '../../../hooks/useWorkbench'
@@ -73,6 +73,7 @@ export const TreeNode: React.FC<TreeNodeProps> = ({
         )}
         style={{ paddingLeft: `${depth * 1.25 + 0.5}rem` }}
         onClick={hasChildren ? toggleExpand : undefined}
+        data-testid={`tree-node-${node.path || 'root'}`}
       >
         {hasChildren ? (
           isExpanded ? (
@@ -84,7 +85,12 @@ export const TreeNode: React.FC<TreeNodeProps> = ({
           <div className="w-4 h-4 mr-1" />
         )}
         {node.kind === 'directory' ? (
-          <Folder className={cn("w-4 h-4 mr-2", effectivelyIgnored ? "text-slate-400" : "text-brand-500")} />
+          <Folder
+            className={cn(
+              'w-4 h-4 mr-2',
+              effectivelyIgnored ? 'text-slate-400' : 'text-brand-500'
+            )}
+          />
         ) : (
           <div className="w-4 h-4 mr-2 flex items-center justify-center">
             {getFileIcon(node.name, 'file')}
@@ -114,10 +120,23 @@ export const TreeNode: React.FC<TreeNodeProps> = ({
           </div>
 
           <div className="flex items-center gap-1 opacity-0 group-hover/node:opacity-100 transition-opacity">
-            {node.kind === 'file' && node.file && (
+            {(node.kind === 'file' ||
+              (node.tokenWeight !== undefined && node.tokenWeight > 0)) && (
               <div className="flex items-center gap-2 mr-2 text-[10px] font-mono whitespace-nowrap border-r border-slate-200 dark:border-slate-700 pr-2 h-4 flex-shrink-0">
-                <span className="text-slate-400">{formatFileSize(node.file.size)}</span>
-                <span className="text-brand-500/70">{estimateTokenCount(node.file.content, node.file.size).toLocaleString()}</span>
+                {node.kind === 'file' && node.file && (
+                  <span className="text-slate-400">
+                    {formatFileSize(node.file.size)}
+                  </span>
+                )}
+                <span
+                  className={cn(
+                    'text-brand-500/70 transition-opacity',
+                    !node.isPrecise && 'opacity-60'
+                  )}
+                >
+                  {!node.isPrecise && '~'}
+                  {(node.tokenWeight || 0).toLocaleString()}
+                </span>
               </div>
             )}
             {node.kind === 'file' && node.file && (

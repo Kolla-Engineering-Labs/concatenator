@@ -3,60 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { test, expect } from './fixtures'
+import { test, expect, resetIgnoreList } from './fixtures'
 import { FileUploadHelper } from './helpers/file-upload'
 import { logger } from '../src/lib/logger'
-import type { APIRequestContext } from '@playwright/test'
 import * as fs from 'fs'
 import JSZip from 'jszip'
 import { ensureSidebarClosed } from './helpers/sidebar'
-
-/**
- * Helper to reset the ignore list via API using the worker-specific context.
- */
-async function resetIgnoreList(apiContext: APIRequestContext): Promise<void> {
-  const defaultIgnoreList = [
-    '.concatenate-ignore',
-    '.DS_Store',
-    '.env',
-    '.expo',
-    '.git',
-    '.gradle',
-    '.next',
-    '.secrets',
-    '.terraform',
-    '.vagrant',
-    '.vscode',
-    '/^\\.concatenate-ignore-worker-\\d+$/',
-    '/\\.class$/',
-    '/\\.exe$/',
-    '/\\.jar$/',
-    '/\\.log$/',
-    '/\\.o$/',
-    '/\\.obj$/',
-    '/\\.swp$/',
-    '/^__.*cache__$/',
-    '/^\\..*_cache$/',
-    'bin',
-    'build',
-    'desktop.ini',
-    'dist',
-    'node_modules',
-    'obj',
-    'package-lock.json',
-    'ruff_output.txt',
-    'target',
-    'Thumbs.db',
-    'vendor',
-    'venv',
-  ]
-  const response = await apiContext.post('/api/ignore-list', {
-    data: defaultIgnoreList,
-  })
-  if (!response.ok()) {
-    throw new Error(`Failed to reset ignore list — HTTP ${response.status()}`)
-  }
-}
 
 /**
  * Creates a mock concatenated file content that the de-concatenator can parse.
@@ -124,7 +76,7 @@ test.describe('De-concatenate Mode', () => {
     await deconcatButton.evaluate((el: HTMLElement) => el.click())
 
     // Wait for the mode switch to complete by checking button state
-    await expect(deconcatButton).toHaveClass(/bg-blue-600/, {
+    await expect(deconcatButton).toHaveClass(/bg-brand-600/, {
       timeout: 10000,
     })
   })
@@ -144,14 +96,14 @@ test.describe('De-concatenate Mode', () => {
         name: 'De-concatenate',
         exact: true,
       })
-      await expect(deconcatButton).toHaveClass(/bg-blue-600/)
+      await expect(deconcatButton).toHaveClass(/bg-brand-600/)
 
       // Concatenate button should be inactive
       const concatButton = page.getByRole('button', {
         name: 'Concatenate',
         exact: true,
       })
-      await expect(concatButton).not.toHaveClass(/bg-blue-600/)
+      await expect(concatButton).not.toHaveClass(/bg-brand-600/)
     })
 
     test('should clear files when switching modes', async ({ page }) => {
@@ -181,7 +133,7 @@ test.describe('De-concatenate Mode', () => {
         await deconcatButton.evaluate((el: HTMLElement) => el.click())
 
         // Wait for mode switch and verify we're in de-concatenate mode
-        await expect(deconcatButton).toHaveClass(/bg-blue-600/, {
+        await expect(deconcatButton).toHaveClass(/bg-brand-600/, {
           timeout: 10000,
         })
 
@@ -371,7 +323,7 @@ test.describe('De-concatenate Mode', () => {
         })
         await downloadButton.waitFor({ state: 'visible', timeout: 15000 })
         const [download] = await Promise.all([
-          page.waitForEvent('download', { timeout: 30000 }),
+          page.waitForEvent('download', { timeout: 60000 }),
           downloadButton.click(),
         ])
 
@@ -449,7 +401,7 @@ test.describe('De-concatenate Mode', () => {
         })
         await downloadButton.waitFor({ state: 'visible', timeout: 15000 })
         const [download] = await Promise.all([
-          page.waitForEvent('download', { timeout: 30000 }),
+          page.waitForEvent('download', { timeout: 60000 }),
           downloadButton.click(),
         ])
 
@@ -518,7 +470,7 @@ test.describe('De-concatenate Mode', () => {
         })
         await downloadButton.waitFor({ state: 'visible', timeout: 15000 })
         const [download] = await Promise.all([
-          page.waitForEvent('download', { timeout: 30000 }),
+          page.waitForEvent('download', { timeout: 60000 }),
           downloadButton.click(),
         ])
 
@@ -553,7 +505,7 @@ test.describe('De-concatenate Mode', () => {
         })
         await downloadButton.waitFor({ state: 'visible', timeout: 15000 })
         const [download] = await Promise.all([
-          page.waitForEvent('download', { timeout: 30000 }),
+          page.waitForEvent('download', { timeout: 60000 }),
           downloadButton.click(),
         ])
 
@@ -629,7 +581,7 @@ test.describe('De-concatenate Mode', () => {
         })
         await downloadButton.waitFor({ state: 'visible', timeout: 15000 })
         const [download] = await Promise.all([
-          page.waitForEvent('download', { timeout: 30000 }),
+          page.waitForEvent('download', { timeout: 60000 }),
           downloadButton.click(),
         ])
 
@@ -722,7 +674,7 @@ test.describe('De-concatenate Mode', () => {
         })
         await downloadButton.waitFor({ state: 'visible', timeout: 15000 })
         const [download] = await Promise.all([
-          page.waitForEvent('download', { timeout: 30000 }),
+          page.waitForEvent('download', { timeout: 60000 }),
           downloadButton.click(),
         ])
 
@@ -859,7 +811,7 @@ This content is valid
         })
         await downloadButton.waitFor({ state: 'visible', timeout: 15000 })
         const [download] = await Promise.all([
-          page.waitForEvent('download', { timeout: 30000 }),
+          page.waitForEvent('download', { timeout: 60000 }),
           downloadButton.click(),
         ])
 

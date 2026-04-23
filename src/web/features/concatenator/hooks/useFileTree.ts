@@ -6,10 +6,16 @@
 import { useMemo } from 'react'
 import { FileItem, TreeItem } from '../../../../core/types'
 
+const EMPTY_MAP = {}
+
 /**
  * Custom hook to construct a hierarchical tree structure from a flat list of files.
  */
-export const useFileTree = (filteredFiles: FileItem[], isIgnored: (path: string) => boolean) => {
+export const useFileTree = (
+  filteredFiles: FileItem[],
+  isIgnored: (path: string) => boolean,
+  tokenMap: Record<string, { tokens: number; isPrecise: boolean }> = EMPTY_MAP
+) => {
   const fileTree = useMemo(() => {
     const root: TreeItem = {
       name: 'Root',
@@ -44,6 +50,37 @@ export const useFileTree = (filteredFiles: FileItem[], isIgnored: (path: string)
       })
     })
 
+    const applyWeights = (
+      node: TreeItem
+    ): { tokens: number; isPrecise: boolean } => {
+      if (node.kind === 'file') {
+        const meta = tokenMap[node.path] || {
+          tokens: node.file?.tokens || 0,
+          isPrecise: node.file?.isPrecise || false,
+        }
+        node.tokenWeight = meta.tokens
+        node.isPrecise = meta.isPrecise
+        return meta
+      }
+
+      let total = 0
+      let allPrecise = true
+
+      if (node.children) {
+        node.children.forEach((child) => {
+          const { tokens, isPrecise } = applyWeights(child)
+          total += tokens
+          if (!isPrecise) allPrecise = false
+        })
+      }
+
+      node.tokenWeight = total
+      node.isPrecise = allPrecise
+      return { tokens: total, isPrecise: allPrecise }
+    }
+
+    applyWeights(root)
+
     const sortTree = (node: TreeItem) => {
       if (node.children) {
         node.children.sort((a, b) => {
@@ -65,7 +102,7 @@ export const useFileTree = (filteredFiles: FileItem[], isIgnored: (path: string)
     }
 
     return root
-  }, [filteredFiles])
+  }, [filteredFiles, isIgnored, tokenMap])
 
   return fileTree
 }

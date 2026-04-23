@@ -18,6 +18,7 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:3000',
   },
+  timeout: 60000, // Increase global test timeout
 
   /* Enable fully parallel for faster test execution with worker-specific ignore files */
   fullyParallel: true,

@@ -59,8 +59,13 @@ graph LR
   - Exclude common noise (e.g., `node_modules`, `.git`, `package-lock.json`) using simple string matches or powerful Regular Expressions.
   - **Auto-Discovery**: CLI automatically respects `.concatignore` or `.gitignore` in your current working directory.
   - **CLI Persistence**: Use `-i, --ignore-file <path>` to leverage existing project configurations for both bundling and extraction. Syncs between `localStorage` and server-side `.concatenate-ignore` in the web UI.
-- **Advanced Visualization**:
+- **Token Estimation & Analytics**:
+  - Real-time token counting for every file using professional LLM heuristics (~4 chars/token).
+  - Aggregate token reporting for the entire bundle to help stay within context windows.
+  - **Budget Guard**: Set token budgets in the CLI to receive warnings when bundles exceed target limits.
+- **Workbench Context & Quick Look**:
   - Switch between **List View** for flat file management and **Tree View** for hierarchical directory inspection.
+  - **Quick Look**: High-fidelity, instant preview for code, PDFs, and vector assets (SVGs) directly in the browser.
   - Real-time filtering and sorting (directories first, then alphabetical).
 - **Developer-Centric UI**:
   - Drag-and-drop support for folders and files.
@@ -285,7 +290,8 @@ Options:
 - `-o, --output <file>` - Specify output filename (default: stdout)
 - `-e, --exclude <patterns>` - Additional patterns to ignore (comma-separated)
 - `-i, --ignore-file <path>` - Path to an ignore file (.concatignore, .gitignore, etc.)
-- `-v, --verbose` - Show detailed file processing logs
+- `-v, --verbose` - Verbosity level (-v: dir-level tokens, -vv: file-level tokens)
+- `--max-tokens <number>` - Budget guard: warn if the estimated token count is exceeded
 - `-f, --force` - Overwrite existing files without prompting
 
 **`extract <file>`** - Reconstruct a project from a concatenated file
@@ -318,10 +324,14 @@ Options:
 - `-vv` - Very verbose (shows all foreign markers in dry-run mode)
 - `-f, --force` - Overwrite existing files without prompting
 
-**`validate <file>`** - Check the integrity of a concatenated file
+**`validate <file|dir>`** - Check file integrity or perform a pre-flight directory dry-run
 
 ```bash
+# Validate a concatenated file
 concatenator validate bundle.txt
+
+# Pre-flight directory check (shows file counts and token estimates)
+concatenator validate ./src --tokens
 
 # With verbose output
 concatenator validate bundle.txt -v
@@ -332,8 +342,11 @@ concatenator validate -vv bundle.txt
 
 Options:
 
+- `-t, --tokens` - Show individual token counts for all files (directory mode)
 - `-v, --verbose` - Show detailed validation logs
 - `-vv` - Very verbose (shows all foreign markers and detailed breakdown)
+- `-e, --exclude <patterns>` - Patterns to ignore during pre-flight check
+- `-i, --ignore-file <path>` - Ignore file to use during pre-flight check
 
 Validates session ID consistency, marker balance, and file structure. Exits with code 0 on success, 1 on failure.
 
