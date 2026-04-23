@@ -117,8 +117,7 @@ export const DEFAULT_IGNORE_LIST = [
   '*.tif',
   '*.tiff',
   '/^__.*cache__$/',
-  // eslint-disable-next-line no-useless-escape
-  '/^\..*_cache$/',
+  '/^\\..*_cache$/',
   'bin',
   'build',
   'desktop.ini',

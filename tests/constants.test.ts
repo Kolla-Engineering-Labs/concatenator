@@ -139,8 +139,7 @@ describe('Constants', () => {
 
     it('contains cache-related regex patterns', () => {
       expect(DEFAULT_IGNORE_LIST).toContain('/^__.*cache__$/')
-      // eslint-disable-next-line no-useless-escape
-      expect(DEFAULT_IGNORE_LIST).toContain('/^\..*_cache$/')
+      expect(DEFAULT_IGNORE_LIST).toContain('/^\\..*_cache$/')
     })
 
     it('contains common image extensions', () => {

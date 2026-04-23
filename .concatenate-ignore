@@ -24,7 +24,7 @@
 *.tif
 *.tiff
 /^__.*cache__$/
-/^\..*_cache$/
+/^\\..*_cache$/
 bin
 build
 desktop.ini

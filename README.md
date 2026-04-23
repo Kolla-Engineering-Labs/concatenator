@@ -225,7 +225,7 @@ By default, **hidden files are included** in imports. The File System Access API
 - Environment/config: `.env`, `.vscode`, `.secrets`
 - Build artifacts: `.next`, `.gradle`, `.expo`, `.terraform`
 - System files: `.DS_Store`
-- Cache patterns: `/^\..*_cache$/` (matches `.pytest_cache`, `.eslint_cache`, etc.)
+- Cache patterns: `/^\\..*_cache$/` (matches `.pytest_cache`, `.eslint_cache`, etc.)
 
 **To exclude additional hidden files**, add patterns to your ignore list:
 
