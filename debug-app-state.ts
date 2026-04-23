@@ -6,7 +6,12 @@ const virtualFileSystem = {
 
 const appMode = 'deconcatenate'
 const files = [
-  { name: 'bundle.txt', path: 'bundle.txt', kind: 'file', content: '...' },
+  {
+    name: 'bundle.txt',
+    path: 'bundle.txt',
+    kind: 'file' as const,
+    content: '...',
+  },
 ]
 
 const ignoreList = ['build', 'dist', 'node_modules']

@@ -53,7 +53,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <aside
       className={cn(
-        'fixed lg:relative inset-y-0 left-0 z-50 w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-transform flex flex-col h-screen shrink-0',
+        'fixed lg:relative inset-y-0 left-0 z-50 w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-transform flex flex-col h-[calc(100vh-2.5rem)] shrink-0',
         isSidebarOpen
           ? 'translate-x-0'
           : '-translate-x-full invisible lg:visible lg:translate-x-0'

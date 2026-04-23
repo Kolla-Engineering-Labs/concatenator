@@ -17,4 +17,5 @@ export interface WorkbenchState {
   compiledIgnores: (string | RegExp)[]
   forceMode: boolean
   virtualFileSystem: Record<string, string>
+  tokenBudget: number
 }

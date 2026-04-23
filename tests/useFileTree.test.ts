@@ -116,9 +116,9 @@ describe('useFileTree', () => {
 
     const { result } = renderHook(() => useFileTree(files, () => false))
 
-    // Should promote 'a' as root
-    expect(result.current.name).toBe('a')
-    expect(result.current.path).toBe('a')
+    // Should promote 'e' as the Minimum Common Root
+    expect(result.current.name).toBe('e')
+    expect(result.current.path).toBe('a/b/c/d/e')
 
     // Navigate to deepest file
     let current = result.current
@@ -288,7 +288,7 @@ describe('useFileTree', () => {
 
     const { result } = renderHook(() => useFileTree(files, () => false))
 
-    expect(result.current.name).toBe('some.dir')
-    expect(result.current.children?.[0].name).toBe('another.dir')
+    expect(result.current.name).toBe('another.dir')
+    expect(result.current.children?.[0].name).toBe('file.txt')
   })
 })

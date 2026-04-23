@@ -33,6 +33,8 @@ test.describe('UI Interactions and Edge Cases', () => {
 
     // Use 'domcontentloaded' for faster Firefox navigation
     await page.goto('/', { waitUntil: 'domcontentloaded' })
+    // Small stability wait for hydration and initial state fetch
+    await page.waitForTimeout(200)
   })
 
   test.describe('Minimize/Maximize Panels', () => {

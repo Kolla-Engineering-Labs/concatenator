@@ -8,6 +8,7 @@ export interface ModeContextType extends WorkbenchState {
   setSidebarOpen: Dispatch<SetStateAction<boolean>>
   setForceMode: Dispatch<SetStateAction<boolean>>
   setVirtualFileSystem: Dispatch<SetStateAction<Record<string, string>>>
+  setTokenBudget: (budget: number) => void
   addIgnorePattern: (pattern: string) => void
   removeIgnorePattern: (pattern: string) => void
   resetWorkbench: () => void

@@ -95,4 +95,25 @@ describe('useFileTree Aggregation', () => {
     expect(srcDir?.tokenWeight).toBe(15)
     expect(srcDir?.isPrecise).toBe(true)
   })
+
+  it('excludes ignored files from hierarchical aggregation', () => {
+    const tokenMap = {
+      'src/a.ts': { tokens: 5, isPrecise: true },
+      'src/b.ts': { tokens: 10, isPrecise: true },
+    }
+    // Ignore src/b.ts
+    const isIgnored = (path: string) => path === 'src/b.ts'
+
+    const { result } = renderHook(() => useFileTree(files, isIgnored, tokenMap))
+
+    const root = result.current
+    const srcDir = root.name === 'src' ? root : root.children?.[0]
+
+    // Only src/a.ts should contribute to srcDir's weight
+    expect(srcDir?.tokenWeight).toBe(5)
+    // However, the ignored node itself should still show its internal tokens for UI purposes
+    const bNode = srcDir?.children?.find((c) => c.name === 'b.ts')
+    expect(bNode?.tokenWeight).toBe(10)
+    expect(bNode?.isIgnored).toBe(true)
+  })
 })

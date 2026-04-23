@@ -111,6 +111,7 @@ describe('ModeSwitch Component', () => {
       compiledIgnores: [],
       forceMode: false,
       virtualFileSystem: {},
+      tokenBudget: 128000,
       isIgnored: () => false,
       resetWorkbench: vi.fn(),
       setSidebarOpen: vi.fn(),
@@ -118,6 +119,7 @@ describe('ModeSwitch Component', () => {
       setIgnoreList: vi.fn(),
       setForceMode: vi.fn(),
       setVirtualFileSystem: vi.fn(),
+      setTokenBudget: vi.fn(),
       addIgnorePattern: vi.fn(),
       removeIgnorePattern: vi.fn(),
     })
@@ -150,6 +152,7 @@ describe('ModeSwitch Component', () => {
       compiledIgnores: [],
       forceMode: false,
       virtualFileSystem: {},
+      tokenBudget: 128000,
       isIgnored: () => false,
       resetWorkbench: vi.fn(),
       setSidebarOpen: vi.fn(),
@@ -157,6 +160,7 @@ describe('ModeSwitch Component', () => {
       setIgnoreList: vi.fn(),
       setForceMode: vi.fn(),
       setVirtualFileSystem: vi.fn(),
+      setTokenBudget: vi.fn(),
       addIgnorePattern: vi.fn(),
       removeIgnorePattern: vi.fn(),
     })
@@ -180,6 +184,7 @@ describe('ModeSwitch Component', () => {
       compiledIgnores: [],
       forceMode: false,
       virtualFileSystem: {},
+      tokenBudget: 128000,
       isIgnored: () => false,
       resetWorkbench: vi.fn(),
       setSidebarOpen: vi.fn(),
@@ -187,6 +192,7 @@ describe('ModeSwitch Component', () => {
       setIgnoreList: vi.fn(),
       setForceMode: vi.fn(),
       setVirtualFileSystem: vi.fn(),
+      setTokenBudget: vi.fn(),
       addIgnorePattern: vi.fn(),
       removeIgnorePattern: vi.fn(),
     })
@@ -208,6 +214,7 @@ describe('ModeSwitch Component', () => {
       isSidebarOpen: true,
       forceMode: false,
       virtualFileSystem: {},
+      tokenBudget: 128000,
       isIgnored: () => false,
       resetWorkbench: vi.fn(),
       setSidebarOpen: vi.fn(),
@@ -215,6 +222,7 @@ describe('ModeSwitch Component', () => {
       setIgnoreList: vi.fn(),
       setForceMode: vi.fn(),
       setVirtualFileSystem: vi.fn(),
+      setTokenBudget: vi.fn(),
       addIgnorePattern: vi.fn(),
       removeIgnorePattern: vi.fn(),
     })

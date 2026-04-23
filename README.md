@@ -59,12 +59,16 @@ graph LR
   - Exclude common noise (e.g., `node_modules`, `.git`, `package-lock.json`) using simple string matches or powerful Regular Expressions.
   - **Auto-Discovery**: CLI automatically respects `.concatignore` or `.gitignore` in your current working directory.
   - **CLI Persistence**: Use `-i, --ignore-file <path>` to leverage existing project configurations for both bundling and extraction. Syncs between `localStorage` and server-side `.concatenate-ignore` in the web UI.
+- **Structural Redundancy Fixes**:
+  - **Root Pruning (Web)**: Automatically reconciles overlapping folder drops. If you drop a parent folder after a child, the workbench "absorbs" the child into the new, higher-level structure to prevent duplicates.
+  - **Input Pruning (CLI)**: Normalizes and filters overlapping command-line arguments. If both `./src` and `./src/components` are passed, the redundant sub-path is automatically pruned.
 - **Token Estimation & Analytics**:
   - Real-time token counting for every file using professional LLM heuristics (~4 chars/token).
   - Aggregate token reporting for the entire bundle to help stay within context windows.
   - **Budget Guard**: Set token budgets in the CLI to receive warnings when bundles exceed target limits.
 - **Workbench Context & Quick Look**:
   - Switch between **List View** for flat file management and **Tree View** for hierarchical directory inspection.
+  - **Path Normalization**: The Tree View automatically calculates the **Minimum Common Root**, ensuring your project structure starts at the most relevant shared directory rather than a generic root.
   - **Quick Look**: High-fidelity, instant preview for code, PDFs, and vector assets (SVGs) directly in the browser.
   - Real-time filtering and sorting (directories first, then alphabetical).
 - **Developer-Centric UI**:
@@ -221,7 +225,7 @@ By default, **hidden files are included** in imports. The File System Access API
 - Environment/config: `.env`, `.vscode`, `.secrets`
 - Build artifacts: `.next`, `.gradle`, `.expo`, `.terraform`
 - System files: `.DS_Store`
-- Cache patterns: `/^\\..*_cache$/` (matches `.pytest_cache`, `.eslint_cache`, etc.)
+- Cache patterns: `/^\..*_cache$/` (matches `.pytest_cache`, `.eslint_cache`, etc.)
 
 **To exclude additional hidden files**, add patterns to your ignore list:
 
@@ -272,7 +276,7 @@ npm run dev:cli -- [command] [options]
 
 #### Commands
 
-**`concat <path>`** - Bundle a directory into a single LLM-ready file
+**`concat <paths...>`** - Bundle one or more directories/files into a single LLM-ready file
 
 ```bash
 # Output to stdout (default)
@@ -283,6 +287,9 @@ concatenator concat -o context.txt ./src
 
 # With verbose logging and exclusions
 concatenator concat -o context.txt -v -e node_modules,dist ./src
+
+# Multiple entry points (with automatic input pruning)
+concatenator concat -o bundle.txt ./src ./lib ./src/components
 ```
 
 Options:
@@ -324,7 +331,7 @@ Options:
 - `-vv` - Very verbose (shows all foreign markers in dry-run mode)
 - `-f, --force` - Overwrite existing files without prompting
 
-**`validate <file|dir>`** - Check file integrity or perform a pre-flight directory dry-run
+**`validate <paths...>`** - Check file integrity or perform a pre-flight dry-run on directories
 
 ```bash
 # Validate a concatenated file

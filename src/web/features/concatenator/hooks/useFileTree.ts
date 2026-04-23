@@ -41,7 +41,7 @@ export const useFileTree = (
             path: currentPath,
             kind: isLast ? file.kind : 'directory',
             children: isLast && file.kind === 'file' ? undefined : [],
-            isIgnored: isLast ? file.isIgnored : isIgnored(currentPath),
+            isIgnored: file.isIgnored ?? isIgnored(currentPath),
             file: isLast ? file : undefined,
           }
           current.children?.push(existing)
@@ -60,6 +60,10 @@ export const useFileTree = (
         }
         node.tokenWeight = meta.tokens
         node.isPrecise = meta.isPrecise
+        // If file is ignored, it contributes 0 to parent total
+        if (node.isIgnored) {
+          return { tokens: 0, isPrecise: true }
+        }
         return meta
       }
 
@@ -76,6 +80,10 @@ export const useFileTree = (
 
       node.tokenWeight = total
       node.isPrecise = allPrecise
+      // If directory is ignored, it contributes 0 to parent total
+      if (node.isIgnored) {
+        return { tokens: 0, isPrecise: true }
+      }
       return { tokens: total, isPrecise: allPrecise }
     }
 
@@ -93,15 +101,18 @@ export const useFileTree = (
     }
     sortTree(root)
 
-    if (
-      root.children &&
-      root.children.length === 1 &&
-      root.children[0].kind === 'directory'
+    // Path Normalization: Recursively prune single-child directories
+    // to ensure the tree starts at the Minimum Common Root.
+    let displayRoot = root
+    while (
+      displayRoot.children &&
+      displayRoot.children.length === 1 &&
+      displayRoot.children[0].kind === 'directory'
     ) {
-      return root.children[0]
+      displayRoot = displayRoot.children[0]
     }
 
-    return root
+    return displayRoot
   }, [filteredFiles, isIgnored, tokenMap])
 
   return fileTree

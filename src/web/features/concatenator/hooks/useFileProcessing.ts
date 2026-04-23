@@ -19,6 +19,7 @@ import {
   validateConcatenation,
   parseBundle,
 } from '../../../../core/engine'
+import { reconcileFiles } from '../../../../core/reconciler'
 import type { ValidationResult } from '../../../../core/types'
 import { logger } from '../../../../lib/logger'
 import {
@@ -309,16 +310,32 @@ export const useFileProcessing = ({
           }
         } else {
           setFiles((prev) => {
-            // Optimized Deduplication
-            const newPaths = new Set(newFiles.map((f) => f.path))
-            const filteredPrev = prev.filter((f) => !newPaths.has(f.path))
+            const { files: reconciledFiles, absorptions } = reconcileFiles(
+              prev,
+              newFiles
+            )
 
-            const uniqueNewFilesMap = new Map()
-            for (const nf of newFiles) {
-              uniqueNewFilesMap.set(nf.path, nf)
+            if (absorptions.length > 0) {
+              // Group by parent for cleaner logging
+              const parentMap = new Map<string, string[]>()
+              absorptions.forEach((abs) => {
+                const list = parentMap.get(abs.parent) || []
+                list.push(abs.child.split('/').pop() || abs.child)
+                parentMap.set(abs.parent, list)
+              })
+
+              parentMap.forEach((children, parent) => {
+                const childrenList =
+                  children.length > 3
+                    ? `${children.slice(0, 3).join(', ')} and ${children.length - 3} more`
+                    : children.join(', ')
+                logger.info(
+                  `Root Pruning: Merged '${childrenList}' into parent '${parent}'.`
+                )
+              })
             }
 
-            return filteredPrev.concat(Array.from(uniqueNewFilesMap.values()))
+            return reconciledFiles
           })
         }
       }

@@ -8,6 +8,7 @@ import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/react'
 import { Sun, Moon } from 'lucide-react'
 import { Sidebar } from './web/components/Sidebar'
+import { StatusBar } from './web/components/StatusBar'
 import { UploadZone as Dropzone } from './web/features/concatenator/components/UploadZone'
 import { FileView } from './web/features/concatenator/components/FileView'
 import { ConcatenatorLogo } from './web/features/concatenator/components/ConcatenatorLogo'
@@ -78,11 +79,37 @@ export default function App() {
 
   const handleRemoveFile = useCallback(
     (fileToRemove: FileItem) => {
-      setFiles((prev) => prev.filter((f) => f.path !== fileToRemove.path))
+      const isDir = fileToRemove.kind === 'directory'
+      const pathWithSlash = fileToRemove.path.endsWith('/')
+        ? fileToRemove.path
+        : `${fileToRemove.path}/`
+
+      const filterFn = (f: { path: string }) => {
+        if (isDir) {
+          return (
+            f.path !== fileToRemove.path && !f.path.startsWith(pathWithSlash)
+          )
+        }
+        return f.path !== fileToRemove.path
+      }
+
+      setFiles((prev) => prev.filter(filterFn))
+
       if (appMode === AppMode.DECONCATENATE) {
         setVirtualFileSystem((prev) => {
           const next = { ...prev }
-          delete next[fileToRemove.path]
+          if (isDir) {
+            Object.keys(next).forEach((path) => {
+              if (
+                path === fileToRemove.path ||
+                path.startsWith(pathWithSlash)
+              ) {
+                delete next[path]
+              }
+            })
+          } else {
+            delete next[fileToRemove.path]
+          }
           return next
         })
       }
@@ -121,6 +148,21 @@ export default function App() {
       }
     })
   }, [baseFiles, isIgnored, tokenMap])
+
+  const { totalTokens, tokensSaved, isPrecise } = useMemo(() => {
+    return displayFiles.reduce(
+      (acc, f) => {
+        if (f.isIgnored) {
+          acc.tokensSaved += f.tokens || 0
+        } else {
+          acc.totalTokens += f.tokens || 0
+        }
+        if (!f.isPrecise) acc.isPrecise = false
+        return acc
+      },
+      { totalTokens: 0, tokensSaved: 0, isPrecise: true }
+    )
+  }, [displayFiles])
 
   const fileTree = useFileTree(displayFiles, isIgnored, tokenMap)
 
@@ -179,119 +221,127 @@ export default function App() {
   }, [isDarkMode])
 
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden font-sans">
-      {/* Sidebar - Persistent on desktop, drawer on mobile */}
-      <Sidebar
-        isDarkMode={isDarkMode}
-        setIsDarkMode={setIsDarkMode}
-        maxFileLimit={maxFileLimit}
-        setMaxFileLimit={setMaxFileLimit}
-        isIgnoreListMinimized={isIgnoreListMinimized}
-        setIsIgnoreListMinimized={setIsIgnoreListMinimized}
-        newIgnoreItem={newIgnoreItem}
-        setNewIgnoreItem={setNewIgnoreItem}
-        ignoredTokens={displayFiles
-          .filter((f) => f.isIgnored)
-          .reduce((acc, f) => acc + (f.tokens || 0), 0)}
-        ignoredIsPrecise={displayFiles
-          .filter((f) => f.isIgnored)
-          .every((f) => f.isPrecise)}
-      />
+    <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden font-sans flex-col">
+      <div className="flex flex-1 overflow-hidden h-[calc(100vh-2.5rem)]">
+        {/* Sidebar - Persistent on desktop, drawer on mobile */}
+        <Sidebar
+          isDarkMode={isDarkMode}
+          setIsDarkMode={setIsDarkMode}
+          maxFileLimit={maxFileLimit}
+          setMaxFileLimit={setMaxFileLimit}
+          isIgnoreListMinimized={isIgnoreListMinimized}
+          setIsIgnoreListMinimized={setIsIgnoreListMinimized}
+          newIgnoreItem={newIgnoreItem}
+          setNewIgnoreItem={setNewIgnoreItem}
+          ignoredTokens={displayFiles
+            .filter((f) => f.isIgnored)
+            .reduce((acc, f) => acc + (f.tokens || 0), 0)}
+          ignoredIsPrecise={displayFiles
+            .filter((f) => f.isIgnored)
+            .every((f) => f.isPrecise)}
+        />
 
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Mobile Header Toggle - Using div to avoid locator ambiguity in accessibility tests */}
-        <nav
-          className="lg:hidden h-14 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 flex items-center justify-between shrink-0"
-          data-testid="mobile-header"
-        >
-          <div className="flex items-center gap-3">
-            <ConcatenatorLogo className="h-7 w-auto" />
-            <span className="font-display font-bold text-slate-800 dark:text-slate-100">
-              Concatenator
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setIsDarkMode(!isDarkMode)}
-              className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none transition-colors text-slate-500"
-              title={
-                isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'
-              }
-              data-testid="theme-toggle-mobile"
-            >
-              {isDarkMode ? (
-                <Sun className="w-5 h-5" />
-              ) : (
-                <Moon className="w-5 h-5" />
-              )}
-            </button>
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="p-2 text-slate-500"
-              data-testid="sidebar-toggle"
-              title="Open menu"
-            >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
+        {/* Main Content */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Mobile Header Toggle - Using div to avoid locator ambiguity in accessibility tests */}
+          <nav
+            className="lg:hidden h-14 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 flex items-center justify-between shrink-0"
+            data-testid="mobile-header"
+          >
+            <div className="flex items-center gap-3">
+              <ConcatenatorLogo className="h-7 w-auto" />
+              <span className="font-display font-bold text-slate-800 dark:text-slate-100">
+                Concatenator
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsDarkMode(!isDarkMode)}
+                className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 focus:outline-none transition-colors text-slate-500"
+                title={
+                  isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'
+                }
+                data-testid="theme-toggle-mobile"
               >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 6h16M4 12h16M4 18h16"
-                />
-              </svg>
-            </button>
-          </div>
-        </nav>
+                {isDarkMode ? (
+                  <Sun className="w-5 h-5" />
+                ) : (
+                  <Moon className="w-5 h-5" />
+                )}
+              </button>
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="p-2 text-slate-500"
+                data-testid="sidebar-toggle"
+                title="Open menu"
+              >
+                <svg
+                  className="w-6 h-6"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 6h16M4 12h16M4 18h16"
+                  />
+                </svg>
+              </button>
+            </div>
+          </nav>
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scrollbar">
-          <div className="max-w-7xl mx-auto w-full space-y-8">
-            <Dropzone
-              isProcessing={isProcessing}
-              isDropzoneMinimized={isDropzoneMinimized}
-              setIsDropzoneMinimized={setIsDropzoneMinimized}
-              importProgress={importProgress}
-              cancelProcessing={cancelProcessing}
-              importError={importError}
-              setImportError={setImportError}
-              appMode={appMode}
-              handleDrop={handleDrop}
-              handleFileUpload={handleFileUpload}
-            />
-
-            {(appMode === AppMode.CONCATENATE || files.length > 0) && (
-              <FileView
-                files={files}
-                filteredFiles={displayFiles}
-                fileTree={fileTree}
-                expandedPaths={expandedPaths}
-                setExpandedPaths={setExpandedPaths}
+          <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scrollbar">
+            <div className="max-w-7xl mx-auto w-full space-y-8">
+              <Dropzone
                 isProcessing={isProcessing}
-                onConcatenate={() =>
-                  handleConcatenate(
-                    displayFiles.filter((f) => !f.isIgnored),
-                    outputFormat
-                  )
-                }
-                onClearAll={handleClearAll}
-                onDownloadAsZip={() =>
-                  handleDownloadAsZip?.(
-                    displayFiles.filter((f) => !f.isIgnored)
-                  )
-                }
-                onRemoveFile={handleRemoveFile}
-                outputFormat={outputFormat}
-                setOutputFormat={setOutputFormat}
+                isDropzoneMinimized={isDropzoneMinimized}
+                setIsDropzoneMinimized={setIsDropzoneMinimized}
+                importProgress={importProgress}
+                cancelProcessing={cancelProcessing}
+                importError={importError}
+                setImportError={setImportError}
+                appMode={appMode}
+                handleDrop={handleDrop}
+                handleFileUpload={handleFileUpload}
               />
-            )}
-          </div>
-        </main>
+
+              {(appMode === AppMode.CONCATENATE || files.length > 0) && (
+                <FileView
+                  files={files}
+                  filteredFiles={displayFiles}
+                  fileTree={fileTree}
+                  expandedPaths={expandedPaths}
+                  setExpandedPaths={setExpandedPaths}
+                  isProcessing={isProcessing}
+                  onConcatenate={() =>
+                    handleConcatenate(
+                      displayFiles.filter((f) => !f.isIgnored),
+                      outputFormat
+                    )
+                  }
+                  onClearAll={handleClearAll}
+                  onDownloadAsZip={() =>
+                    handleDownloadAsZip?.(
+                      displayFiles.filter((f) => !f.isIgnored)
+                    )
+                  }
+                  onRemoveFile={handleRemoveFile}
+                  outputFormat={outputFormat}
+                  setOutputFormat={setOutputFormat}
+                />
+              )}
+            </div>
+          </main>
+        </div>
       </div>
+
+      <StatusBar
+        totalTokens={totalTokens}
+        tokensSaved={tokensSaved}
+        isPrecise={isPrecise}
+      />
 
       <Analytics />
       <SpeedInsights />

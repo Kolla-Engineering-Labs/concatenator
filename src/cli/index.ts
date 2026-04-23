@@ -14,7 +14,7 @@ import {
   existsSync,
   rmSync,
 } from 'fs'
-import { join, relative, dirname } from 'path'
+import { join, relative, dirname, resolve } from 'path'
 import { fileURLToPath } from 'url'
 import {
   concatenate,
@@ -23,6 +23,7 @@ import {
   type VirtualFile,
   type ValidationResult,
 } from '../core/engine.js'
+import { prunePaths } from '../core/reconciler.js'
 import { isDirectoryTainted } from '../core/utils/fs-utils.js'
 import { UserError } from '../core/errors.js'
 import { createZipFromVirtualFiles } from '../drivers/zip-driver.js'
@@ -401,8 +402,8 @@ const program = new Command()
 // Concat command (default action)
 program
   .command('concat')
-  .argument('<path>', 'Directory path to concatenate')
-  .description('Bundle a directory into a single LLM-ready file')
+  .argument('<paths...>', 'Directory paths to concatenate')
+  .description('Bundle directories into a single LLM-ready file')
   .option('-o, --output <file>', 'Specify output filename (default: stdout)')
   .option(
     '-e, --exclude <patterns>',
@@ -429,7 +430,7 @@ program
   )
   .action(
     async (
-      inputPath: string,
+      paths: string[],
       options: {
         output?: string
         exclude: string
@@ -440,24 +441,67 @@ program
       }
     ) => {
       try {
-        const stats = statSync(inputPath)
-        if (!stats.isDirectory()) {
-          throw new Error(`${inputPath} is not a directory`)
+        // Path Normalization & Pruning
+        const absolutePaths = paths.map((p) => resolve(p))
+        const { pruned, remaining } = prunePaths(absolutePaths)
+
+        if (options.verbose && pruned.length > 0) {
+          for (const p of pruned) {
+            const relPath = relative(process.cwd(), p) || '.'
+            logger.info(
+              `[info] Pruned redundant sub-path: ${relPath} (already covered by a parent path)`
+            )
+          }
         }
 
         // Get ignore patterns and initialize engine
         const ignorePatterns = getIgnorePatterns(options)
         const ignoreEngine = new IgnoreEngine(ignorePatterns)
 
-        const { files, totalTokens } = collectFiles(
-          inputPath,
-          inputPath,
-          ignoreEngine,
-          options.verbose
-        )
+        const allFiles: FileWithMetadata[] = []
+        let totalTokens = 0
 
-        if (files.length === 0) {
-          throw new Error(`No readable files found in ${inputPath}`)
+        for (const inputPath of remaining) {
+          if (!existsSync(inputPath)) {
+            logger.warn(`Warning: Path ${inputPath} does not exist. Skipping.`)
+            continue
+          }
+
+          const stats = statSync(inputPath)
+          if (stats.isDirectory()) {
+            // For a single input directory, we keep paths relative to it (traditional behavior).
+            // For multiple inputs, we preserve the directory name to avoid collisions.
+            const baseDir =
+              remaining.length === 1 ? inputPath : dirname(inputPath)
+
+            const { totalTokens: tokens } = collectFiles(
+              inputPath,
+              baseDir,
+              ignoreEngine,
+              options.verbose,
+              allFiles
+            )
+            totalTokens += tokens
+          } else if (stats.isFile()) {
+            const content = readFileSync(inputPath, 'utf-8')
+            const tokens = TokenService.getTokenEstimate(content)
+            // For files, we always use the parent dir as base to get just the filename
+            const relativePath = relative(dirname(inputPath), inputPath)
+
+            if (!ignoreEngine.isIgnored(relativePath)) {
+              allFiles.push({
+                path: relativePath,
+                content,
+                tokens,
+                size: stats.size,
+              })
+              totalTokens += tokens
+            }
+          }
+        }
+
+        if (allFiles.length === 0) {
+          throw new Error(`No readable files found in the provided paths`)
         }
 
         // Budget Guard
@@ -469,7 +513,7 @@ program
           logger.warn('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
         }
 
-        const result = concatenate(files)
+        const result = concatenate(allFiles)
         const bundleSize = Buffer.byteLength(result, 'utf-8')
 
         if (options.output) {
@@ -635,9 +679,12 @@ program
 // Validate command
 program
   .command('validate')
-  .argument('<path>', 'Path to a directory (pre-flight) or a concatenated file')
+  .argument(
+    '<paths...>',
+    'Path to directories (pre-flight) or concatenated files'
+  )
   .description(
-    'Check the integrity of a concatenated file or perform a pre-flight dry run on a directory'
+    'Check the integrity of concatenated files or perform a pre-flight dry run on directories'
   )
   .option('-t, --tokens', 'Show individual token counts for all files', false)
   .option(
@@ -657,7 +704,7 @@ program
   )
   .action(
     async (
-      inputPath: string,
+      paths: string[],
       options: {
         tokens: boolean
         verbose: number
@@ -666,60 +713,84 @@ program
       }
     ) => {
       try {
-        if (existsSync(inputPath) && statSync(inputPath).isDirectory()) {
-          // Pre-flight directory dry-run
-          const ignorePatterns = getIgnorePatterns(options)
-          const ignoreEngine = new IgnoreEngine(ignorePatterns)
+        // Path Normalization & Pruning
+        const absolutePaths = paths.map((p) => resolve(p))
+        const { pruned, remaining } = prunePaths(absolutePaths)
 
-          if (options.tokens) {
-            logger.info(`[DRY RUN] Pre-flight Analysis for: ${inputPath}`)
-            const { files, totalTokens } = collectFiles(
-              inputPath,
-              inputPath,
-              ignoreEngine,
-              options.verbose
-            )
-
+        if (options.verbose && pruned.length > 0) {
+          for (const p of pruned) {
+            const relPath = relative(process.cwd(), p) || '.'
             logger.info(
-              '--------------------------------------------------------------------------------'
-            )
-            logger.info(String('File Path').padEnd(60) + ' | ' + 'Tokens')
-            logger.info(
-              '--------------------------------------------------------------------------------'
-            )
-            for (const file of files) {
-              logger.info(
-                file.path.padEnd(60) +
-                  ' | ' +
-                  file.tokens.toLocaleString().padStart(10)
-              )
-            }
-            logger.info(
-              '--------------------------------------------------------------------------------'
-            )
-            logger.info(
-              `TOTAL CONTEXT WEIGHT (tokens): ${totalTokens.toLocaleString()}`
-            )
-            logger.info(
-              '--------------------------------------------------------------------------------'
-            )
-          } else {
-            const { files, totalTokens } = collectFiles(
-              inputPath,
-              inputPath,
-              ignoreEngine,
-              options.verbose
-            )
-            logger.info(
-              `✓ Pre-flight check passed: ${files.length} files, ~${totalTokens.toLocaleString()} tokens.`
+              `[info] Pruned redundant sub-path: ${relPath} (already covered by a parent path)`
             )
           }
-        } else {
-          // File validation
-          const content = readFileSync(inputPath, 'utf-8')
-          const result = validateConcatenation(content)
-          formatValidationReport(result, inputPath, options.verbose, false)
-          process.exit(result.isValid ? 0 : 1)
+        }
+
+        for (const inputPath of remaining) {
+          if (!existsSync(inputPath)) {
+            logger.warn(`Warning: Path ${inputPath} does not exist. Skipping.`)
+            continue
+          }
+
+          if (statSync(inputPath).isDirectory()) {
+            // Pre-flight directory dry-run
+            const ignorePatterns = getIgnorePatterns(options)
+            const ignoreEngine = new IgnoreEngine(ignorePatterns)
+            const baseDir =
+              remaining.length === 1 ? inputPath : dirname(inputPath)
+
+            if (options.tokens) {
+              logger.info(`[DRY RUN] Pre-flight Analysis for: ${inputPath}`)
+              const { files, totalTokens } = collectFiles(
+                inputPath,
+                baseDir,
+                ignoreEngine,
+                options.verbose
+              )
+
+              logger.info(
+                '--------------------------------------------------------------------------------'
+              )
+              logger.info(String('File Path').padEnd(60) + ' | ' + 'Tokens')
+              logger.info(
+                '--------------------------------------------------------------------------------'
+              )
+              for (const file of files) {
+                logger.info(
+                  file.path.padEnd(60) +
+                    ' | ' +
+                    file.tokens.toLocaleString().padStart(10)
+                )
+              }
+              logger.info(
+                '--------------------------------------------------------------------------------'
+              )
+              logger.info(
+                `TOTAL CONTEXT WEIGHT (tokens): ${totalTokens.toLocaleString()}`
+              )
+              logger.info(
+                '--------------------------------------------------------------------------------'
+              )
+            } else {
+              const { files, totalTokens } = collectFiles(
+                inputPath,
+                baseDir,
+                ignoreEngine,
+                options.verbose
+              )
+              logger.info(
+                `✓ Pre-flight check passed for ${inputPath}: ${files.length} files, ~${totalTokens.toLocaleString()} tokens.`
+              )
+            }
+          } else {
+            // File validation
+            const content = readFileSync(inputPath, 'utf-8')
+            const result = validateConcatenation(content)
+            formatValidationReport(result, inputPath, options.verbose, false)
+            if (!result.isValid) {
+              process.exit(1)
+            }
+          }
         }
       } catch (error) {
         handleError(error)

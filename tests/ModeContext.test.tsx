@@ -76,7 +76,7 @@ describe('ModeContext (Workbench State)', () => {
     })
   })
 
-  it('fetches ignore list from server and merges with local on mount', async () => {
+  it('fetches ignore list from server and replaces local on mount', async () => {
     const serverList = ['server-item']
     global.fetch = vi.fn().mockImplementation((url) => {
       if (url === '/api/ignore-list') {
@@ -94,7 +94,7 @@ describe('ModeContext (Workbench State)', () => {
 
     await waitFor(() => {
       expect(result.current.ignoreList).toContain('server-item')
-      expect(result.current.ignoreList).toContain('local-item')
+      expect(result.current.ignoreList).not.toContain('local-item')
     })
   })
 

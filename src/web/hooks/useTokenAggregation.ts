@@ -153,6 +153,10 @@ export const useTokenAggregation = (files: FileItem[]) => {
         }
         node.tokenWeight = meta.tokens
         node.isPrecise = meta.isPrecise
+        // If file is ignored, it contributes 0 to parent total
+        if (node.isIgnored) {
+          return { tokens: 0, isPrecise: true }
+        }
         return meta
       }
 
@@ -169,6 +173,10 @@ export const useTokenAggregation = (files: FileItem[]) => {
 
       node.tokenWeight = total
       node.isPrecise = allPrecise
+      // If directory is ignored, it contributes 0 to parent total
+      if (node.isIgnored) {
+        return { tokens: 0, isPrecise: true }
+      }
       return { tokens: total, isPrecise: allPrecise }
     },
     [tokenMap]
