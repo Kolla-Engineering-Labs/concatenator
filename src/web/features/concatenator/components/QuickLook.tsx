@@ -163,24 +163,38 @@ export const QuickLook: React.FC<QuickLookProps> = ({ file, onClose }) => {
                       if (isDataUrl || isSvgText) {
                         if (isSvg) {
                           try {
-                            let svgHtml = isSvgText
-                              ? content
-                              : decodeURIComponent(
-                                  escape(atob(content.split(',')[1]))
+                            let svgHtml = ''
+                            if (isSvgText) {
+                              svgHtml = content
+                            } else {
+                              // Use TextDecoder for robust UTF-8 base64 decoding
+                              const base64Data = content.split(',')[1]
+                              if (base64Data) {
+                                const binaryString = atob(base64Data)
+                                const bytes = new Uint8Array(
+                                  binaryString.length
                                 )
+                                for (let i = 0; i < binaryString.length; i++) {
+                                  bytes[i] = binaryString.charCodeAt(i)
+                                }
+                                svgHtml = new TextDecoder().decode(bytes)
+                              }
+                            }
 
-                            // Strip existing class attribute from the <svg> tag to prevent it from overriding our workbench styles
-                            svgHtml = svgHtml.replace(
-                              /<svg([^>]*)class="[^"]*"([^>]*)>/i,
-                              '<svg$1$2>'
-                            )
+                            if (svgHtml) {
+                              // Strip existing class attribute from the <svg> tag to prevent it from overriding our workbench styles
+                              svgHtml = svgHtml.replace(
+                                /<svg([^>]*)class="[^"]*"([^>]*)>/i,
+                                '<svg$1$2>'
+                              )
 
-                            return (
-                              <div
-                                className="max-w-full max-h-full flex items-center justify-center ph-no-capture transition-transform duration-300 group-hover/img:scale-[1.02] [&>svg]:w-full [&>svg]:h-auto [&>svg]:max-w-[70vw] [&>svg]:max-h-[60vh] [&>svg]:min-w-[64px] [&>svg]:min-h-[64px] [&>svg]:block [&>svg]:mx-auto"
-                                dangerouslySetInnerHTML={{ __html: svgHtml }}
-                              />
-                            )
+                              return (
+                                <div
+                                  className="max-w-full max-h-full flex items-center justify-center ph-no-capture transition-transform duration-300 group-hover/img:scale-[1.02] [&>svg]:w-full [&>svg]:h-auto [&>svg]:max-w-[70vw] [&>svg]:max-h-[60vh] [&>svg]:min-w-[64px] [&>svg]:min-h-[64px] [&>svg]:block [&>svg]:mx-auto"
+                                  dangerouslySetInnerHTML={{ __html: svgHtml }}
+                                />
+                              )
+                            }
                           } catch (err) {
                             console.error('SVG decoding failed:', err)
                             // Fallback to standard img tag if decoding fails

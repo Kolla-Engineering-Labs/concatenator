@@ -23,6 +23,34 @@ vi.mock('jszip', () => {
   }
 })
 
+// Mock jsPDF
+const mockSave = vi.fn()
+const mockAddPage = vi.fn()
+const mockSetFont = vi.fn()
+const mockText = vi.fn()
+const mockSplitTextToSize = vi.fn((t) => [t])
+
+vi.mock('jspdf', () => {
+  const MockjsPDF = class {
+    save = mockSave
+    addPage = mockAddPage
+    setFont = mockSetFont
+    setFontSize = vi.fn()
+    text = mockText
+    splitTextToSize = mockSplitTextToSize
+    internal = {
+      pageSize: {
+        getHeight: () => 10, // Extremely small height to force page breaks
+        getWidth: () => 595,
+      },
+    }
+  }
+  return {
+    jsPDF: MockjsPDF,
+    default: MockjsPDF,
+  }
+})
+
 describe('useFileProcessing', () => {
   let originalClick: any
 
@@ -253,7 +281,8 @@ describe('useFileProcessing', () => {
       )
     })
 
-    it('executes URL.revokeObjectURL synchronously which may cause download race conditions on slow devices', async () => {
+    it('executes URL.revokeObjectURL with a delay to prevent download race conditions', async () => {
+      vi.useFakeTimers()
       const { result } = renderHook(() =>
         useFileProcessing({
           appMode: AppMode.CONCATENATE,
@@ -278,7 +307,16 @@ describe('useFileProcessing', () => {
         result.current.handleConcatenate(mockFiles)
       })
 
+      // Initially not called because of delay
+      expect(global.URL.revokeObjectURL).not.toHaveBeenCalled()
+
+      // Fast-forward timers
+      act(() => {
+        vi.advanceTimersByTime(1000)
+      })
+
       expect(global.URL.revokeObjectURL).toHaveBeenCalledTimes(1)
+      vi.useRealTimers()
     })
 
     it('concatenates files containing unregulated URI components in paths leading to special path injection risks', async () => {
@@ -347,6 +385,179 @@ describe('useFileProcessing', () => {
         .calls[0][0]
       const text = await createObjCallArgs.text()
       expect(text.length).toBeGreaterThan(5000)
+    })
+
+    it('generates PDF when outputFormat is pdf', async () => {
+      const { result } = renderHook(() =>
+        useFileProcessing({
+          appMode: AppMode.CONCATENATE,
+          isIgnored: () => false,
+          maxFileLimit: 10000,
+          isIgnoreListLoading: false,
+          setVirtualFileSystem: vi.fn(),
+        })
+      )
+
+      const mockFiles = [
+        {
+          name: 'test.js',
+          path: 'src/test.js',
+          kind: 'file' as const,
+          content: 'console.log("hello");',
+          size: 100,
+        },
+      ]
+
+      await act(async () => {
+        await result.current.handleConcatenate(mockFiles, 'pdf')
+      })
+
+      expect(mockSave).toHaveBeenCalled()
+      expect(mockText).toHaveBeenCalledWith(
+        expect.arrayContaining([expect.stringContaining('src/test.js')]),
+        expect.any(Number),
+        expect.any(Number)
+      )
+    })
+
+    it('handles empty content in PDF generation', async () => {
+      const { result } = renderHook(() =>
+        useFileProcessing({
+          appMode: AppMode.CONCATENATE,
+          isIgnored: () => false,
+          maxFileLimit: 10000,
+          isIgnoreListLoading: false,
+          setVirtualFileSystem: vi.fn(),
+        })
+      )
+
+      const mockFiles = [
+        {
+          name: 'empty.txt',
+          path: 'empty.txt',
+          kind: 'file' as const,
+          content: '',
+          size: 0,
+        },
+      ]
+
+      await act(async () => {
+        await result.current.handleConcatenate(mockFiles, 'pdf')
+      })
+
+      expect(mockText).toHaveBeenCalledWith(
+        '[Empty or Binary Content]',
+        expect.any(Number),
+        expect.any(Number)
+      )
+    })
+
+    it('triggers page breaks in PDF generation for long content', async () => {
+      const { result } = renderHook(() =>
+        useFileProcessing({
+          appMode: AppMode.CONCATENATE,
+          isIgnored: () => false,
+          maxFileLimit: 10000,
+          isIgnoreListLoading: false,
+          setVirtualFileSystem: vi.fn(),
+        })
+      )
+
+      // Mock splitTextToSize to return many lines
+      mockSplitTextToSize.mockReturnValue(new Array(100).fill('line'))
+
+      const mockFiles = [
+        {
+          name: 'long.txt',
+          path: 'long.txt',
+          kind: 'file' as const,
+          content: 'long',
+          size: 1000,
+        },
+      ]
+
+      await act(async () => {
+        await result.current.handleConcatenate(mockFiles, 'pdf')
+      })
+
+      expect(mockAddPage).toHaveBeenCalled()
+      mockSplitTextToSize.mockRestore()
+    })
+
+    it('handles multiple files in PDF generation', async () => {
+      const { result } = renderHook(() =>
+        useFileProcessing({
+          appMode: AppMode.CONCATENATE,
+          isIgnored: () => false,
+          maxFileLimit: 10000,
+          isIgnoreListLoading: false,
+          setVirtualFileSystem: vi.fn(),
+        })
+      )
+
+      const mockFiles = [
+        {
+          name: '1.txt',
+          path: '1.txt',
+          kind: 'file' as const,
+          content: '1',
+          size: 1,
+        },
+        {
+          name: '2.txt',
+          path: '2.txt',
+          kind: 'file' as const,
+          content: '2',
+          size: 1,
+        },
+        {
+          name: '3.txt',
+          path: '3.txt',
+          kind: 'file' as const,
+          content: '3',
+          size: 1,
+        },
+      ]
+
+      await act(async () => {
+        await result.current.handleConcatenate(mockFiles, 'pdf')
+      })
+
+      expect(mockSave).toHaveBeenCalled()
+      expect(mockText).toHaveBeenCalled()
+    })
+
+    it('handles handleDownloadAsZip failure gracefully', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      mockGenerateAsync.mockRejectedValue(new Error('Zip failed'))
+
+      const { result } = renderHook(() =>
+        useFileProcessing({
+          appMode: AppMode.CONCATENATE,
+          isIgnored: () => false,
+          maxFileLimit: 10000,
+          isIgnoreListLoading: false,
+          setVirtualFileSystem: vi.fn(),
+        })
+      )
+
+      const mockFiles = [
+        {
+          name: 'a.txt',
+          path: 'a.txt',
+          kind: 'file' as const,
+          content: 'a',
+          size: 1,
+        },
+      ]
+
+      await act(async () => {
+        await result.current.handleDownloadAsZip(mockFiles)
+      })
+
+      expect(result.current.importError).toBe('Failed to create ZIP archive')
+      expect(consoleSpy).toHaveBeenCalled()
+      consoleSpy.mockRestore()
     })
   })
 
@@ -2207,6 +2418,353 @@ describe('useFileProcessing', () => {
       })
       // Assert no crash
       expect(result.current.isProcessing).toBe(false)
+    })
+    it('handles file upload errors gracefully', async () => {
+      const { result } = renderHook(() =>
+        useFileProcessing({
+          appMode: AppMode.CONCATENATE,
+          isIgnored: () => false,
+          maxFileLimit: 10000,
+          isIgnoreListLoading: false,
+          setVirtualFileSystem: vi.fn(),
+        })
+      )
+
+      // Mock event with no files
+      const mockEvent = {
+        target: { files: null },
+      } as any
+
+      await act(async () => {
+        await result.current.handleFileUpload(mockEvent)
+      })
+
+      expect(result.current.files.length).toBe(0)
+    })
+
+    it('handles zip generation failure in handleDeconcatenate', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      mockGenerateAsync.mockRejectedValue(new Error('Zip failed'))
+
+      const { result } = renderHook(() =>
+        useFileProcessing({
+          appMode: AppMode.DECONCATENATE,
+          isIgnored: () => false,
+          maxFileLimit: 10,
+          isIgnoreListLoading: false,
+          setVirtualFileSystem: vi.fn(),
+        })
+      )
+
+      const mockFiles = [
+        {
+          name: 'bundle.txt',
+          path: 'bundle.txt',
+          kind: 'file' as const,
+          content: `${START_DELIMITER}src/test.js${END_DELIMITER}\nconsole.log(1)\n${FILE_END_DELIMITER}`,
+          size: 100,
+        },
+      ]
+
+      await act(async () => {
+        await result.current.handleDeconcatenate(mockFiles)
+      })
+
+      expect(result.current.importError).toBe(
+        'An error occurred during de-concatenation. Please check the console for details.'
+      )
+      consoleSpy.mockRestore()
+    })
+
+    it('handles zip generation failure in handleDownloadAsZip', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      mockGenerateAsync.mockRejectedValue(new Error('Zip failed'))
+
+      const { result } = renderHook(() =>
+        useFileProcessing({
+          appMode: AppMode.CONCATENATE,
+          isIgnored: () => false,
+          maxFileLimit: 10,
+          isIgnoreListLoading: false,
+          setVirtualFileSystem: vi.fn(),
+        })
+      )
+
+      const mockFiles = [
+        {
+          name: 'a.txt',
+          path: 'a.txt',
+          kind: 'file' as const,
+          content: 'a',
+          size: 1,
+        },
+      ]
+
+      await act(async () => {
+        await result.current.handleDownloadAsZip(mockFiles)
+      })
+
+      expect(result.current.importError).toBe('Failed to create ZIP archive')
+      consoleSpy.mockRestore()
+    })
+
+    it('handles zip generation failure in handleDownloadAsZip', async () => {
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+      mockGenerateAsync.mockRejectedValue(new Error('Zip failed'))
+
+      const { result } = renderHook(() =>
+        useFileProcessing({
+          appMode: AppMode.CONCATENATE,
+          isIgnored: () => false,
+          maxFileLimit: 10,
+          isIgnoreListLoading: false,
+          setVirtualFileSystem: vi.fn(),
+        })
+      )
+
+      const mockFiles = [
+        {
+          name: 'a.txt',
+          path: 'a.txt',
+          kind: 'file' as const,
+          content: 'a',
+          size: 1,
+        },
+      ]
+
+      await act(async () => {
+        await result.current.handleDownloadAsZip(mockFiles)
+      })
+
+      expect(result.current.importError).toBe('Failed to create ZIP archive')
+      consoleSpy.mockRestore()
+    })
+
+    it('skips non-files in de-concatenate mode', async () => {
+      const { result } = renderHook(() =>
+        useFileProcessing({
+          appMode: AppMode.DECONCATENATE,
+          isIgnored: () => false,
+          maxFileLimit: 10,
+          isIgnoreListLoading: false,
+          setVirtualFileSystem: vi.fn(),
+        })
+      )
+
+      const mockFiles = [
+        { name: 'dir', path: 'dir', kind: 'directory' as const },
+      ]
+
+      await act(async () => {
+        await result.current.handleDeconcatenate(mockFiles)
+      })
+
+      expect(result.current.isProcessing).toBe(false)
+    })
+
+    it('handles cancellation during handleDrop traversal', async () => {
+      const { result } = renderHook(() =>
+        useFileProcessing({
+          appMode: AppMode.CONCATENATE,
+          isIgnored: () => false,
+          maxFileLimit: 10,
+          isIgnoreListLoading: false,
+          setVirtualFileSystem: vi.fn(),
+        })
+      )
+
+      // Mock entry that triggers cancellation
+      const rootEntry = {
+        name: 'root',
+        isFile: false,
+        isDirectory: true,
+        createReader: () => ({
+          readEntries: (success: any) => {
+            result.current.cancelProcessing()
+            success([])
+          },
+        }),
+      } as any
+
+      const mockEvent = {
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+        dataTransfer: { items: [{ webkitGetAsEntry: () => rootEntry }] },
+      } as any
+
+      await act(async () => {
+        await result.current.handleDrop(mockEvent)
+      })
+
+      expect(result.current.isProcessing).toBe(false)
+    })
+    it('skips ignored files in handleDownloadAsZip', async () => {
+      const { result } = renderHook(() =>
+        useFileProcessing({
+          appMode: AppMode.CONCATENATE,
+          isIgnored: (path) => path.includes('ignored'),
+          maxFileLimit: 10,
+          isIgnoreListLoading: false,
+          setVirtualFileSystem: vi.fn(),
+        })
+      )
+
+      const mockFiles = [
+        {
+          name: 'a.txt',
+          path: 'a.txt',
+          kind: 'file' as const,
+          content: 'a',
+          size: 1,
+        },
+        {
+          name: 'ignored.txt',
+          path: 'ignored.txt',
+          kind: 'file' as const,
+          content: 'i',
+          size: 1,
+        },
+      ]
+
+      await act(async () => {
+        await result.current.handleDownloadAsZip(mockFiles)
+      })
+
+      expect(result.current.isProcessing).toBe(false)
+    })
+
+    it('validates content directly', () => {
+      const { result } = renderHook(() =>
+        useFileProcessing({
+          appMode: AppMode.CONCATENATE,
+          isIgnored: () => false,
+          maxFileLimit: 10,
+          isIgnoreListLoading: false,
+          setVirtualFileSystem: vi.fn(),
+        })
+      )
+
+      let validation: any
+      act(() => {
+        validation = result.current.validateContent('some content')
+      })
+
+      expect(validation).toBeDefined()
+      expect(result.current.validationResult).toEqual(validation)
+
+      act(() => {
+        result.current.clearValidation()
+      })
+      expect(result.current.validationResult).toBeNull()
+    })
+
+    it('processes image files using readAsDataURL', async () => {
+      const { result } = renderHook(() =>
+        useFileProcessing({
+          appMode: AppMode.CONCATENATE,
+          isIgnored: () => false,
+          maxFileLimit: 10,
+          isIgnoreListLoading: false,
+          setVirtualFileSystem: vi.fn(),
+        })
+      )
+
+      const mockFile = new File(['image content'], 'test.png', {
+        type: 'image/png',
+      })
+      const mockEvent = {
+        target: { files: [mockFile] },
+      } as any
+
+      await act(async () => {
+        await result.current.handleFileUpload(mockEvent)
+      })
+
+      expect(result.current.files.length).toBeGreaterThan(0)
+      expect(result.current.files[0].name).toBe('test.png')
+    })
+
+    it('handles root pruning logs in processUploadedFiles', async () => {
+      const { result } = renderHook(() =>
+        useFileProcessing({
+          appMode: AppMode.CONCATENATE,
+          isIgnored: () => false,
+          maxFileLimit: 10,
+          isIgnoreListLoading: false,
+          setVirtualFileSystem: vi.fn(),
+        })
+      )
+
+      const file1 = new File(['a'], 'a/b/c.txt')
+      Object.defineProperty(file1, 'webkitRelativePath', { value: 'a/b/c.txt' })
+      const file2 = new File(['d'], 'a/b/e.txt')
+      Object.defineProperty(file2, 'webkitRelativePath', { value: 'a/b/e.txt' })
+
+      const mockEvent = {
+        target: { files: [file1, file2] },
+      } as any
+
+      await act(async () => {
+        await result.current.handleFileUpload(mockEvent)
+      })
+
+      expect(result.current.files.length).toBeGreaterThan(0)
+    })
+
+    it('handles multiple files error in de-concatenate mode', async () => {
+      const { result } = renderHook(() =>
+        useFileProcessing({
+          appMode: AppMode.DECONCATENATE,
+          isIgnored: () => false,
+          maxFileLimit: 10,
+          isIgnoreListLoading: false,
+          setVirtualFileSystem: vi.fn(),
+        })
+      )
+
+      const file1 = new File(['a'], 'a.txt')
+      const file2 = new File(['b'], 'b.txt')
+      const mockEvent = {
+        target: { files: [file1, file2] },
+      } as any
+
+      await act(async () => {
+        await result.current.handleFileUpload(mockEvent)
+      })
+
+      expect(result.current.importError).toBe(
+        'Please upload only one concatenated file at a time.'
+      )
+    })
+
+    it('prevents import if ignore list is loading', async () => {
+      const { result } = renderHook(() =>
+        useFileProcessing({
+          appMode: AppMode.CONCATENATE,
+          isIgnored: () => false,
+          maxFileLimit: 10,
+          isIgnoreListLoading: true,
+          setVirtualFileSystem: vi.fn(),
+        })
+      )
+
+      const mockEvent = {
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+        dataTransfer: {
+          items: [
+            { webkitGetAsEntry: () => ({ isFile: true, name: 'a.txt' }) },
+          ],
+        },
+      } as any
+
+      await act(async () => {
+        await result.current.handleDrop(mockEvent)
+      })
+
+      expect(result.current.importError).toBe(
+        'Please wait for ignore patterns to load before importing files.'
+      )
     })
   })
 })

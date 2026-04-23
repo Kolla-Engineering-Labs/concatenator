@@ -117,8 +117,8 @@ export const useFileProcessing = ({
             document.body.appendChild(a)
             a.click()
             document.body.removeChild(a)
-            await new Promise((resolve) => setTimeout(resolve, 200))
-            URL.revokeObjectURL(url)
+            // Ensure the browser has time to initiate the download before revoking
+            setTimeout(() => URL.revokeObjectURL(url), 1000)
           }
         }
 
@@ -430,6 +430,9 @@ export const useFileProcessing = ({
           return
         }
 
+        // Defensive check: if cancelled, stop immediately
+        if (cancelImportRef.current) return
+
         if (entry.isFile && 'file' in entry) {
           // Check max file limit before adding (halt immediately when exceeded)
           if (droppedFiles.length >= maxFileLimit) {
@@ -491,6 +494,8 @@ export const useFileProcessing = ({
           for (const childEntry of entriesBatch) {
             if (cancelImportRef.current) break
             await traverseEntry(childEntry, fullPath + '/')
+            // Stop processing siblings if cancelled
+            if (cancelImportRef.current) break
           }
         }
       }
@@ -580,23 +585,32 @@ export const useFileProcessing = ({
           // Add file header with delimiters
           doc.setFont('helvetica', 'bold')
           const headerText = `${START_DELIMITER}${file.path}${END_DELIMITER}`
-          const headerLines = doc.splitTextToSize(headerText, contentWidth)
+          // Robust text splitting
+          const safeHeaderText = String(headerText || '')
+          const headerLines = doc.splitTextToSize(safeHeaderText, contentWidth)
           doc.text(headerLines, margin, yPosition)
           yPosition += headerLines.length * lineHeight
 
           // Add file content
           doc.setFont('helvetica', 'normal')
-          const content = typeof file.content === 'string' ? file.content : ''
-          const contentLines = doc.splitTextToSize(content, contentWidth)
+          const rawContent = file.content
+          const content = typeof rawContent === 'string' ? rawContent : ''
 
-          // Handle page breaks for long content
-          for (let i = 0; i < contentLines.length; i++) {
-            if (yPosition > doc.internal.pageSize.getHeight() - margin) {
-              doc.addPage()
-              yPosition = margin
-            }
-            doc.text(contentLines[i], margin, yPosition)
+          if (!content) {
+            doc.text('[Empty or Binary Content]', margin, yPosition)
             yPosition += lineHeight
+          } else {
+            const contentLines = doc.splitTextToSize(content, contentWidth)
+
+            // Handle page breaks for long content
+            for (let i = 0; i < contentLines.length; i++) {
+              if (yPosition > doc.internal.pageSize.getHeight() - margin) {
+                doc.addPage()
+                yPosition = margin
+              }
+              doc.text(contentLines[i], margin, yPosition)
+              yPosition += lineHeight
+            }
           }
 
           // Add file end delimiter
@@ -643,7 +657,8 @@ export const useFileProcessing = ({
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
-        URL.revokeObjectURL(url)
+        // Ensure the browser has time to initiate the download before revoking
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
       }
 
       setIsProcessing(false)
@@ -686,7 +701,8 @@ export const useFileProcessing = ({
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
-        URL.revokeObjectURL(url)
+        // Ensure the browser has time to initiate the download before revoking
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
       } catch (error) {
         logger.error('Failed to create ZIP:', error)
         setImportError('Failed to create ZIP archive')

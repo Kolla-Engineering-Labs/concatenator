@@ -6,9 +6,24 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
       const item = window.localStorage.getItem(key)
       if (!item) return initialValue
       try {
-        return JSON.parse(item)
+        const parsed = JSON.parse(item)
+        // Type guard: If initialValue is not a string/number/boolean (i.e., an object or array),
+        // and parsed is not an object, it's likely corrupted or legacy data.
+        if (
+          typeof initialValue !== 'string' &&
+          typeof initialValue !== 'number' &&
+          typeof initialValue !== 'boolean' &&
+          (parsed === null || typeof parsed !== 'object')
+        ) {
+          return initialValue
+        }
+        return parsed as T
       } catch {
-        return item as unknown as T
+        // If parsing fails, only return the raw item if T is expected to be a string
+        if (typeof initialValue === 'string') {
+          return item as unknown as T
+        }
+        return initialValue
       }
     } catch (error) {
       console.error(`Error reading localStorage key "${key}":`, error)

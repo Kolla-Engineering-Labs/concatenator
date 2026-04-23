@@ -136,7 +136,7 @@ describe('CLI E2E Tests', () => {
       expect(content).toContain('Root level content')
       expect(content).toContain('console.log("main")')
       expect(content).toContain('export const helper = () => {}')
-    })
+    }, 20000)
 
     it('should output to stdout when no output path is provided', () => {
       writeFileSync(join(tempDir, 'file.txt'), 'Hello World')

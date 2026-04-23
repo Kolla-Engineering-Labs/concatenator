@@ -22,6 +22,8 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
   )
   const isInitialMount = React.useRef(true)
   const isInitialized = React.useRef(false)
+  const lastSyncedList = React.useRef<string[] | null>(null)
+  const isSyncing = React.useRef(false)
 
   // Fetch initial ignore list from server and sync with local
   React.useEffect(() => {
@@ -43,9 +45,11 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
         )
       } finally {
         isInitialized.current = true
+        lastSyncedList.current = [...ignoreList]
       }
     }
     fetchFromServer()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setIgnoreList])
 
   // Sync back to server on changes
@@ -57,21 +61,34 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     // CRITICAL: Skip if we haven't finished the initial fetch yet.
-    // This prevents overwriting the server's .concatenate-ignore file
-    // with the hardcoded DEFAULT_IGNORE_LIST on application startup.
     if (!isInitialized.current) {
       return
     }
 
+    // Optimization: Don't sync if the list is the same as the last successful sync
+    if (
+      lastSyncedList.current &&
+      JSON.stringify(lastSyncedList.current) === JSON.stringify(ignoreList)
+    ) {
+      return
+    }
+
     const saveToServer = async () => {
+      if (isSyncing.current) return
+      isSyncing.current = true
       try {
-        await fetch('/api/ignore-list', {
+        const response = await fetch('/api/ignore-list', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(ignoreList),
         })
+        if (response.ok) {
+          lastSyncedList.current = [...ignoreList]
+        }
       } catch {
         console.error('Failed to sync ignore list to server')
+      } finally {
+        isSyncing.current = false
       }
     }
     saveToServer()
