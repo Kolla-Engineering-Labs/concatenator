@@ -4,6 +4,7 @@
  */
 
 import { IgnoreEngine } from './ignore/IgnoreEngine.js'
+import { TreeItem } from './types.js'
 
 /**
  * TokenService provides utilities for estimating token counts and generating context metadata.
@@ -88,5 +89,56 @@ export class TokenService {
     const formattedTokens = tokens.toLocaleString()
     const budgetPart = budget ? ` | Budget: ${budget.toLocaleString()}` : ''
     return `--- METADATA: Tokens: ${formattedTokens}${budgetPart} ---`
+  }
+
+  /**
+   * Recursive function to compute directory weights in a tree.
+   * Modifies the tree nodes in-place with tokenWeight and isPrecise flags.
+   *
+   * @param node - The root node of the tree or sub-tree
+   * @param tokenMap - Map of file paths to their individual token counts
+   * @returns The aggregate tokens and precision for this node
+   */
+  static computeTreeWeights(
+    node: TreeItem,
+    tokenMap: Record<string, { tokens: number; isPrecise: boolean }> = {}
+  ): { tokens: number; isPrecise: boolean } {
+    if (node.kind === 'file') {
+      const meta = tokenMap[node.path] || {
+        tokens:
+          node.file?.tokens !== undefined
+            ? node.file.tokens
+            : typeof node.file?.content === 'string'
+              ? this.getTokenEstimate(node.file.content)
+              : 0,
+        isPrecise: node.file?.isPrecise || false,
+      }
+      node.tokenWeight = meta.tokens
+      node.isPrecise = meta.isPrecise
+      // If file is ignored, it contributes 0 to parent total
+      if (node.isIgnored) {
+        return { tokens: 0, isPrecise: true }
+      }
+      return meta
+    }
+
+    let total = 0
+    let allPrecise = true
+
+    if (node.children) {
+      for (const child of node.children) {
+        const { tokens, isPrecise } = this.computeTreeWeights(child, tokenMap)
+        total += tokens
+        if (!isPrecise) allPrecise = false
+      }
+    }
+
+    node.tokenWeight = total
+    node.isPrecise = allPrecise
+    // If directory is ignored, it contributes 0 to parent total
+    if (node.isIgnored) {
+      return { tokens: 0, isPrecise: true }
+    }
+    return { tokens: total, isPrecise: allPrecise }
   }
 }

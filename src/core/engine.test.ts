@@ -11,6 +11,8 @@ import {
   dedupePath,
   generateSessionId,
   parseBundle,
+  validateConcatenation,
+  generateFileTimestamp,
 } from './engine'
 
 describe('engine', () => {
@@ -173,6 +175,60 @@ legacy content
       expect(result.files).toHaveLength(1)
       expect(result.files[0].path).toBe('legacy.txt')
       expect(result.files[0].content).toBe('legacy content')
+    })
+  })
+
+  describe('deconcatenateHeader', () => {
+    it('handles header format (--- FILE: ... ---)', () => {
+      const headerContent = `--- FILE: header.txt ---
+This is header content
+---
+--- FILE: dir/sub.js ---
+console.log(1)
+---
+`
+      const result = deconcatenate(headerContent)
+
+      expect(result.foundAny).toBe(true)
+      expect(result.files).toHaveLength(2)
+      expect(result.files[0].path).toBe('header.txt')
+      expect(result.files[0].content).toBe('This is header content')
+      expect(result.files[1].path).toBe('dir/sub.js')
+      expect(result.files[1].content).toBe('console.log(1)')
+    })
+  })
+
+  describe('validateConcatenation', () => {
+    it('validates header protocol', () => {
+      const content = '--- FILE: test.txt ---\ncontent\n---'
+      const result = validateConcatenation(content)
+      expect(result.isValid).toBe(true)
+      expect(result.targetFileCount).toBe(1)
+    })
+
+    it('detects foreign markers from different sessions', () => {
+      const content = `--- CONCATENATOR_SESSION_ID: abc123 ---
+<<<<< FILE_START: target.txt (ID: abc123) >>>>>
+target content
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: foreign.txt (ID: def456) >>>>>
+foreign content
+<<<<< FILE_END >>>>>
+`
+      const result = validateConcatenation(content)
+      expect(result.isValid).toBe(true)
+      expect(result.targetFileCount).toBe(1)
+      expect(result.foreignFileCount).toBe(1)
+      expect(result.foreignFiles).toContain('foreign.txt')
+      expect(result.warnings[0]).toContain('mismatched Session IDs')
+    })
+  })
+
+  describe('generateFileTimestamp', () => {
+    it('generates a timestamp string', () => {
+      const ts = generateFileTimestamp(new Date('2024-01-01T12:00:00'))
+      expect(ts).toBe('20240101_120000')
     })
   })
 

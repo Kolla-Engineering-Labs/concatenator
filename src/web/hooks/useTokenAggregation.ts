@@ -146,38 +146,7 @@ export const useTokenAggregation = (files: FileItem[]) => {
    */
   const computeTreeWeights = useCallback(
     (node: TreeItem): { tokens: number; isPrecise: boolean } => {
-      if (node.kind === 'file') {
-        const meta = tokenMap[node.path] || {
-          tokens: node.file?.tokens || 0,
-          isPrecise: node.file?.isPrecise || false,
-        }
-        node.tokenWeight = meta.tokens
-        node.isPrecise = meta.isPrecise
-        // If file is ignored, it contributes 0 to parent total
-        if (node.isIgnored) {
-          return { tokens: 0, isPrecise: true }
-        }
-        return meta
-      }
-
-      let total = 0
-      let allPrecise = true
-
-      if (node.children) {
-        node.children.forEach((child) => {
-          const { tokens, isPrecise } = computeTreeWeights(child)
-          total += tokens
-          if (!isPrecise) allPrecise = false
-        })
-      }
-
-      node.tokenWeight = total
-      node.isPrecise = allPrecise
-      // If directory is ignored, it contributes 0 to parent total
-      if (node.isIgnored) {
-        return { tokens: 0, isPrecise: true }
-      }
-      return { tokens: total, isPrecise: allPrecise }
+      return TokenService.computeTreeWeights(node, tokenMap)
     },
     [tokenMap]
   )

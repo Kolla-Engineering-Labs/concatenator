@@ -526,6 +526,7 @@ export function validateConcatenation(input: string): ValidationResult {
   const looksLikeCorruptedManifest =
     firstLine.startsWith('--- ') &&
     !firstLine.includes(MANIFEST_PREFIX.trim()) &&
+    !firstLine.includes('--- FILE:') &&
     !sessionId
 
   if (!sessionId) {
@@ -643,26 +644,35 @@ export function validateConcatenation(input: string): ValidationResult {
         : input.length
 
     // Look for end marker between this start and next target start (or end of content)
-    const contentAfterStart = input.substring(
-      marker.endPos,
-      nextTargetMarkerStart
-    )
-    const hasEndMarker = contentAfterStart.includes(FILE_END_DELIMITER)
+    // Only required for non-header markers
+    const isHeaderMarker = input
+      .substring(marker.startPos, marker.endPos)
+      .includes('--- FILE:')
 
-    marker.hasMatchingEnd = hasEndMarker
+    if (!isHeaderMarker) {
+      const contentAfterStart = input.substring(
+        marker.endPos,
+        nextTargetMarkerStart
+      )
+      const hasEndMarker = contentAfterStart.includes(FILE_END_DELIMITER)
+      marker.hasMatchingEnd = hasEndMarker
 
-    if (!hasEndMarker) {
-      errors.push(`Missing end marker for file: ${marker.path}`)
-    } else {
-      // Only add to targetFiles if it has a matching end marker (will be extracted)
-      targetFiles.push(marker.path)
+      if (!hasEndMarker) {
+        errors.push(`Missing end marker for file: ${marker.path}`)
+      } else {
+        // Only add to targetFiles if it has a matching end marker (will be extracted)
+        targetFiles.push(marker.path)
 
-      // Check for empty file warning
-      const endIndex = contentAfterStart.indexOf(FILE_END_DELIMITER)
-      const content = contentAfterStart.substring(0, endIndex).trim()
-      if (content.length === 0) {
-        warnings.push(`Empty file detected: ${marker.path}`)
+        // Check for empty file warning
+        const endIndex = contentAfterStart.indexOf(FILE_END_DELIMITER)
+        const content = contentAfterStart.substring(0, endIndex).trim()
+        if (content.length === 0) {
+          warnings.push(`Empty file detected: ${marker.path}`)
+        }
       }
+    } else {
+      // Header markers are always considered "balanced"
+      targetFiles.push(marker.path)
     }
 
     detectedFiles.push(marker.path)
