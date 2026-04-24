@@ -3,59 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { test, expect } from './fixtures'
+import { test, expect, resetIgnoreList } from './fixtures'
 import { FileUploadHelper } from './helpers/file-upload'
 import { logger } from '../src/lib/logger'
-import type { APIRequestContext } from '@playwright/test'
 import * as fs from 'fs'
 import JSZip from 'jszip'
-
-/**
- * Helper to reset the ignore list via API using the worker-specific context.
- */
-async function resetIgnoreList(apiContext: APIRequestContext): Promise<void> {
-  const defaultIgnoreList = [
-    '.concatenate-ignore',
-    '.DS_Store',
-    '.env',
-    '.expo',
-    '.git',
-    '.gradle',
-    '.next',
-    '.secrets',
-    '.terraform',
-    '.vagrant',
-    '.vscode',
-    '/^\\.concatenate-ignore-worker-\\d+$/',
-    '/\\.class$/',
-    '/\\.exe$/',
-    '/\\.jar$/',
-    '/\\.log$/',
-    '/\\.o$/',
-    '/\\.obj$/',
-    '/\\.swp$/',
-    '/^__.*cache__$/',
-    '/^\\..*_cache$/',
-    'bin',
-    'build',
-    'desktop.ini',
-    'dist',
-    'node_modules',
-    'obj',
-    'package-lock.json',
-    'ruff_output.txt',
-    'target',
-    'Thumbs.db',
-    'vendor',
-    'venv',
-  ]
-  const response = await apiContext.post('/api/ignore-list', {
-    data: defaultIgnoreList,
-  })
-  if (!response.ok()) {
-    throw new Error(`Failed to reset ignore list — HTTP ${response.status()}`)
-  }
-}
+import { ensureSidebarClosed } from './helpers/sidebar'
 
 /**
  * Creates a mock concatenated file content that the de-concatenator can parse.
@@ -96,6 +49,9 @@ test.describe('De-concatenate Mode', () => {
       localStorage.removeItem('concatenate-ignore')
       localStorage.removeItem('concatenate-view-mode')
       localStorage.removeItem('concatenate-dark-mode')
+      localStorage.removeItem('concat_mode')
+      localStorage.removeItem('concat_view')
+      localStorage.removeItem('concat_ignore')
     })
 
     // Reset server-side ignore list BEFORE navigation so client fetches correct state.
@@ -106,7 +62,7 @@ test.describe('De-concatenate Mode', () => {
     await page.goto('/', { waitUntil: 'domcontentloaded' })
 
     // Wait for the mode toggle container to be fully rendered and stable
-    const modeToggle = page.locator('.flex.p-1.bg-slate-200').first()
+    const modeToggle = page.getByTestId('mode-switch').first()
     await modeToggle.waitFor({ state: 'visible', timeout: 10000 })
 
     // Switch to de-concatenate mode using JavaScript click for Firefox compatibility
@@ -120,7 +76,7 @@ test.describe('De-concatenate Mode', () => {
     await deconcatButton.evaluate((el: HTMLElement) => el.click())
 
     // Wait for the mode switch to complete by checking button state
-    await expect(deconcatButton).toHaveClass(/bg-white|dark:bg-slate-800/, {
+    await expect(deconcatButton).toHaveClass(/bg-brand-600/, {
       timeout: 10000,
     })
   })
@@ -140,14 +96,14 @@ test.describe('De-concatenate Mode', () => {
         name: 'De-concatenate',
         exact: true,
       })
-      await expect(deconcatButton).toHaveClass(/bg-white|dark:bg-slate-800/)
+      await expect(deconcatButton).toHaveClass(/bg-brand-600/)
 
       // Concatenate button should be inactive
       const concatButton = page.getByRole('button', {
         name: 'Concatenate',
         exact: true,
       })
-      await expect(concatButton).not.toHaveClass(/bg-white|dark:bg-slate-800/)
+      await expect(concatButton).not.toHaveClass(/bg-brand-600/)
     })
 
     test('should clear files when switching modes', async ({ page }) => {
@@ -177,7 +133,7 @@ test.describe('De-concatenate Mode', () => {
         await deconcatButton.evaluate((el: HTMLElement) => el.click())
 
         // Wait for mode switch and verify we're in de-concatenate mode
-        await expect(deconcatButton).toHaveClass(/bg-white|dark:bg-slate-800/, {
+        await expect(deconcatButton).toHaveClass(/bg-brand-600/, {
           timeout: 10000,
         })
 
@@ -210,9 +166,15 @@ test.describe('De-concatenate Mode', () => {
 
         // Wait for the download event (app auto-downloads ZIP after processing)
         // Mobile Safari needs more time for de-concatenation + ZIP creation
+        await uploadHelper.uploadSingleFile('concatenated.txt', mockContent)
+        await ensureSidebarClosed(page)
+        const downloadButton = page.getByRole('button', {
+          name: 'Download ZIP',
+        })
+        await downloadButton.waitFor({ state: 'visible', timeout: 30000 })
         const [download] = await Promise.all([
           page.waitForEvent('download', { timeout: 30000 }),
-          uploadHelper.uploadSingleFile('concatenated.txt', mockContent),
+          downloadButton.click(),
         ])
 
         // Verify it's a ZIP file
@@ -262,9 +224,15 @@ test.describe('De-concatenate Mode', () => {
       try {
         // Wait for the download event (app auto-downloads ZIP after processing)
         // Mobile Safari needs more time for de-concatenation + ZIP creation
+        await uploadHelper.uploadSingleFile('project-bundle.txt', mockContent)
+        await ensureSidebarClosed(page)
+        const downloadButton = page.getByRole('button', {
+          name: 'Download ZIP',
+        })
+        await downloadButton.waitFor({ state: 'visible', timeout: 30000 })
         const [download] = await Promise.all([
           page.waitForEvent('download', { timeout: 30000 }),
-          uploadHelper.uploadSingleFile('project-bundle.txt', mockContent),
+          downloadButton.click(),
         ])
 
         // Verify it's a ZIP file
@@ -345,9 +313,18 @@ test.describe('De-concatenate Mode', () => {
       try {
         // Wait for the download event (app auto-downloads ZIP after processing)
         // Mobile Safari needs more time for de-concatenation + ZIP creation
+        await uploadHelper.uploadSingleFile(
+          'structured-bundle.txt',
+          mockContent
+        )
+        await ensureSidebarClosed(page)
+        const downloadButton = page.getByRole('button', {
+          name: 'Download ZIP',
+        })
+        await downloadButton.waitFor({ state: 'visible', timeout: 30000 })
         const [download] = await Promise.all([
-          page.waitForEvent('download', { timeout: 30000 }),
-          uploadHelper.uploadSingleFile('structured-bundle.txt', mockContent),
+          page.waitForEvent('download', { timeout: 60000 }),
+          downloadButton.click(),
         ])
 
         const downloadPath = await download.path()
@@ -417,9 +394,15 @@ test.describe('De-concatenate Mode', () => {
       try {
         // Wait for the download event (app auto-downloads ZIP after processing)
         // Mobile Safari needs more time for de-concatenation + ZIP creation
+        await uploadHelper.uploadSingleFile('special-chars.txt', mockContent)
+        await ensureSidebarClosed(page)
+        const downloadButton = page.getByRole('button', {
+          name: 'Download ZIP',
+        })
+        await downloadButton.waitFor({ state: 'visible', timeout: 30000 })
         const [download] = await Promise.all([
-          page.waitForEvent('download', { timeout: 30000 }),
-          uploadHelper.uploadSingleFile('special-chars.txt', mockContent),
+          page.waitForEvent('download', { timeout: 60000 }),
+          downloadButton.click(),
         ])
 
         const downloadPath = await download.path()
@@ -480,9 +463,15 @@ test.describe('De-concatenate Mode', () => {
         const mockContent = createMockConcatenatedFile(files)
 
         // Wait for the download event (app auto-downloads ZIP after processing)
+        await uploadHelper.uploadSingleFile('large-bundle.txt', mockContent)
+        await ensureSidebarClosed(page)
+        const downloadButton = page.getByRole('button', {
+          name: 'Download ZIP',
+        })
+        await downloadButton.waitFor({ state: 'visible', timeout: 30000 })
         const [download] = await Promise.all([
-          page.waitForEvent('download', { timeout: 30000 }),
-          uploadHelper.uploadSingleFile('large-bundle.txt', mockContent),
+          page.waitForEvent('download', { timeout: 60000 }),
+          downloadButton.click(),
         ])
 
         // Verify it's a ZIP file
@@ -509,9 +498,15 @@ test.describe('De-concatenate Mode', () => {
         const mockContent = createMockConcatenatedFile(files)
 
         // Wait for the download event (app auto-downloads ZIP after processing)
+        await uploadHelper.uploadSingleFile('big-content.txt', mockContent)
+        await ensureSidebarClosed(page)
+        const downloadButton = page.getByRole('button', {
+          name: 'Download ZIP',
+        })
+        await downloadButton.waitFor({ state: 'visible', timeout: 30000 })
         const [download] = await Promise.all([
-          page.waitForEvent('download', { timeout: 30000 }),
-          uploadHelper.uploadSingleFile('big-content.txt', mockContent),
+          page.waitForEvent('download', { timeout: 60000 }),
+          downloadButton.click(),
         ])
 
         const downloadPath = await download.path()
@@ -576,9 +571,18 @@ test.describe('De-concatenate Mode', () => {
 
       try {
         // Wait for the download event
+        await uploadHelper.uploadSingleFile(
+          'malicious-traversal.txt',
+          mockContent
+        )
+        await ensureSidebarClosed(page)
+        const downloadButton = page.getByRole('button', {
+          name: 'Download ZIP',
+        })
+        await downloadButton.waitFor({ state: 'visible', timeout: 30000 })
         const [download] = await Promise.all([
-          page.waitForEvent('download', { timeout: 30000 }),
-          uploadHelper.uploadSingleFile('malicious-traversal.txt', mockContent),
+          page.waitForEvent('download', { timeout: 60000 }),
+          downloadButton.click(),
         ])
 
         // Verify it's a ZIP file
@@ -663,9 +667,15 @@ test.describe('De-concatenate Mode', () => {
       const mockContent = createMockConcatenatedFile(maliciousFiles)
 
       try {
+        await uploadHelper.uploadSingleFile('null-byte-attack.txt', mockContent)
+        await ensureSidebarClosed(page)
+        const downloadButton = page.getByRole('button', {
+          name: 'Download ZIP',
+        })
+        await downloadButton.waitFor({ state: 'visible', timeout: 30000 })
         const [download] = await Promise.all([
-          page.waitForEvent('download', { timeout: 30000 }),
-          uploadHelper.uploadSingleFile('null-byte-attack.txt', mockContent),
+          page.waitForEvent('download', { timeout: 60000 }),
+          downloadButton.click(),
         ])
 
         const downloadPath = await download.path()
@@ -794,9 +804,15 @@ This content is valid
 
       try {
         // Wait for the download event
+        await uploadHelper.uploadSingleFile('partial.txt', partialContent)
+        await ensureSidebarClosed(page)
+        const downloadButton = page.getByRole('button', {
+          name: 'Download ZIP',
+        })
+        await downloadButton.waitFor({ state: 'visible', timeout: 30000 })
         const [download] = await Promise.all([
-          page.waitForEvent('download', { timeout: 30000 }),
-          uploadHelper.uploadSingleFile('partial.txt', partialContent),
+          page.waitForEvent('download', { timeout: 60000 }),
+          downloadButton.click(),
         ])
 
         // Verify ZIP was downloaded (valid file should still be extracted)

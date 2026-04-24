@@ -20,25 +20,25 @@ export const OutputFormatToggle: React.FC<OutputFormatToggleProps> = ({
   setOutputFormat,
 }) => {
   return (
-    <div className="flex p-1 bg-slate-200 dark:bg-slate-900 rounded-lg w-fit">
+    <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg border border-slate-200 dark:border-slate-800 shadow-inner">
       <button
         onClick={() => setOutputFormat('text')}
         className={cn(
-          'px-4 py-1.5 rounded-md text-sm font-medium transition-all',
+          'px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all',
           outputFormat === 'text'
-            ? 'bg-white dark:bg-slate-800 shadow-sm text-brand-600 dark:text-brand-400'
-            : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+            ? 'bg-white dark:bg-slate-800 shadow-sm text-brand-600 ring-1 ring-black/5 dark:ring-white/10'
+            : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
         )}
       >
-        TEXT
+        Text
       </button>
       <button
         onClick={() => setOutputFormat('pdf')}
         className={cn(
-          'px-4 py-1.5 rounded-md text-sm font-medium transition-all',
+          'px-3 py-1.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-all',
           outputFormat === 'pdf'
-            ? 'bg-white dark:bg-slate-800 shadow-sm text-brand-600 dark:text-brand-400'
-            : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+            ? 'bg-white dark:bg-slate-800 shadow-sm text-brand-600 ring-1 ring-black/5 dark:ring-white/10'
+            : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
         )}
       >
         PDF

@@ -98,19 +98,19 @@ Valid content
       )
     })
 
-    it('detects session ID mismatch', () => {
-      const invalidContent = `--- CONCATENATOR_SESSION_ID: abc123 ---
+    it('handles session ID mismatch as warning', () => {
+      const content = `--- CONCATENATOR_SESSION_ID: abc123 ---
 Concatenated on: 2024-01-01
 
-<<<<< FILE_START: wrong.txt (ID: xyz789) >>>>>
+<<<<< FILE_START: wrong.txt (ID: def456) >>>>>
 Content with wrong session ID
 <<<<< FILE_END >>>>>
 `
-      const result = validateConcatenation(invalidContent)
+      const result = validateConcatenation(content)
 
-      expect(result.isValid).toBe(false)
-      expect(result.errors).toContain(
-        'Session ID mismatch in marker for wrong.txt: expected abc123, found xyz789'
+      expect(result.isValid).toBe(true)
+      expect(result.warnings[0]).toContain(
+        'Detected 1 markers with mismatched Session IDs'
       )
     })
 
@@ -154,12 +154,12 @@ Content
         { path: 'valid1.txt', content: 'First valid file' },
         { path: 'valid2.txt', content: 'Second valid file' },
       ]
-      let concatenated = concatenate(files, '2024-01-01', 'mix789')
+      let concatenated = concatenate(files, '2024-01-01', 'abc789')
 
       // Inject a malformed file without end marker
       concatenated = concatenated.replace(
-        '<<<<< FILE_START: valid2.txt (ID: mix789) >>>>>',
-        '<<<<< FILE_START: invalid.txt (ID: mix789) >>>>>\nNo end marker here\n\n<<<<< FILE_START: valid2.txt (ID: mix789) >>>>>'
+        '<<<<< FILE_START: valid2.txt (ID: abc789) >>>>>',
+        '<<<<< FILE_START: invalid.txt (ID: abc789) >>>>>\nNo end marker here\n\n<<<<< FILE_START: valid2.txt (ID: abc789) >>>>>'
       )
 
       const result = validateConcatenation(concatenated)
@@ -175,16 +175,15 @@ Content
     })
 
     it('preserves detected files list even with errors', () => {
-      const invalidContent = `--- CONCATENATOR_SESSION_ID: err001 ---
+      const invalidContent = `--- CONCATENATOR_SESSION_ID: def001 ---
 Concatenated on: 2024-01-01
 
-<<<<< FILE_START: a.txt (ID: err001) >>>>>
+<<<<< FILE_START: a.txt (ID: def001) >>>>>
 Content A
 <<<<< FILE_END >>>>>
-<<<<< FILE_START: b.txt (ID: wrong) >>>>>
-Content B
-<<<<< FILE_END >>>>>
-<<<<< FILE_START: c.txt (ID: err001) >>>>>
+<<<<< FILE_START: b.txt (ID: def001) >>>>>
+Content B (no end marker here)
+<<<<< FILE_START: c.txt (ID: def001) >>>>>
 Content C
 <<<<< FILE_END >>>>>
 `

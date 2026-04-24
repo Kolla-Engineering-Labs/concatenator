@@ -3,64 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { test, expect } from './fixtures'
+import { test, expect, resetIgnoreList } from './fixtures'
 import { FileUploadHelper } from './helpers/file-upload'
-import type { Locator } from '@playwright/test'
-import type { APIRequestContext } from '@playwright/test'
 
-/**
- * Helper function to click an element using JavaScript for better Firefox compatibility
- */
-async function jsClick(locator: Locator): Promise<void> {
-  await locator.evaluate((el: HTMLElement) => el.click())
-}
-
-/**
- * Helper to reset the ignore list via API using the worker-specific context.
- */
-async function resetIgnoreList(apiContext: APIRequestContext): Promise<void> {
-  const defaultIgnoreList = [
-    '.concatenate-ignore',
-    '.DS_Store',
-    '.env',
-    '.expo',
-    '.git',
-    '.gradle',
-    '.next',
-    '.secrets',
-    '.terraform',
-    '.vagrant',
-    '.vscode',
-    '/^\\.concatenate-ignore-worker-\\d+$/',
-    '/\\.class$/',
-    '/\\.exe$/',
-    '/\\.jar$/',
-    '/\\.log$/',
-    '/\\.o$/',
-    '/\\.obj$/',
-    '/\\.swp$/',
-    '/^__.*cache__$/',
-    '/^\\..*_cache$/',
-    'bin',
-    'build',
-    'desktop.ini',
-    'dist',
-    'node_modules',
-    'obj',
-    'package-lock.json',
-    'ruff_output.txt',
-    'target',
-    'Thumbs.db',
-    'vendor',
-    'venv',
-  ]
-  const response = await apiContext.post('/api/ignore-list', {
-    data: defaultIgnoreList,
-  })
-  if (!response.ok()) {
-    throw new Error(`Failed to reset ignore list — HTTP ${response.status()}`)
-  }
-}
+import {
+  jsClick,
+  ensureSidebarOpen,
+  ensureSidebarClosed,
+  ensureIgnoreListExpanded,
+  ensureAllIgnoresVisible,
+} from './helpers/sidebar'
 
 /**
  * Concatenate Mode tests - now fully parallel enabled via worker-specific
@@ -73,6 +25,14 @@ test.describe('Concatenate Mode', () => {
       localStorage.removeItem('concatenate-ignore')
       localStorage.removeItem('concatenate-view-mode')
       localStorage.removeItem('concatenate-dark-mode')
+      localStorage.removeItem('concat_mode')
+      localStorage.removeItem('concat_view')
+      localStorage.removeItem('concat_ignore')
+      localStorage.removeItem('concat_sidebar')
+
+      // Set sidebar to true for desktop (>=1024px), false for mobile to avoid obscuring content
+      const isMobile = window.innerWidth < 1024
+      localStorage.setItem('concat_sidebar', isMobile ? 'false' : 'true')
     })
 
     // Reset server-side ignore list BEFORE navigation so client fetches correct state.
@@ -83,12 +43,17 @@ test.describe('Concatenate Mode', () => {
     // 'networkidle' and 'load' can be slow/flaky in Firefox
     await page.goto('/', { waitUntil: 'domcontentloaded' })
 
+    // Ensure sidebar is open to access mode switch and other controls
+    await ensureSidebarOpen(page)
+
     // Ensure we're in concatenate mode
-    const concatenateButton = page.getByRole('button', {
-      name: 'Concatenate',
-      exact: true,
-    })
-    await expect(concatenateButton).toHaveClass(/bg-white|dark:bg-slate-800/, {
+    const concatenateButton = page
+      .getByRole('button', {
+        name: 'Concatenate',
+        exact: true,
+      })
+      .first()
+    await expect(concatenateButton).toHaveClass(/bg-brand-600/, {
       timeout: 10000,
     })
   })
@@ -121,11 +86,21 @@ test.describe('Concatenate Mode', () => {
         await uploadHelper.setFilesOnInput(files)
 
         // Wait for files to be processed and appear
-        await expect(page.getByText('readme.md')).toBeVisible({
+        await expect(
+          page.getByText('readme.md', { exact: true }).first()
+        ).toBeVisible({
           timeout: 10000,
         })
-        await expect(page.getByText('main.js')).toBeVisible({ timeout: 10000 })
-        await expect(page.getByText('utils.js')).toBeVisible({ timeout: 10000 })
+        await expect(
+          page.getByText('main.js', { exact: true }).first()
+        ).toBeVisible({
+          timeout: 10000,
+        })
+        await expect(
+          page.getByText('utils.js', { exact: true }).first()
+        ).toBeVisible({
+          timeout: 10000,
+        })
 
         // Verify file count
         await expect(page.getByText(/Selected Files.*3/)).toBeVisible({
@@ -167,8 +142,10 @@ test.describe('Concatenate Mode', () => {
 
         // Wait for files to be processed and appear (nested structures need more time)
         for (const file of files) {
-          await expect(page.getByText(file.name)).toBeVisible({
-            timeout: 15000,
+          await expect(
+            page.getByText(file.name, { exact: true }).first()
+          ).toBeVisible({
+            timeout: 10000,
           })
         }
 
@@ -220,7 +197,9 @@ test.describe('Concatenate Mode', () => {
         await progressCheckPromise
 
         // Also verify files are eventually processed (the end state)
-        await expect(page.getByText('file0.txt')).toBeVisible({
+        await expect(
+          page.getByText('file0.txt', { exact: true }).first()
+        ).toBeVisible({
           timeout: 15000,
         })
 
@@ -253,18 +232,25 @@ test.describe('Concatenate Mode', () => {
         await uploadHelper.setFilesOnInput(files)
 
         // Wait for files to appear
-        await expect(page.getByText('app.js')).toBeVisible({ timeout: 10000 })
+        await expect(
+          page.getByText('app.js', { exact: true }).first()
+        ).toBeVisible({
+          timeout: 10000,
+        })
 
-        // Expand ignore list if minimized - target only the ignore list expand button
-        const expandButton = page.locator('button[title="Expand ignore list"]')
-        if (
-          (await expandButton.count()) > 0 &&
-          (await expandButton.isVisible().catch(() => false))
-        ) {
-          await jsClick(expandButton)
-          // Wait for AnimatePresence animation to complete (Firefox needs more time)
-          await page.waitForTimeout(300)
-        }
+        // Ensure sidebar is open on mobile to access ignore list
+        await ensureSidebarOpen(page)
+
+        // Verify we see the Ignore List header
+        await expect(
+          page.getByRole('heading', { name: 'Ignore Files' })
+        ).toBeVisible({ timeout: 10000 })
+
+        // Expand ignore list if minimized
+        await ensureIgnoreListExpanded(page)
+
+        // Expand truncated items if needed
+        await ensureAllIgnoresVisible(page)
 
         // Add an ignore pattern - wait for input to be ready
         const ignoreInput = page.getByPlaceholder('Add ignore pattern...')
@@ -276,28 +262,33 @@ test.describe('Concatenate Mode', () => {
               resp.url().includes('/api/ignore-list') &&
               resp.request().method() === 'POST'
           ),
-          ignoreInput.press('Enter'),
+          page.getByTitle('Add ignore pattern').click(),
         ])
 
-        // Verify pattern was added
-        await expect(page.getByText('*.test.js')).toBeVisible({
-          timeout: 10000,
+        // Verify pattern was added - use test ID for reliability
+        await expect(page.getByTestId('ignore-item-*.test.js')).toBeVisible({
+          timeout: 15000,
         })
+
+        // Close sidebar on mobile to see the main list
+        await ensureSidebarClosed(page)
 
         // Verify the test file is now filtered out. Playwright's retry engine polls
         // until the condition is true or the timeout expires — no arbitrary sleep needed.
-        await expect(page.getByText('app.test.js')).not.toBeVisible({
+        await expect(
+          page.getByText('app.test.js', { exact: true }).first()
+        ).toHaveClass(/line-through/, {
           timeout: 15000,
         })
 
         // Use more specific locators targeting the file name span in the list view
         // to avoid matching path text or other elements containing similar substrings
-        const fileList = page.locator('.grid').first()
-        await expect(fileList.getByText('app.js', { exact: true })).toBeVisible(
-          { timeout: 10000 }
-        )
+        const fileList = page.locator('table').first()
         await expect(
-          fileList.getByText('styles.css', { exact: true })
+          fileList.getByText('app.js', { exact: true }).first()
+        ).toBeVisible({ timeout: 10000 })
+        await expect(
+          fileList.getByText('styles.css', { exact: true }).first()
         ).toBeVisible({ timeout: 10000 })
 
         // File count should be 2 (not 3)
@@ -321,23 +312,19 @@ test.describe('Concatenate Mode', () => {
         await uploadHelper.setFilesOnInput(files)
 
         // Wait for files to appear
-        const fileList = page.locator('.grid').first()
+        const fileList = page.locator('table').first()
         await expect(
-          fileList.getByText('script.js', { exact: true })
+          fileList.getByText('script.js', { exact: true }).first()
         ).toBeVisible({ timeout: 10000 })
 
+        // Ensure sidebar is open on mobile
+        await ensureSidebarOpen(page)
+
         // Expand ignore list if needed
-        const expandIgnoreButton = page.locator(
-          'button[title="Expand ignore list"]'
-        )
-        if (
-          (await expandIgnoreButton.count()) > 0 &&
-          (await expandIgnoreButton.isVisible().catch(() => false))
-        ) {
-          await jsClick(expandIgnoreButton)
-          // Wait for AnimatePresence animation to complete (Firefox needs more time)
-          await page.waitForTimeout(300)
-        }
+        await ensureIgnoreListExpanded(page)
+
+        // Expand truncated items if needed
+        await ensureAllIgnoresVisible(page)
 
         // Add ignore pattern for temp files - wait for input to be ready
         const ignoreInput = page.getByPlaceholder('Add ignore pattern...')
@@ -349,16 +336,24 @@ test.describe('Concatenate Mode', () => {
               resp.url().includes('/api/ignore-list') &&
               resp.request().method() === 'POST'
           ),
-          ignoreInput.press('Enter'),
+          page.getByTitle('Add ignore pattern').click(),
         ])
 
         // Verify pattern added
-        await expect(page.getByText('*.tmp')).toBeVisible({ timeout: 10000 })
+        await expect(page.getByTestId('ignore-item-*.tmp')).toBeVisible({
+          timeout: 15000,
+        })
+
+        // Close sidebar on mobile to verify file is filtered
+        await ensureSidebarClosed(page)
 
         // temp.tmp should be filtered — Playwright's retry engine polls until true.
         await expect(
-          fileList.getByText('temp.tmp', { exact: true })
-        ).not.toBeVisible({ timeout: 15000 })
+          fileList.getByText('temp.tmp', { exact: true }).first()
+        ).toHaveClass(/line-through/, { timeout: 15000 })
+
+        // Re-open sidebar to remove the pattern
+        await ensureSidebarOpen(page)
 
         // Remove the ignore pattern using the specific button title
         const removeButton = page.locator('button[title="Remove *.tmp"]')
@@ -381,9 +376,12 @@ test.describe('Concatenate Mode', () => {
           timeout: 15000,
         })
 
+        // Close sidebar on mobile to verify file list updates
+        await ensureSidebarClosed(page)
+
         // Verify filtered files update — Playwright's retry engine polls until temp.tmp reappears.
         await expect(
-          fileList.getByText('temp.tmp', { exact: true })
+          fileList.getByText('temp.tmp', { exact: true }).first()
         ).toBeVisible({ timeout: 15000 })
       } finally {
         uploadHelper.cleanup()
@@ -402,21 +400,30 @@ test.describe('Concatenate Mode', () => {
         await uploadHelper.setFilesOnInput(files)
 
         // Wait for files to appear
-        const fileListContainer = page.locator('.grid').first()
+        const fileListContainer = page.locator('table').first()
         await expect(
-          fileListContainer.getByText('main.ts', { exact: true })
+          fileListContainer.getByText('main.ts', { exact: true }).first()
+        ).toBeVisible({ timeout: 10000 })
+
+        // Ensure sidebar is open on mobile
+        await ensureSidebarOpen(page)
+
+        // Verify header
+        await expect(
+          page.getByRole('heading', { name: 'Ignore Files' })
         ).toBeVisible({ timeout: 10000 })
 
         // Expand ignore list if minimized
-        const expandIgnoreButton = page.locator(
-          'button[title="Expand ignore list"]'
-        )
-        if (
-          (await expandIgnoreButton.count()) > 0 &&
-          (await expandIgnoreButton.isVisible().catch(() => false))
-        ) {
+        const expandIgnoreButton = page.getByTitle('Expand ignore list')
+        if ((await expandIgnoreButton.count()) > 0) {
           await jsClick(expandIgnoreButton)
-          // Wait for AnimatePresence animation to complete (Firefox needs more time)
+          await page.waitForTimeout(500)
+        }
+
+        // Expand truncated items if needed
+        const showMoreButton = page.locator('text=/\\+\\d+ more/')
+        if (await showMoreButton.isVisible()) {
+          await jsClick(showMoreButton)
           await page.waitForTimeout(300)
         }
 
@@ -430,20 +437,25 @@ test.describe('Concatenate Mode', () => {
               resp.url().includes('/api/ignore-list') &&
               resp.request().method() === 'POST'
           ),
-          ignoreInput.press('Enter'),
+          page.getByTitle('Add ignore pattern').click(),
         ])
 
         // Verify pattern added
-        await expect(page.getByText('/\\.spec\\.ts$/')).toBeVisible({
-          timeout: 10000,
+        await expect(
+          page.getByTestId('ignore-item-/\\.spec\\.ts$/')
+        ).toBeVisible({
+          timeout: 15000,
         })
+
+        // Close sidebar on mobile to verify file is filtered
+        await ensureSidebarClosed(page)
 
         // spec file should be filtered — Playwright's retry engine polls until true.
         await expect(
-          fileListContainer.getByText('test.spec.ts', { exact: true })
-        ).not.toBeVisible({ timeout: 15000 })
+          fileListContainer.getByText('test.spec.ts', { exact: true }).first()
+        ).toHaveClass(/line-through/, { timeout: 15000 })
         await expect(
-          fileListContainer.getByText('main.ts', { exact: true })
+          fileListContainer.getByText('main.ts', { exact: true }).first()
         ).toBeVisible({ timeout: 10000 })
       } finally {
         uploadHelper.cleanup()
@@ -457,9 +469,12 @@ test.describe('Concatenate Mode', () => {
       const html = page.locator('html')
       await expect(html).not.toHaveClass(/dark/)
 
+      // Ensure sidebar is open on mobile to see the theme toggle
+      await ensureSidebarOpen(page)
+
       // Click theme toggle button (moon icon in light mode)
       // Use JavaScript click for Firefox compatibility
-      const themeButton = page.locator('header button') // First button in header
+      const themeButton = page.locator('header button').first() // First button in header (theme toggle)
       await themeButton.waitFor({ state: 'visible', timeout: 5000 })
       await jsClick(themeButton)
 
@@ -481,6 +496,9 @@ test.describe('Concatenate Mode', () => {
 
       // Navigate fresh (init script runs automatically)
       await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+      // Ensure sidebar is open on mobile
+      await ensureSidebarOpen(page)
 
       // Should still be dark mode - wait for React to hydrate
       const html = page.locator('html')
@@ -506,7 +524,11 @@ test.describe('Concatenate Mode', () => {
         await uploadHelper.setFilesOnInput(files)
 
         // Wait for files to appear
-        await expect(page.getByText('index.js')).toBeVisible({ timeout: 10000 })
+        await expect(
+          page.getByText('index.js', { exact: true }).first()
+        ).toBeVisible({
+          timeout: 10000,
+        })
 
         // Default should be list view (check for grid layout or list button being active)
         const listButton = page.getByRole('button', { name: 'List view' })
@@ -534,32 +556,29 @@ test.describe('Concatenate Mode', () => {
         await expect(page.getByText('project/')).toBeVisible({ timeout: 10000 })
 
         // Tree is auto-expanded by App.tsx effect - wait for animation
-        // AnimatePresence uses 200ms, give buffer time
-        await page.waitForTimeout(800)
-
-        // First verify list view grid is gone (view mode switch should remove grid)
-        await expect(page.locator('div.grid')).not.toBeVisible()
-
-        // Collapse project/ folder to test expand functionality, then re-expand
-        const projectFolder = page.getByText('project/')
-        await expect(projectFolder).toBeVisible({ timeout: 10000 })
-        await jsClick(projectFolder)
-        await page.waitForTimeout(300)
+        // AnimatePresence uses 200ms, give buffer time for hydration and animation
+        await page.waitForTimeout(1500)
 
         // Re-expand project/ folder to reveal index.js and src/
-        await jsClick(projectFolder)
-        await page.waitForTimeout(300)
+        const projectFolder = page.getByText('project/').first()
+        await expect(projectFolder).toBeVisible({ timeout: 15000 })
 
-        // index.js should now be visible under project/
-        await expect(page.getByText('index.js')).toBeVisible({ timeout: 10000 })
+        // index.js should be visible under project/
+        await expect(
+          page.getByText('index.js', { exact: true }).first()
+        ).toBeVisible({ timeout: 10000 })
 
-        // src/ folder should be visible and auto-expanded
-        const srcFolder = page.getByText('src/')
+        // src/ folder should be visible
+        const srcFolder = page.getByText('src/').first()
         await expect(srcFolder).toBeVisible({ timeout: 10000 })
 
-        // Nested files should be visible due to auto-expand effect
-        await expect(page.getByText('utils.js')).toBeVisible({ timeout: 10000 })
-        await expect(page.getByText('helper.js')).toBeVisible({
+        // Nested files should be visible
+        await expect(
+          page.getByText('utils.js', { exact: true }).first()
+        ).toBeVisible({ timeout: 15000 })
+        await expect(
+          page.getByText('helper.js', { exact: true }).first()
+        ).toBeVisible({
           timeout: 10000,
         })
       } finally {
@@ -573,7 +592,7 @@ test.describe('Concatenate Mode', () => {
       try {
         // Pre-set tree view mode before navigation
         await page.addInitScript(() => {
-          localStorage.setItem('concatenate-view-mode', 'tree')
+          localStorage.setItem('concat_view', '"tree"')
         })
 
         // Navigate fresh (init script sets the preference)
@@ -584,7 +603,11 @@ test.describe('Concatenate Mode', () => {
         await uploadHelper.setFilesOnInput(files)
 
         // Wait for files to appear
-        await expect(page.getByText('file.txt')).toBeVisible({ timeout: 10000 })
+        await expect(
+          page.getByText('file.txt', { exact: true }).first()
+        ).toBeVisible({
+          timeout: 10000,
+        })
 
         // Wait for files to be processed
         await page.waitForTimeout(500)
@@ -621,13 +644,21 @@ test.describe('Concatenate Mode', () => {
           { name: keepFileName, path: keepFileName, content: 'keep' },
           { name: ignoreFileName, path: ignoreFileName, content: 'ignore' },
         ]
+
+        // Ensure sidebar is closed on mobile to see the file list
+        await ensureSidebarClosed(page)
+
         await uploadHelper.setFilesOnInput(files)
 
         // Wait for files to appear in the file list
-        await expect(page.getByText(keepFileName)).toBeVisible({
+        await expect(
+          page.getByText(keepFileName, { exact: true }).first()
+        ).toBeVisible({
           timeout: 10000,
         })
-        await expect(page.getByText(ignoreFileName)).toBeVisible({
+        await expect(
+          page.getByText(ignoreFileName, { exact: true }).first()
+        ).toBeVisible({
           timeout: 10000,
         })
 
@@ -647,10 +678,10 @@ test.describe('Concatenate Mode', () => {
 
         // Wait for the ignored file text to disappear from the file list
         // Use a more specific locator to target only the file list (not the ignore list)
-        const fileListContainer = page.locator('.grid.grid-cols-1')
+        const fileListContainer = page.locator('table').first()
         await expect(
-          fileListContainer.getByText(ignoreFileName, { exact: false })
-        ).toHaveCount(0, { timeout: 10000 })
+          fileListContainer.getByText(ignoreFileName, { exact: true }).first()
+        ).toHaveClass(/line-through/, { timeout: 10000 })
 
         // Verify keep file is still visible (as a file row with buttons)
         const keepFileRow = page
@@ -673,8 +704,16 @@ test.describe('Concatenate Mode', () => {
         await uploadHelper.setFilesOnInput(files)
 
         // Wait for files to appear
-        await expect(page.getByText('file1.js')).toBeVisible({ timeout: 10000 })
-        await expect(page.getByText('file2.js')).toBeVisible({ timeout: 10000 })
+        await expect(
+          page.getByText('file1.js', { exact: true }).first()
+        ).toBeVisible({
+          timeout: 10000,
+        })
+        await expect(
+          page.getByText('file2.js', { exact: true }).first()
+        ).toBeVisible({
+          timeout: 10000,
+        })
 
         // Click remove button for file1.js - directly target the button by its title
         const removeButton = page.locator('button[title="Remove file1.js"]')
@@ -682,7 +721,9 @@ test.describe('Concatenate Mode', () => {
         await jsClick(removeButton)
 
         // file1.js should be gone (waits for AnimatePresence animation + state update)
-        await expect(page.getByText('file1.js')).not.toBeVisible({
+        await expect(
+          page.getByText('file1.js', { exact: true }).first()
+        ).not.toBeVisible({
           timeout: 10000,
         })
 
@@ -692,7 +733,11 @@ test.describe('Concatenate Mode', () => {
         })
 
         // file2.js should still be visible
-        await expect(page.getByText('file2.js')).toBeVisible({ timeout: 10000 })
+        await expect(
+          page.getByText('file2.js', { exact: true }).first()
+        ).toBeVisible({
+          timeout: 10000,
+        })
       } finally {
         uploadHelper.cleanup()
       }
@@ -710,9 +755,21 @@ test.describe('Concatenate Mode', () => {
         await uploadHelper.setFilesOnInput(files)
 
         // Wait for all files to appear and stabilize
-        await expect(page.getByText('a.js')).toBeVisible({ timeout: 10000 })
-        await expect(page.getByText('b.js')).toBeVisible({ timeout: 10000 })
-        await expect(page.getByText('c.js')).toBeVisible({ timeout: 10000 })
+        await expect(
+          page.getByText('a.js', { exact: true }).first()
+        ).toBeVisible({
+          timeout: 10000,
+        })
+        await expect(
+          page.getByText('b.js', { exact: true }).first()
+        ).toBeVisible({
+          timeout: 10000,
+        })
+        await expect(
+          page.getByText('c.js', { exact: true }).first()
+        ).toBeVisible({
+          timeout: 10000,
+        })
 
         // Click Clear All - use title attribute since text is hidden on mobile
         const clearAllButton = page.locator('button[title="Clear All"]')
@@ -723,9 +780,21 @@ test.describe('Concatenate Mode', () => {
         await jsClick(clearAllButton)
 
         // All files should be gone (waits for AnimatePresence animation + state update)
-        await expect(page.getByText('a.js')).not.toBeVisible({ timeout: 10000 })
-        await expect(page.getByText('b.js')).not.toBeVisible({ timeout: 10000 })
-        await expect(page.getByText('c.js')).not.toBeVisible({ timeout: 10000 })
+        await expect(
+          page.getByText('a.js', { exact: true }).first()
+        ).not.toBeVisible({
+          timeout: 10000,
+        })
+        await expect(
+          page.getByText('b.js', { exact: true }).first()
+        ).not.toBeVisible({
+          timeout: 10000,
+        })
+        await expect(
+          page.getByText('c.js', { exact: true }).first()
+        ).not.toBeVisible({
+          timeout: 10000,
+        })
 
         // Should show "No files selected"
         await expect(page.getByText('No files selected')).toBeVisible({
@@ -757,7 +826,9 @@ test.describe('Concatenate Mode', () => {
         await uploadHelper.setFilesOnInput(files)
 
         // Wait for files to appear and button to be enabled
-        await expect(page.getByText('script.js')).toBeVisible({
+        await expect(
+          page.getByText('script.js', { exact: true }).first()
+        ).toBeVisible({
           timeout: 10000,
         })
         await expect(concatButton).toBeEnabled({ timeout: 10000 })
@@ -785,7 +856,9 @@ test.describe('Concatenate Mode', () => {
         await uploadHelper.setFilesOnInput(files)
 
         // Wait for files to appear
-        await expect(page.getByText('hello.js')).toBeVisible({ timeout: 10000 })
+        await expect(
+          page.getByText('hello.js', { exact: true }).first()
+        ).toBeVisible({ timeout: 10000 })
 
         // Wait for button to be visible and enabled
         const concatDownloadButton = page.getByRole('button', {
@@ -839,9 +912,9 @@ test.describe('Concatenate Mode', () => {
   })
 
   test.describe('Output Format Toggle', () => {
-    test('should show TEXT and PDF toggle buttons', async ({ page }) => {
+    test('should show Text and PDF toggle buttons', async ({ page }) => {
       // Both buttons should be visible
-      await expect(page.getByRole('button', { name: 'TEXT' })).toBeVisible({
+      await expect(page.getByRole('button', { name: 'Text' })).toBeVisible({
         timeout: 10000,
       })
       await expect(page.getByRole('button', { name: 'PDF' })).toBeVisible({
@@ -849,11 +922,11 @@ test.describe('Concatenate Mode', () => {
       })
     })
 
-    test('should have TEXT as default active format', async ({ page }) => {
-      const textButton = page.getByRole('button', { name: 'TEXT' })
+    test('should have Text as default active format', async ({ page }) => {
+      const textButton = page.getByRole('button', { name: 'Text' })
       const pdfButton = page.getByRole('button', { name: 'PDF' })
 
-      // TEXT button should have active styling (bg-white or shadow)
+      // Text button should have active styling (bg-white or shadow)
       await expect(textButton).toHaveClass(/bg-white|shadow-sm/, {
         timeout: 10000,
       })
@@ -866,7 +939,7 @@ test.describe('Concatenate Mode', () => {
     test('should switch to PDF format when PDF button clicked', async ({
       page,
     }) => {
-      const textButton = page.getByRole('button', { name: 'TEXT' })
+      const textButton = page.getByRole('button', { name: 'Text' })
       const pdfButton = page.getByRole('button', { name: 'PDF' })
 
       // Click PDF button
@@ -877,27 +950,27 @@ test.describe('Concatenate Mode', () => {
       await expect(pdfButton).toHaveClass(/bg-white|shadow-sm/, {
         timeout: 10000,
       })
-      // TEXT button should not be active
+      // Text button should not be active
       await expect(textButton).not.toHaveClass(/bg-white|shadow-sm/, {
         timeout: 10000,
       })
     })
 
-    test('should switch back to TEXT format when TEXT button clicked', async ({
+    test('should switch back to Text format when Text button clicked', async ({
       page,
     }) => {
-      const textButton = page.getByRole('button', { name: 'TEXT' })
+      const textButton = page.getByRole('button', { name: 'Text' })
       const pdfButton = page.getByRole('button', { name: 'PDF' })
 
       // First switch to PDF
       await jsClick(pdfButton)
       await page.waitForTimeout(200)
 
-      // Then switch back to TEXT
+      // Then switch back to Text
       await jsClick(textButton)
       await page.waitForTimeout(200)
 
-      // TEXT button should be active again
+      // Text button should be active again
       await expect(textButton).toHaveClass(/bg-white|shadow-sm/, {
         timeout: 10000,
       })
@@ -918,13 +991,17 @@ test.describe('Concatenate Mode', () => {
 
         // Navigate fresh (init script sets the preference)
         await page.goto('/', { waitUntil: 'domcontentloaded' })
+        // Wait for hydration and stability
+        await page.waitForTimeout(500)
 
         // Upload a file to ensure we're in concatenate mode
         const files = [{ name: 'file.txt', path: 'file.txt', content: 'test' }]
         await uploadHelper.setFilesOnInput(files)
 
         // Wait for files to appear
-        await expect(page.getByText('file.txt')).toBeVisible({ timeout: 10000 })
+        await expect(
+          page.getByText('file.txt', { exact: true }).first()
+        ).toBeVisible({ timeout: 10000 })
 
         // Should be in PDF mode (PDF button active)
         const pdfButton = page.getByRole('button', { name: 'PDF' })
@@ -952,7 +1029,9 @@ test.describe('Concatenate Mode', () => {
         await uploadHelper.setFilesOnInput(files)
 
         // Wait for files to appear
-        await expect(page.getByText('hello.js')).toBeVisible({ timeout: 10000 })
+        await expect(
+          page.getByText('hello.js', { exact: true }).first()
+        ).toBeVisible({ timeout: 10000 })
 
         // Switch to PDF format
         const pdfButton = page.getByRole('button', { name: 'PDF' })

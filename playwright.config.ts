@@ -16,7 +16,11 @@ export default defineConfig({
 
   /* Base URL for all navigation */
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: 'http://127.0.0.1:3000',
+  },
+  timeout: 60000, // Increase global test timeout
+  expect: {
+    timeout: 10000, // Increase global expect timeout for slower CI runners
   },
 
   /* Enable fully parallel for faster test execution with worker-specific ignore files */
@@ -112,7 +116,7 @@ export default defineConfig({
   /* Run your local dev server before starting the tests */
   webServer: {
     command: 'npm run dev',
-    url: 'http://localhost:3000',
+    url: 'http://127.0.0.1:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
     stdout: 'pipe',

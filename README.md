@@ -56,9 +56,20 @@ graph LR
   - **Text (default)**: Save concatenated files as a plain `.txt` file.
   - **PDF**: Export concatenated files as a formatted PDF document with proper pagination and delimiters.
 - **Smart Ignore System**:
-  - Exclude common noise (e.g., `node_modules`, `.git`, `package-lock.json`) using simple string matches or powerful Regular Expressions. Syncs between `localStorage` and server-side `.concatenate-ignore`.
-- **Advanced Visualization**:
+  - Exclude common noise (e.g., `node_modules`, `.git`, `package-lock.json`) using simple string matches or powerful Regular Expressions.
+  - **Auto-Discovery**: CLI automatically respects `.concatignore` or `.gitignore` in your current working directory.
+  - **CLI Persistence**: Use `-i, --ignore-file <path>` to leverage existing project configurations for both bundling and extraction. Syncs between `localStorage` and server-side `.concatenate-ignore` in the web UI.
+- **Structural Redundancy Fixes**:
+  - **Root Pruning (Web)**: Automatically reconciles overlapping folder drops. If you drop a parent folder after a child, the workbench "absorbs" the child into the new, higher-level structure to prevent duplicates.
+  - **Input Pruning (CLI)**: Normalizes and filters overlapping command-line arguments. If both `./src` and `./src/components` are passed, the redundant sub-path is automatically pruned.
+- **Token Estimation & Analytics**:
+  - Real-time token counting for every file using professional LLM heuristics (~4 chars/token).
+  - Aggregate token reporting for the entire bundle to help stay within context windows.
+  - **Budget Guard**: Set token budgets in the CLI to receive warnings when bundles exceed target limits.
+- **Workbench Context & Quick Look**:
   - Switch between **List View** for flat file management and **Tree View** for hierarchical directory inspection.
+  - **Path Normalization**: The Tree View automatically calculates the **Minimum Common Root**, ensuring your project structure starts at the most relevant shared directory rather than a generic root.
+  - **Quick Look**: High-fidelity, instant preview for code, PDFs, and vector assets (SVGs) directly in the browser.
   - Real-time filtering and sorting (directories first, then alphabetical).
 - **Developer-Centric UI**:
   - Drag-and-drop support for folders and files.
@@ -265,7 +276,7 @@ npm run dev:cli -- [command] [options]
 
 #### Commands
 
-**`concat <path>`** - Bundle a directory into a single LLM-ready file
+**`concat <paths...>`** - Bundle one or more directories/files into a single LLM-ready file
 
 ```bash
 # Output to stdout (default)
@@ -276,13 +287,19 @@ concatenator concat -o context.txt ./src
 
 # With verbose logging and exclusions
 concatenator concat -o context.txt -v -e node_modules,dist ./src
+
+# Multiple entry points (with automatic input pruning)
+concatenator concat -o bundle.txt ./src ./lib ./src/components
 ```
 
 Options:
 
 - `-o, --output <file>` - Specify output filename (default: stdout)
-- `-e, --exclude <pattern>` - Additional patterns to ignore (comma-separated)
-- `-v, --verbose` - Show detailed file processing logs
+- `-e, --exclude <patterns>` - Additional patterns to ignore (comma-separated)
+- `-i, --ignore-file <path>` - Path to an ignore file (.concatignore, .gitignore, etc.)
+- `-v, --verbose` - Verbosity level (-v: dir-level tokens, -vv: file-level tokens)
+- `--max-tokens <number>` - Budget guard: warn if the estimated token count is exceeded
+- `-f, --force` - Overwrite existing files without prompting
 
 **`extract <file>`** - Reconstruct a project from a concatenated file
 
@@ -306,15 +323,22 @@ concatenator extract --dry-run -vv bundle.txt
 Options:
 
 - `-o, --output <dir>` - Destination directory (default: `.`)
+- `-e, --exclude <patterns>` - Patterns to ignore during extraction (comma-separated)
+- `-i, --ignore-file <path>` - Path to an ignore file to use during extraction
 - `-z, --zip` - Output as a .zip archive instead of writing to disk
 - `-d, --dry-run` - Validate integrity without extracting
 - `-v, --verbose` - Show detailed file processing logs
 - `-vv` - Very verbose (shows all foreign markers in dry-run mode)
+- `-f, --force` - Overwrite existing files without prompting
 
-**`validate <file>`** - Check the integrity of a concatenated file
+**`validate <paths...>`** - Check file integrity or perform a pre-flight dry-run on directories
 
 ```bash
+# Validate a concatenated file
 concatenator validate bundle.txt
+
+# Pre-flight directory check (shows file counts and token estimates)
+concatenator validate ./src --tokens
 
 # With verbose output
 concatenator validate bundle.txt -v
@@ -325,8 +349,11 @@ concatenator validate -vv bundle.txt
 
 Options:
 
+- `-t, --tokens` - Show individual token counts for all files (directory mode)
 - `-v, --verbose` - Show detailed validation logs
 - `-vv` - Very verbose (shows all foreign markers and detailed breakdown)
+- `-e, --exclude <patterns>` - Patterns to ignore during pre-flight check
+- `-i, --ignore-file <path>` - Ignore file to use during pre-flight check
 
 Validates session ID consistency, marker balance, and file structure. Exits with code 0 on success, 1 on failure.
 

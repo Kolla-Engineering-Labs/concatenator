@@ -3,63 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { test, expect } from './fixtures'
+import { test, expect, resetIgnoreList } from './fixtures'
 import { FileUploadHelper } from './helpers/file-upload'
-import type { Locator, APIRequestContext } from '@playwright/test'
 
-/**
- * Helper function to click an element using JavaScript for better Firefox compatibility
- */
-async function jsClick(locator: Locator): Promise<void> {
-  await locator.evaluate((el: HTMLElement) => el.click())
-}
-
-/**
- * Helper to reset the ignore list via API using the worker-specific context.
- */
-async function resetIgnoreList(apiContext: APIRequestContext): Promise<void> {
-  const defaultIgnoreList = [
-    '.concatenate-ignore',
-    '.DS_Store',
-    '.env',
-    '.expo',
-    '.git',
-    '.gradle',
-    '.next',
-    '.secrets',
-    '.terraform',
-    '.vagrant',
-    '.vscode',
-    '/^\\.concatenate-ignore-worker-\\d+$/',
-    '/\\.class$/',
-    '/\\.exe$/',
-    '/\\.jar$/',
-    '/\\.log$/',
-    '/\\.o$/',
-    '/\\.obj$/',
-    '/\\.swp$/',
-    '/^__.*cache__$/',
-    '/^\\..*_cache$/',
-    'bin',
-    'build',
-    'desktop.ini',
-    'dist',
-    'node_modules',
-    'obj',
-    'package-lock.json',
-    'ruff_output.txt',
-    'target',
-    'Thumbs.db',
-    'vendor',
-    'venv',
-  ]
-  const response = await apiContext.post('/api/ignore-list', {
-    data: defaultIgnoreList,
-  })
-  if (!response.ok()) {
-    throw new Error(`Failed to reset ignore list — HTTP ${response.status()}`)
-  }
-}
+import {
+  jsClick,
+  ensureSidebarOpen,
+  ensureIgnoreListExpanded,
+  ensureAllIgnoresVisible,
+} from './helpers/sidebar'
 
 /**
  * UI Interactions and Edge Cases tests - now fully parallel enabled via
@@ -70,6 +22,9 @@ test.describe('UI Interactions and Edge Cases', () => {
     // Clear localStorage before navigation to avoid interference from previous test runs
     await page.addInitScript(() => {
       localStorage.removeItem('concatenate-ignore')
+      localStorage.removeItem('concat_mode')
+      localStorage.removeItem('concat_view')
+      localStorage.removeItem('concat_ignore')
     })
 
     // Reset server-side ignore list BEFORE navigation so client fetches correct state.
@@ -78,6 +33,8 @@ test.describe('UI Interactions and Edge Cases', () => {
 
     // Use 'domcontentloaded' for faster Firefox navigation
     await page.goto('/', { waitUntil: 'domcontentloaded' })
+    // Small stability wait for hydration and initial state fetch
+    await page.waitForTimeout(200)
   })
 
   test.describe('Minimize/Maximize Panels', () => {
@@ -129,12 +86,14 @@ test.describe('UI Interactions and Edge Cases', () => {
         ])
 
         // Wait for upload to complete
-        await expect(page.getByText('test.js')).toBeVisible({ timeout: 10000 })
+        await expect(
+          page.getByText('test.js', { exact: true }).first()
+        ).toBeVisible({ timeout: 10000 })
 
         // Find ignore list minimize button and wait for it
         const ignoreSection = page
           .locator('div')
-          .filter({ hasText: /^Ignore List/ })
+          .filter({ hasText: /^Ignore Files/ })
           .first()
         const minimizeButton = ignoreSection.locator('button').first()
         await minimizeButton.waitFor({ state: 'visible', timeout: 10000 })
@@ -174,23 +133,16 @@ test.describe('UI Interactions and Edge Cases', () => {
         ])
 
         // Scope to file list and use exact matching for filename
-        const fileList = page.locator('.grid').first()
+        const fileList = page.locator('table').first()
         await expect(
-          fileList.getByText('temp.tmp', { exact: true })
+          fileList.getByText('temp.tmp', { exact: true }).first()
         ).toBeVisible({ timeout: 10000 })
 
         // Expand ignore list if needed
-        const expandIgnoreButton = page.locator(
-          'button[title="Expand ignore list"]'
-        )
-        if (
-          (await expandIgnoreButton.count()) > 0 &&
-          (await expandIgnoreButton.isVisible().catch(() => false))
-        ) {
-          await jsClick(expandIgnoreButton)
-          // Wait for AnimatePresence animation to complete (Firefox needs more time)
-          await page.waitForTimeout(300)
-        }
+        await ensureIgnoreListExpanded(page)
+
+        // Expand truncated items if needed
+        await ensureAllIgnoresVisible(page)
 
         // Type in ignore input and press Enter
         const ignoreInput = page.getByPlaceholder('Add ignore pattern...')
@@ -240,11 +192,14 @@ test.describe('UI Interactions and Edge Cases', () => {
 
       // Page should still load
       await expect(
-        page.getByRole('heading', { name: 'Concatenator' })
+        page.getByRole('heading', { name: 'Concatenator' }).first()
       ).toBeVisible()
       await expect(
         page.getByRole('button', { name: 'Concatenate', exact: true })
       ).toBeVisible()
+
+      // Open sidebar on mobile to reveal mode toggle
+      await ensureSidebarOpen(page)
 
       // Mode toggle should still be usable - use JavaScript click
       const deconcatButton = page.getByRole('button', {
@@ -253,7 +208,7 @@ test.describe('UI Interactions and Edge Cases', () => {
       })
       await deconcatButton.waitFor({ state: 'visible', timeout: 10000 })
       await jsClick(deconcatButton)
-      await expect(deconcatButton).toHaveClass(/bg-white|dark:bg-slate-800/, {
+      await expect(deconcatButton).toHaveClass(/bg-brand-600/, {
         timeout: 10000,
       })
     })
@@ -289,7 +244,7 @@ test.describe('UI Interactions and Edge Cases', () => {
         ])
 
         // File should be visible even with long name
-        await expect(page.getByText('very-long-filename')).toBeVisible({
+        await expect(page.getByText('very-long-filename').first()).toBeVisible({
           timeout: 10000,
         })
       } finally {
@@ -360,7 +315,7 @@ test.describe('UI Interactions and Edge Cases', () => {
 
       // Page should still be functional
       await expect(
-        page.getByRole('heading', { name: 'Concatenator' })
+        page.getByRole('heading', { name: 'Concatenator' }).first()
       ).toBeVisible()
     })
   })
@@ -397,11 +352,13 @@ test.describe('UI Interactions and Edge Cases', () => {
         ])
 
         // Wait for file and ignore list to be visible
-        await expect(page.getByText('test.js')).toBeVisible({ timeout: 10000 })
+        await expect(
+          page.getByText('test.js', { exact: true }).first()
+        ).toBeVisible({ timeout: 10000 })
 
         const ignoreSection = page
           .locator('div')
-          .filter({ hasText: /^Ignore List/ })
+          .filter({ hasText: /^Ignore Files/ })
           .first()
         const minimizeButton = ignoreSection.locator('button').first()
         await minimizeButton.waitFor({ state: 'visible', timeout: 10000 })
@@ -420,7 +377,9 @@ test.describe('UI Interactions and Edge Cases', () => {
         ])
 
         // Wait for file to appear
-        await expect(page.getByText('test2.js')).toBeVisible({ timeout: 10000 })
+        await expect(
+          page.getByText('test2.js', { exact: true }).first()
+        ).toBeVisible({ timeout: 10000 })
 
         // Ignore list should still be minimized
         await expect(
@@ -448,6 +407,9 @@ test.describe('UI Interactions and Edge Cases', () => {
       await deconcatButton.waitFor({ state: 'visible', timeout: 5000 })
 
       // Rapidly switch modes multiple times using JavaScript clicks
+      // On mobile, ensure sidebar is open
+      await ensureSidebarOpen(page)
+
       for (let i = 0; i < 5; i++) {
         await jsClick(deconcatButton)
         await page.waitForTimeout(50) // Small delay for state update
@@ -456,13 +418,13 @@ test.describe('UI Interactions and Edge Cases', () => {
       }
 
       // Should end in concatenate mode
-      await expect(concatButton).toHaveClass(/bg-white|dark:bg-slate-800/, {
+      await expect(concatButton).toHaveClass(/bg-brand-600/, {
         timeout: 10000,
       })
 
       // App should still be functional
       await expect(
-        page.getByRole('heading', { name: 'Concatenator' })
+        page.getByRole('heading', { name: 'Concatenator' }).first()
       ).toBeVisible()
     })
 
@@ -490,6 +452,9 @@ test.describe('UI Interactions and Edge Cases', () => {
         await uploadHelper.dragAndDropDirectory(files)
 
         // Immediately try to switch mode using JavaScript click
+        // On mobile, ensure sidebar is open
+        await ensureSidebarOpen(page)
+
         const deconcatButton = page.getByRole('button', {
           name: 'De-concatenate',
         })
@@ -497,7 +462,7 @@ test.describe('UI Interactions and Edge Cases', () => {
         await jsClick(deconcatButton)
 
         // Should switch mode (files will be cleared)
-        await expect(deconcatButton).toHaveClass(/bg-white|dark:bg-slate-800/, {
+        await expect(deconcatButton).toHaveClass(/bg-brand-600/, {
           timeout: 10000,
         })
       } finally {
@@ -508,8 +473,9 @@ test.describe('UI Interactions and Edge Cases', () => {
 
   test.describe('Accessibility', () => {
     test('should have proper button titles', async ({ page }) => {
+      await ensureSidebarOpen(page)
       // Theme button should be present
-      const themeButton = page.locator('header button')
+      const themeButton = page.getByTestId('theme-toggle').first()
       await expect(themeButton).toBeVisible()
     })
 
@@ -520,8 +486,9 @@ test.describe('UI Interactions and Edge Cases', () => {
         'Focus/Tab navigation tests skipped on WebKit due to different focus behavior'
       )
 
+      await ensureSidebarOpen(page)
       // First, click on a focusable element to ensure document has focus
-      const themeButton = page.locator('header button')
+      const themeButton = page.getByTestId('theme-toggle').first()
       await themeButton.waitFor({ state: 'visible', timeout: 5000 })
 
       // Use JavaScript click for Firefox compatibility

@@ -52,11 +52,14 @@ export default defineConfig(({ mode }) => {
       react(),
       tailwindcss(),
       codecovVitePlugin({
-        enableBundleAnalysis: env.CI === 'true',
+        enableBundleAnalysis: process.env.CI !== undefined,
         bundleName: 'concatenator-bundle',
+        uploadToken: env.CODECOV_TOKEN,
         oidc: {
           useGitHubOIDC: true,
         },
+        // @ts-expect-error - Ignore the type error to force debug logs if they exist in your version
+        logLevel: 'debug',
       }),
       visualizer({
         open: true,

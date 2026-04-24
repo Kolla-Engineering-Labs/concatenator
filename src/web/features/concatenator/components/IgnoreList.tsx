@@ -5,7 +5,9 @@
 
 import React from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { Settings2, Maximize2, Minimize2, X, Plus } from 'lucide-react'
+import { Maximize2, Minimize2, X, Plus, ChevronUp } from 'lucide-react'
+import { useLocalStorage } from '../../../hooks/useLocalStorage'
+import { cn } from '../../../../lib/utils'
 
 interface IgnoreListProps {
   ignoreList: string[]
@@ -15,6 +17,8 @@ interface IgnoreListProps {
   setNewIgnoreItem: (item: string) => void
   addIgnoreItem: () => void
   removeIgnoreItem: (item: string) => void
+  ignoredTokens?: number
+  ignoredIsPrecise?: boolean
 }
 
 /**
@@ -28,19 +32,45 @@ export const IgnoreList: React.FC<IgnoreListProps> = ({
   setNewIgnoreItem,
   addIgnoreItem,
   removeIgnoreItem,
+  ignoredTokens,
+  ignoredIsPrecise,
 }) => {
+  const [isIgnoreListExpanded, setIsIgnoreListExpanded] = useLocalStorage(
+    'concat_ignore_expanded',
+    false
+  )
+
+  const TRUNCATE_LIMIT = 8
+  const hasMore = ignoreList.length > TRUNCATE_LIMIT
+  const displayedItems = isIgnoreListExpanded
+    ? ignoreList
+    : ignoreList.slice(0, TRUNCATE_LIMIT)
+  const remainder = ignoreList.length - TRUNCATE_LIMIT
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between h-9">
-        <div className="flex items-center gap-2 text-slate-500">
-          <Settings2 className="w-4 h-4" />
-          <h2 className="text-sm font-semibold uppercase tracking-wider">
-            Ignore List
+    <div className="flex flex-col h-full space-y-1">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">
+            Ignore Files
           </h2>
           {!isIgnoreListMinimized && (
-            <span className="text-xs text-slate-400 font-normal normal-case hidden sm:inline">
-              (files/folders matching these names will be skipped)
-            </span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[10px] text-slate-400/60 font-bold uppercase tracking-tight hidden sm:inline">
+                ({ignoreList.length})
+              </span>
+              {ignoredTokens !== undefined && ignoredTokens > 0 && (
+                <span
+                  className={cn(
+                    'text-[10px] font-bold transition-opacity',
+                    ignoredIsPrecise ? 'text-brand-500/80' : 'text-brand-500/40'
+                  )}
+                >
+                  {!ignoredIsPrecise && '~'}
+                  {ignoredTokens.toLocaleString()}
+                </span>
+              )}
+            </div>
           )}
         </div>
         <button
@@ -66,12 +96,52 @@ export const IgnoreList: React.FC<IgnoreListProps> = ({
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
+            className="flex flex-col overflow-hidden bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm"
           >
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 pb-8 shadow-sm">
-              <div className="flex flex-wrap gap-2 items-center">
+            {/* Pinned Input */}
+            <div className="p-3 border-b border-slate-100 dark:border-slate-800 shrink-0">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={newIgnoreItem}
+                  onChange={(e) => setNewIgnoreItem(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      addIgnoreItem()
+                    }
+                  }}
+                  placeholder="Add ignore pattern..."
+                  className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 focus:border-brand-500 dark:focus:border-brand-500 focus:ring-1 focus:ring-brand-500 rounded-lg text-sm py-1.5 pl-3 pr-9 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 transition-all"
+                />
+                <button
+                  onClick={addIgnoreItem}
+                  disabled={!newIgnoreItem}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 text-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 disabled:text-slate-300 dark:disabled:text-slate-600 rounded-md transition-colors"
+                  title="Add ignore pattern"
+                >
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="mt-2 text-[10px] text-slate-400 px-1">
+                Tip: Use{' '}
+                <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded font-mono">
+                  /regex/
+                </code>{' '}
+                for advanced matching
+              </p>
+            </div>
+
+            {/* Scrollable Tag List */}
+            <div
+              className="p-3 overflow-y-auto max-h-64 custom-scrollbar"
+              style={{
+                scrollbarWidth: 'thin',
+              }}
+            >
+              <div className="flex flex-wrap gap-2">
                 <AnimatePresence mode="popLayout">
-                  {ignoreList.map((item, index) => (
+                  {displayedItems.map((item, index) => (
                     <motion.div
                       key={`${item}-${index}`}
                       layout
@@ -79,9 +149,12 @@ export const IgnoreList: React.FC<IgnoreListProps> = ({
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.8 }}
                       transition={{ duration: 0.15 }}
-                      className="flex items-center gap-1.5 px-2.5 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-sm font-medium group border border-slate-200 dark:border-slate-700 hover:border-brand-300 dark:hover:border-brand-700 transition-colors"
+                      className="flex items-center gap-1.5 px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-[11px] font-medium group border border-slate-200 dark:border-slate-700 hover:border-brand-300 dark:hover:border-brand-700 transition-colors"
+                      data-testid={`ignore-item-${item}`}
                     >
-                      <span>{item}</span>
+                      <span className="truncate max-w-[120px]" title={item}>
+                        {item}
+                      </span>
                       <button
                         onClick={() => removeIgnoreItem(item)}
                         className="p-0.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md text-slate-400 hover:text-red-500 transition-colors"
@@ -93,53 +166,25 @@ export const IgnoreList: React.FC<IgnoreListProps> = ({
                   ))}
                 </AnimatePresence>
 
-                <div className="relative flex-grow min-w-[150px] max-w-xs">
-                  <input
-                    type="text"
-                    value={newIgnoreItem}
-                    onChange={(e) => setNewIgnoreItem(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        addIgnoreItem()
-                      }
-                    }}
-                    placeholder="Add ignore pattern..."
-                    className="w-full bg-transparent border-none focus:ring-0 text-sm py-1 px-2 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500"
-                  />
-                  <div className="absolute top-full left-0 mt-1 text-[10px] text-slate-400 whitespace-nowrap">
-                    {newIgnoreItem.includes('*') &&
-                    !newIgnoreItem.startsWith('/') ? (
-                      <span className="text-brand-500 dark:text-brand-400 font-medium">
-                        Tip: For wildcards, use regex:{' '}
-                        <code className="bg-brand-50 dark:bg-brand-900/20 px-1 rounded">
-                          /{newIgnoreItem.replace(/\*/g, '.*')}/
-                        </code>
-                      </span>
-                    ) : (
-                      <>
-                        Tip: Use{' '}
-                        <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">
-                          /pattern/
-                        </code>{' '}
-                        for regex (e.g.{' '}
-                        <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">
-                          /\.test\.ts$/
-                        </code>
-                        )
-                      </>
-                    )}
-                  </div>
-                  {newIgnoreItem && (
-                    <button
-                      onClick={addIgnoreItem}
-                      className="absolute right-1 top-1/2 -translate-y-1/2 p-1 text-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded-md transition-colors"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
+                {hasMore && !isIgnoreListExpanded && (
+                  <button
+                    onClick={() => setIsIgnoreListExpanded(true)}
+                    className="flex items-center gap-1 px-2.5 py-1 bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 rounded-lg text-[11px] font-bold border border-brand-100 dark:border-brand-900/30 hover:bg-brand-100 dark:hover:bg-brand-900/40 transition-colors"
+                  >
+                    +{remainder} more
+                  </button>
+                )}
               </div>
+
+              {isIgnoreListExpanded && hasMore && (
+                <button
+                  onClick={() => setIsIgnoreListExpanded(false)}
+                  className="mt-3 flex items-center gap-1.5 text-[11px] font-bold text-slate-400 hover:text-brand-500 transition-colors"
+                >
+                  <ChevronUp className="w-3 h-3" />
+                  Show less
+                </button>
+              )}
             </div>
           </motion.div>
         )}

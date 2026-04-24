@@ -3,55 +3,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { test, expect } from './fixtures'
+import { test, expect, resetIgnoreList } from './fixtures'
 import { FileUploadHelper } from './helpers/file-upload'
-import type { APIRequestContext } from '@playwright/test'
+import { ensureSidebarOpen } from './helpers/sidebar'
+import type { Locator } from '@playwright/test'
 
 /**
- * Helper to reset the ignore list via API using the worker-specific context.
+ * Helper function to click an element using JavaScript for better Firefox compatibility
  */
-async function resetIgnoreList(apiContext: APIRequestContext): Promise<void> {
-  const defaultIgnoreList = [
-    '.concatenate-ignore',
-    '.DS_Store',
-    '.env',
-    '.expo',
-    '.git',
-    '.gradle',
-    '.next',
-    '.secrets',
-    '.terraform',
-    '.vagrant',
-    '.vscode',
-    '/^\\.concatenate-ignore-worker-\\d+$/',
-    '/\\.class$/',
-    '/\\.exe$/',
-    '/\\.jar$/',
-    '/\\.log$/',
-    '/\\.o$/',
-    '/\\.obj$/',
-    '/\\.swp$/',
-    '/^__.*cache__$/',
-    '/^\\..*_cache$/',
-    'bin',
-    'build',
-    'desktop.ini',
-    'dist',
-    'node_modules',
-    'obj',
-    'package-lock.json',
-    'ruff_output.txt',
-    'target',
-    'Thumbs.db',
-    'vendor',
-    'venv',
-  ]
-  const response = await apiContext.post('/api/ignore-list', {
-    data: defaultIgnoreList,
-  })
-  if (!response.ok()) {
-    throw new Error(`Failed to reset ignore list — HTTP ${response.status()}`)
-  }
+async function jsClick(locator: Locator): Promise<void> {
+  await locator.evaluate((el: HTMLElement) => el.click())
 }
 
 /**
@@ -67,6 +28,9 @@ test.describe('Max File Limit Feature', () => {
       localStorage.removeItem('concatenate-ignore')
       localStorage.removeItem('concatenate-view-mode')
       localStorage.removeItem('concatenate-dark-mode')
+      localStorage.removeItem('concat_mode')
+      localStorage.removeItem('concat_view')
+      localStorage.removeItem('concat_ignore')
     })
 
     // Reset server-side ignore list BEFORE navigation so client fetches correct state.
@@ -75,6 +39,9 @@ test.describe('Max File Limit Feature', () => {
 
     // Use 'domcontentloaded' for faster Firefox navigation
     await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+    // Ensure sidebar is open to access controls
+    await ensureSidebarOpen(page)
   })
 
   test.describe('UI Visibility', () => {
@@ -86,10 +53,9 @@ test.describe('Max File Limit Feature', () => {
         name: 'Concatenate',
         exact: true,
       })
-      await expect(concatenateButton).toHaveClass(
-        /bg-white|dark:bg-slate-800/,
-        { timeout: 10000 }
-      )
+      await expect(concatenateButton).toHaveClass(/bg-brand-600/, {
+        timeout: 10000,
+      })
 
       // Check that the dropdown is visible
       const maxFileLimitSelect = page.locator('select#max-file-limit')
@@ -98,7 +64,7 @@ test.describe('Max File Limit Feature', () => {
       // Check that the label is visible
       const label = page.locator('label[for="max-file-limit"]')
       await expect(label).toBeVisible({ timeout: 10000 })
-      await expect(label).toHaveText('Max Files:')
+      await expect(label).toHaveText('Performance')
     })
 
     test('should hide max file limit dropdown in deconcatenate mode', async ({
@@ -109,11 +75,10 @@ test.describe('Max File Limit Feature', () => {
         name: 'De-concatenate',
         exact: true,
       })
-      await deconcatenateButton.click()
-      await expect(deconcatenateButton).toHaveClass(
-        /bg-white|dark:bg-slate-800/,
-        { timeout: 5000 }
-      )
+      await jsClick(deconcatenateButton)
+      await expect(deconcatenateButton).toHaveClass(/bg-brand-600/, {
+        timeout: 5000,
+      })
 
       // Check that the dropdown is hidden
       const maxFileLimitSelect = page.locator('select#max-file-limit')
@@ -132,22 +97,20 @@ test.describe('Max File Limit Feature', () => {
         name: 'De-concatenate',
         exact: true,
       })
-      await deconcatenateButton.click()
-      await expect(deconcatenateButton).toHaveClass(
-        /bg-white|dark:bg-slate-800/,
-        { timeout: 5000 }
-      )
+      await jsClick(deconcatenateButton)
+      await expect(deconcatenateButton).toHaveClass(/bg-brand-600/, {
+        timeout: 5000,
+      })
 
       // Then switch back to concatenate mode and confirm
       const concatenateButton = page.getByRole('button', {
         name: 'Concatenate',
         exact: true,
       })
-      await concatenateButton.click()
-      await expect(concatenateButton).toHaveClass(
-        /bg-white|dark:bg-slate-800/,
-        { timeout: 5000 }
-      )
+      await jsClick(concatenateButton)
+      await expect(concatenateButton).toHaveClass(/bg-brand-600/, {
+        timeout: 5000,
+      })
 
       // Check that the dropdown is visible again
       const maxFileLimitSelect = page.locator('select#max-file-limit')
@@ -177,7 +140,7 @@ test.describe('Max File Limit Feature', () => {
       for (let i = 0; i < expectedOptions.length; i++) {
         const option = options.nth(i)
         await expect(option).toHaveAttribute('value', expectedOptions[i].value)
-        await expect(option).toHaveText(expectedOptions[i].label)
+        await expect(option).toHaveText(new RegExp(expectedOptions[i].label))
       }
     })
 
@@ -236,6 +199,7 @@ test.describe('Max File Limit Feature', () => {
     test('should show error when file count exceeds selected limit', async ({
       page,
     }) => {
+      test.setTimeout(60000)
       const uploadHelper = new FileUploadHelper(page)
 
       try {
@@ -263,7 +227,7 @@ test.describe('Max File Limit Feature', () => {
         const concatenateButton = page.getByRole('button', {
           name: /Concatenate & Download/,
         })
-        await concatenateButton.click()
+        await jsClick(concatenateButton)
 
         // Check for error message with correct limit
         const errorMessage = page.locator(
@@ -278,6 +242,7 @@ test.describe('Max File Limit Feature', () => {
     test('should allow concatenation when file count is within limit', async ({
       page,
     }) => {
+      test.setTimeout(60000)
       const uploadHelper = new FileUploadHelper(page)
 
       try {
@@ -305,7 +270,7 @@ test.describe('Max File Limit Feature', () => {
         const concatenateButton = page.getByRole('button', {
           name: /Concatenate & Download/,
         })
-        await concatenateButton.click()
+        await jsClick(concatenateButton)
 
         // Wait a bit for download to start
         await page.waitForTimeout(500)
@@ -324,6 +289,7 @@ test.describe('Max File Limit Feature', () => {
       page,
       browserName,
     }) => {
+      test.setTimeout(60000)
       // Skip on WebKit due to timeout - simpler tests already cover the core functionality
       test.skip(
         browserName === 'webkit',
@@ -341,15 +307,17 @@ test.describe('Max File Limit Feature', () => {
         }))
 
         await uploadHelper.setFilesOnInput(files)
-        await expect(page.getByText(/Selected Files.*600/)).toBeVisible({
-          timeout: 15000,
+        await expect(
+          page.getByText(/Selected Files \(\s*600\s*\)/)
+        ).toBeVisible({
+          timeout: 30000,
         })
 
         // With default limit (10000), concatenation should work
         const concatenateButton = page.getByRole('button', {
           name: /Concatenate & Download/,
         })
-        await concatenateButton.click()
+        await jsClick(concatenateButton)
         await page.waitForTimeout(500)
 
         // No error should be shown
@@ -363,40 +331,40 @@ test.describe('Max File Limit Feature', () => {
           name: 'De-concatenate',
           exact: true,
         })
-        await deconcatenateButton.click()
-        await expect(deconcatenateButton).toHaveClass(
-          /bg-white|dark:bg-slate-800/,
-          { timeout: 5000 }
-        )
+        await jsClick(deconcatenateButton)
+        await expect(deconcatenateButton).toHaveClass(/bg-brand-600/, {
+          timeout: 5000,
+        })
 
         const concatenateModeButton = page.getByRole('button', {
           name: 'Concatenate',
           exact: true,
         })
-        await concatenateModeButton.click()
-        await expect(concatenateModeButton).toHaveClass(
-          /bg-white|dark:bg-slate-800/,
-          { timeout: 5000 }
-        )
+        await jsClick(concatenateModeButton)
+        await expect(concatenateModeButton).toHaveClass(/bg-brand-600/, {
+          timeout: 5000,
+        })
 
         // Change limit to 500
         const maxFileLimitSelect = page.locator('select#max-file-limit')
         await maxFileLimitSelect.selectOption('500')
         await page.waitForTimeout(300)
 
-        // Re-upload the same 600 files
+        // Re-upload the same 600 files (or verify they are still there)
         await uploadHelper.setFilesOnInput(files)
-        await expect(page.getByText(/Selected Files.*600/)).toBeVisible({
-          timeout: 15000,
+        await expect(
+          page.getByText(/Selected Files \(\s*600\s*\)/)
+        ).toBeVisible({
+          timeout: 30000,
         })
 
         // Try to concatenate - should now fail with 500 limit
-        await concatenateButton.click()
+        await jsClick(concatenateButton)
 
-        const newErrorMessage = page.locator(
-          'text=Warning: You are attempting to concatenate over 500 files'
+        const newErrorMessage = page.getByText(
+          /Warning: You are attempting to concatenate over 500 files/i
         )
-        await expect(newErrorMessage).toBeVisible({ timeout: 10000 })
+        await expect(newErrorMessage).toBeVisible({ timeout: 15000 })
       } finally {
         uploadHelper.cleanup()
       }

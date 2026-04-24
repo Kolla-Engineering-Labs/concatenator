@@ -14,7 +14,7 @@ import {
   existsSync,
   rmSync,
 } from 'fs'
-import { join, relative, dirname } from 'path'
+import { join, relative, dirname, resolve } from 'path'
 import { fileURLToPath } from 'url'
 import {
   concatenate,
@@ -23,8 +23,14 @@ import {
   type VirtualFile,
   type ValidationResult,
 } from '../core/engine.js'
+import { prunePaths } from '../core/reconciler.js'
+import { isDirectoryTainted } from '../core/utils/fs-utils.js'
+import { UserError } from '../core/errors.js'
 import { createZipFromVirtualFiles } from '../drivers/zip-driver.js'
 import { logger } from '../lib/logger.js'
+import { IgnoreEngine } from '../core/ignore/IgnoreEngine.js'
+import { TokenService } from '../core/TokenService.js'
+import { formatFileSize } from '../lib/utils.js'
 
 // Load version from package.json
 const __filename = fileURLToPath(import.meta.url)
@@ -34,38 +40,132 @@ const packageJson = JSON.parse(
 )
 
 /**
- * Recursively collect all files from a directory
+ * File metadata with token and size info
+ */
+interface FileWithMetadata {
+  path: string
+  content: string
+  tokens: number
+  size: number
+}
+
+/**
+ * Recursively collect all files from a directory and calculate tokens
  */
 function collectFiles(
   dir: string,
   baseDir: string,
-  files: Array<{ path: string; content: string }> = [],
-  excludePatterns: string[] = []
-): Array<{ path: string; content: string }> {
+  ignoreEngine: IgnoreEngine,
+  verbose: number = 0,
+  files: FileWithMetadata[] = []
+): { files: FileWithMetadata[]; totalTokens: number } {
   const entries = readdirSync(dir, { withFileTypes: true })
+  let dirTokens = 0
 
   for (const entry of entries) {
     const fullPath = join(dir, entry.name)
     const relativePath = relative(baseDir, fullPath)
 
-    // Check if path matches any exclude pattern
-    if (excludePatterns.some((pattern) => relativePath.includes(pattern))) {
+    // Check if path is ignored
+    if (ignoreEngine.isIgnored(relativePath)) {
       continue
     }
 
     if (entry.isDirectory()) {
-      collectFiles(fullPath, baseDir, files, excludePatterns)
+      const subResult = collectFiles(
+        fullPath,
+        baseDir,
+        ignoreEngine,
+        verbose,
+        files
+      )
+      dirTokens += subResult.totalTokens
     } else if (entry.isFile()) {
       try {
+        const stats = statSync(fullPath)
         const content = readFileSync(fullPath, 'utf-8')
-        files.push({ path: relativePath, content })
+        const tokens = TokenService.getTokenEstimate(content)
+
+        files.push({
+          path: relativePath,
+          content,
+          tokens,
+          size: stats.size,
+        })
+
+        dirTokens += tokens
+
+        if (verbose >= 2) {
+          logger.info(
+            `  [${tokens.toLocaleString().padStart(8)} tokens] ${relativePath}`
+          )
+        }
       } catch {
         // Skip files that can't be read (binary, permissions, etc.)
       }
     }
   }
 
-  return files
+  if (verbose >= 1) {
+    const relDir = relative(baseDir, dir) || '.'
+    logger.info(`Dir: ${relDir} (~${dirTokens.toLocaleString()} tokens)`)
+  }
+
+  return { files, totalTokens: dirTokens }
+}
+
+/**
+ * Resolve ignore patterns from explicit flags and auto-discovery
+ * @returns Array of ignore patterns
+ */
+function getIgnorePatterns(options: {
+  exclude?: string
+  ignoreFile?: string
+}): string[] {
+  let patterns: string[] = []
+
+  // 1. Parse explicit --exclude patterns (comma-separated)
+  if (options.exclude) {
+    patterns = patterns.concat(
+      options.exclude
+        .split(',')
+        .map((p) => p.trim())
+        .filter(Boolean)
+    )
+  }
+
+  // 2. Determine which ignore file to use
+  let ignoreFilePath = options.ignoreFile
+  const isExplicit = !!options.ignoreFile
+
+  if (!ignoreFilePath) {
+    // Auto-discovery: .concatignore then .gitignore
+    if (existsSync('.concatignore')) {
+      ignoreFilePath = '.concatignore'
+    } else if (existsSync('.gitignore')) {
+      ignoreFilePath = '.gitignore'
+    }
+  }
+
+  // 3. Load patterns from file
+  if (ignoreFilePath) {
+    if (existsSync(ignoreFilePath)) {
+      try {
+        const content = readFileSync(ignoreFilePath, 'utf-8')
+        const filePatterns = IgnoreEngine.parseIgnoreFile(content)
+        patterns = patterns.concat(filePatterns)
+      } catch (error) {
+        logger.warn(
+          `Could not read ignore file ${ignoreFilePath}: ${error instanceof Error ? error.message : String(error)}`
+        )
+      }
+    } else if (isExplicit) {
+      // Explicitly requested but missing
+      throw new Error(`Ignore file ${ignoreFilePath} does not exist.`)
+    }
+  }
+
+  return patterns
 }
 
 /**
@@ -121,7 +221,9 @@ function checkOutputPath(
     return true
   }
 
-  return true
+  throw new Error(
+    `File ${outputPath} already exists. Use --force to overwrite.`
+  )
 }
 
 /**
@@ -149,6 +251,12 @@ function reconstructFiles(
 
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true })
+    }
+
+    if (existsSync(fullPath) && !force) {
+      throw new Error(
+        `File ${fullPath} already exists. Use --force to overwrite.`
+      )
     }
 
     writeFileSync(fullPath, file.content, 'utf-8')
@@ -263,9 +371,16 @@ function formatValidationReport(
  * Global error handler for CLI commands
  */
 function handleError(error: unknown): void {
-  logger.error(
-    `Error: ${error instanceof Error ? error.message : String(error)}`
-  )
+  if (error instanceof UserError) {
+    logger.error(`Error: ${error.message}`)
+  } else {
+    logger.error(
+      `Error: ${error instanceof Error ? error.message : String(error)}`
+    )
+    if (error instanceof Error && error.stack) {
+      logger.debug(error.stack)
+    }
+  }
   process.exit(1)
 }
 
@@ -287,15 +402,27 @@ const program = new Command()
 // Concat command (default action)
 program
   .command('concat')
-  .argument('<path>', 'Directory path to concatenate')
-  .description('Bundle a directory into a single LLM-ready file')
+  .argument('<paths...>', 'Directory paths to concatenate')
+  .description('Bundle directories into a single LLM-ready file')
   .option('-o, --output <file>', 'Specify output filename (default: stdout)')
   .option(
-    '-e, --exclude <pattern>',
+    '-e, --exclude <patterns>',
     'Additional patterns to ignore (comma-separated)',
     ''
   )
-  .option('-v, --verbose', 'Show detailed file processing logs', false)
+  .option(
+    '-i, --ignore-file <path>',
+    'Path to an ignore file (.concatignore, .gitignore, etc.)'
+  )
+  .option(
+    '-v, --verbose',
+    'Verbosity level. -v: total tokens per dir, -vv: individual file tokens',
+    (v, p) => p + 1,
+    0
+  )
+  .option('--max-tokens <number>', 'Budget guard: warn if exceeded', (val) =>
+    parseInt(val, 10)
+  )
   .option(
     '-f, --force',
     'Overwrite existing files or directories without prompting',
@@ -303,49 +430,98 @@ program
   )
   .action(
     async (
-      inputPath: string,
+      paths: string[],
       options: {
         output?: string
         exclude: string
-        verbose: boolean
+        ignoreFile?: string
+        verbose: number
+        maxTokens?: number
         force: boolean
       }
     ) => {
       try {
-        const stats = statSync(inputPath)
-        if (!stats.isDirectory()) {
-          throw new Error(`${inputPath} is not a directory`)
-        }
+        // Path Normalization & Pruning
+        const absolutePaths = paths.map((p) => resolve(p))
+        const { pruned, remaining } = prunePaths(absolutePaths)
 
-        // Parse exclude patterns
-        const excludePatterns = options.exclude
-          ? options.exclude
-              .split(',')
-              .map((p) => p.trim())
-              .filter(Boolean)
-          : []
-
-        const files = collectFiles(inputPath, inputPath, [], excludePatterns)
-
-        if (files.length === 0) {
-          throw new Error(`No readable files found in ${inputPath}`)
-        }
-
-        if (options.verbose) {
-          logger.info(`Processing ${files.length} file(s)...`)
-          for (const file of files) {
-            logger.info(`  - ${file.path}`)
+        if (options.verbose && pruned.length > 0) {
+          for (const p of pruned) {
+            const relPath = relative(process.cwd(), p) || '.'
+            logger.info(
+              `[info] Pruned redundant sub-path: ${relPath} (already covered by a parent path)`
+            )
           }
         }
 
-        const result = concatenate(files)
+        // Get ignore patterns and initialize engine
+        const ignorePatterns = getIgnorePatterns(options)
+        const ignoreEngine = new IgnoreEngine(ignorePatterns)
+
+        const allFiles: FileWithMetadata[] = []
+        let totalTokens = 0
+
+        for (const inputPath of remaining) {
+          if (!existsSync(inputPath)) {
+            logger.warn(`Warning: Path ${inputPath} does not exist. Skipping.`)
+            continue
+          }
+
+          const stats = statSync(inputPath)
+          if (stats.isDirectory()) {
+            // For a single input directory, we keep paths relative to it (traditional behavior).
+            // For multiple inputs, we preserve the directory name to avoid collisions.
+            const baseDir =
+              remaining.length === 1 ? inputPath : dirname(inputPath)
+
+            const { totalTokens: tokens } = collectFiles(
+              inputPath,
+              baseDir,
+              ignoreEngine,
+              options.verbose,
+              allFiles
+            )
+            totalTokens += tokens
+          } else if (stats.isFile()) {
+            const content = readFileSync(inputPath, 'utf-8')
+            const tokens = TokenService.getTokenEstimate(content)
+            // For files, we always use the parent dir as base to get just the filename
+            const relativePath = relative(dirname(inputPath), inputPath)
+
+            if (!ignoreEngine.isIgnored(relativePath)) {
+              allFiles.push({
+                path: relativePath,
+                content,
+                tokens,
+                size: stats.size,
+              })
+              totalTokens += tokens
+            }
+          }
+        }
+
+        if (allFiles.length === 0) {
+          throw new Error(`No readable files found in the provided paths`)
+        }
+
+        // Budget Guard
+        if (options.maxTokens && totalTokens > options.maxTokens) {
+          logger.warn('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+          logger.warn('BUDGET WARNING: Token limit exceeded')
+          logger.warn(`Limit:   ${options.maxTokens.toLocaleString()}`)
+          logger.warn(`Current: ${totalTokens.toLocaleString()}`)
+          logger.warn('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+        }
+
+        const result = concatenate(allFiles)
+        const bundleSize = Buffer.byteLength(result, 'utf-8')
 
         if (options.output) {
           // Check for directory collision before writing
           checkOutputPath(options.output, options.force, 'file')
           writeFileSync(options.output, result)
           logger.info(
-            `Concatenated ${files.length} file(s) to ${options.output}`
+            `✔ Created ${options.output} (${formatFileSize(bundleSize)} | ~${totalTokens.toLocaleString()} tokens).`
           )
         } else {
           process.stdout.write(result)
@@ -362,6 +538,15 @@ program
   .argument('<file>', 'Path to the concatenated file')
   .description('Reconstruct a project from a concatenated file')
   .option('-o, --output <dir>', 'Destination directory', '.')
+  .option(
+    '-e, --exclude <patterns>',
+    'Patterns to ignore during extraction (comma-separated)',
+    ''
+  )
+  .option(
+    '-i, --ignore-file <path>',
+    'Path to an ignore file to use during extraction'
+  )
   .option(
     '-z, --zip',
     'Output as a .zip archive instead of writing to disk',
@@ -388,6 +573,8 @@ program
       inputFile: string,
       options: {
         output: string
+        exclude: string
+        ignoreFile?: string
         zip: boolean
         dryRun: boolean
         verbose: number
@@ -402,13 +589,24 @@ program
           throw new Error('No concatenated files found in input')
         }
 
+        // Filter files using ignore patterns
+        const ignorePatterns = getIgnorePatterns(options)
+        const ignoreEngine = new IgnoreEngine(ignorePatterns)
+        const filteredFiles = result.files.filter(
+          (file) => !ignoreEngine.isIgnored(file.path)
+        )
+
+        if (filteredFiles.length === 0 && result.files.length > 0) {
+          logger.warn('All files were filtered out by ignore patterns.')
+        }
+
         const totalFiles = result.files.length + result.skippedPaths.length
 
         if (options.verbose > 0) {
           logger.info(
-            `Found ${result.files.length}/${totalFiles} file(s) to extract`
+            `Found ${filteredFiles.length}/${totalFiles} file(s) to extract`
           )
-          for (const file of result.files) {
+          for (const file of filteredFiles) {
             logger.info(`  - ${file.path}`)
           }
           if (result.skippedPaths.length > 0) {
@@ -439,7 +637,7 @@ program
           // Check for directory collision before writing zip
           checkOutputPath(zipPath, options.force, 'file')
 
-          const zipData = await createZipFromVirtualFiles(result.files)
+          const zipData = await createZipFromVirtualFiles(filteredFiles)
           writeFileSync(zipPath, zipData)
 
           if (result.skippedPaths.length > 0) {
@@ -449,25 +647,18 @@ program
           }
 
           logger.info(
-            `Created ${zipPath} with ${result.files.length}/${totalFiles} file(s)`
+            `Created ${zipPath} with ${filteredFiles.length}/${totalFiles} file(s)`
           )
         } else {
           // File explosion mode (default)
-          // Check for file collision before extracting to directory
-          if (
-            existsSync(options.output) &&
-            !statSync(options.output).isDirectory()
-          ) {
-            if (options.force) {
-              rmSync(options.output, { recursive: true, force: true })
-            } else {
-              throw new Error(
-                `Path ${options.output} exists as a file. Please provide a different directory name or use --force to overwrite.`
-              )
-            }
+          // Guard against non-empty target directory or existing file
+          if (!options.force && isDirectoryTainted(options.output)) {
+            throw new UserError(
+              'Target directory is not empty. Use --force to overwrite or merge.'
+            )
           }
 
-          reconstructFiles(result.files, options.output, options.force)
+          reconstructFiles(filteredFiles, options.output, options.force)
 
           if (result.skippedPaths.length > 0) {
             logger.warn(
@@ -476,7 +667,7 @@ program
           }
 
           logger.info(
-            `Restored ${result.files.length}/${totalFiles} file(s) to ${options.output}`
+            `Restored ${filteredFiles.length}/${totalFiles} file(s) to ${options.output}`
           )
         }
       } catch (error) {
@@ -488,24 +679,124 @@ program
 // Validate command
 program
   .command('validate')
-  .argument('<file>', 'Path to the concatenated file')
-  .description('Check the integrity of a concatenated file')
+  .argument(
+    '<paths...>',
+    'Path to directories (pre-flight) or concatenated files'
+  )
+  .description(
+    'Check the integrity of concatenated files or perform a pre-flight dry run on directories'
+  )
+  .option('-t, --tokens', 'Show individual token counts for all files', false)
   .option(
     '-v, --verbose',
     'Show detailed validation logs (use -vv for very verbose)',
     (value, previous) => previous + 1,
     0
   )
-  .action(async (inputFile: string, options: { verbose: number }) => {
-    try {
-      const content = readFileSync(inputFile, 'utf-8')
-      const result = validateConcatenation(content)
-      formatValidationReport(result, inputFile, options.verbose, false)
-      process.exit(result.isValid ? 0 : 1)
-    } catch (error) {
-      handleError(error)
+  .option(
+    '-e, --exclude <patterns>',
+    'Additional patterns to ignore (comma-separated)',
+    ''
+  )
+  .option(
+    '-i, --ignore-file <path>',
+    'Path to an ignore file (.concatignore, .gitignore, etc.)'
+  )
+  .action(
+    async (
+      paths: string[],
+      options: {
+        tokens: boolean
+        verbose: number
+        exclude: string
+        ignoreFile?: string
+      }
+    ) => {
+      try {
+        // Path Normalization & Pruning
+        const absolutePaths = paths.map((p) => resolve(p))
+        const { pruned, remaining } = prunePaths(absolutePaths)
+
+        if (options.verbose && pruned.length > 0) {
+          for (const p of pruned) {
+            const relPath = relative(process.cwd(), p) || '.'
+            logger.info(
+              `[info] Pruned redundant sub-path: ${relPath} (already covered by a parent path)`
+            )
+          }
+        }
+
+        for (const inputPath of remaining) {
+          if (!existsSync(inputPath)) {
+            logger.warn(`Warning: Path ${inputPath} does not exist. Skipping.`)
+            continue
+          }
+
+          if (statSync(inputPath).isDirectory()) {
+            // Pre-flight directory dry-run
+            const ignorePatterns = getIgnorePatterns(options)
+            const ignoreEngine = new IgnoreEngine(ignorePatterns)
+            const baseDir =
+              remaining.length === 1 ? inputPath : dirname(inputPath)
+
+            if (options.tokens) {
+              logger.info(`[DRY RUN] Pre-flight Analysis for: ${inputPath}`)
+              const { files, totalTokens } = collectFiles(
+                inputPath,
+                baseDir,
+                ignoreEngine,
+                options.verbose
+              )
+
+              logger.info(
+                '--------------------------------------------------------------------------------'
+              )
+              logger.info(String('File Path').padEnd(60) + ' | ' + 'Tokens')
+              logger.info(
+                '--------------------------------------------------------------------------------'
+              )
+              for (const file of files) {
+                logger.info(
+                  file.path.padEnd(60) +
+                    ' | ' +
+                    file.tokens.toLocaleString().padStart(10)
+                )
+              }
+              logger.info(
+                '--------------------------------------------------------------------------------'
+              )
+              logger.info(
+                `TOTAL CONTEXT WEIGHT (tokens): ${totalTokens.toLocaleString()}`
+              )
+              logger.info(
+                '--------------------------------------------------------------------------------'
+              )
+            } else {
+              const { files, totalTokens } = collectFiles(
+                inputPath,
+                baseDir,
+                ignoreEngine,
+                options.verbose
+              )
+              logger.info(
+                `✓ Pre-flight check passed for ${inputPath}: ${files.length} files, ~${totalTokens.toLocaleString()} tokens.`
+              )
+            }
+          } else {
+            // File validation
+            const content = readFileSync(inputPath, 'utf-8')
+            const result = validateConcatenation(content)
+            formatValidationReport(result, inputPath, options.verbose, false)
+            if (!result.isValid) {
+              process.exit(1)
+            }
+          }
+        }
+      } catch (error) {
+        handleError(error)
+      }
     }
-  })
+  )
 
 // Add custom help text with examples
 program.on('--help', () => {

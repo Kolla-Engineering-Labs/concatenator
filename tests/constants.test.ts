@@ -102,10 +102,10 @@ describe('Constants', () => {
       expect(DEFAULT_IGNORE_LIST).toContain('venv')
     })
 
-    it('contains common binary extensions as regex patterns', () => {
-      // Regex patterns start and end with /
-      const binaryPatterns = DEFAULT_IGNORE_LIST.filter(
-        (item) => item.startsWith('/') && item.endsWith('/')
+    it('contains common binary extensions as glob patterns', () => {
+      // Glob patterns for common binaries
+      const binaryPatterns = DEFAULT_IGNORE_LIST.filter((item) =>
+        item.startsWith('*.')
       )
       expect(binaryPatterns.length).toBeGreaterThan(0)
     })
@@ -137,11 +137,19 @@ describe('Constants', () => {
       })
     })
 
-    it('contains cache-related patterns', () => {
-      const cachePatterns = DEFAULT_IGNORE_LIST.filter((item) =>
-        item.toLowerCase().includes('cache')
-      )
-      expect(cachePatterns.length).toBeGreaterThan(0)
+    it('contains cache-related regex patterns', () => {
+      expect(DEFAULT_IGNORE_LIST).toContain('/^__.*cache__$/')
+      expect(DEFAULT_IGNORE_LIST).toContain('/^\\..*_cache$/')
+    })
+
+    it('contains common image extensions', () => {
+      expect(DEFAULT_IGNORE_LIST).toContain('*.gif')
+      expect(DEFAULT_IGNORE_LIST).toContain('*.jpeg')
+      expect(DEFAULT_IGNORE_LIST).toContain('*.jpg')
+      expect(DEFAULT_IGNORE_LIST).toContain('*.png')
+      expect(DEFAULT_IGNORE_LIST).toContain('*.svg')
+      expect(DEFAULT_IGNORE_LIST).toContain('*.tif')
+      expect(DEFAULT_IGNORE_LIST).toContain('*.tiff')
     })
 
     it('contains compiled object patterns', () => {
@@ -155,21 +163,17 @@ describe('Constants', () => {
     })
 
     it('contains log pattern', () => {
-      expect(DEFAULT_IGNORE_LIST).toContain('/\\.log$/')
+      expect(DEFAULT_IGNORE_LIST).toContain('*.log')
     })
 
-    it('correctly escapes dots in regex patterns', () => {
-      const dotPatterns = DEFAULT_IGNORE_LIST.filter(
-        (item) => item.startsWith('/') && item.includes('.')
-      )
-      // All dot patterns should have escaped dots
-      dotPatterns.forEach((pattern) => {
-        // Pattern like /\.ext$/ should have escaped dot
-        if (!pattern.includes('\\.')) {
-          // Some patterns might not need escaping (like __cache__)
-          // This is a soft check
-        }
-      })
+    it('contains playwright-related directories', () => {
+      expect(DEFAULT_IGNORE_LIST).toContain('playwright-report')
+      expect(DEFAULT_IGNORE_LIST).toContain('test-results')
+    })
+
+    it('contains patterns for common temporary files', () => {
+      expect(DEFAULT_IGNORE_LIST).toContain('*.swp')
+      expect(DEFAULT_IGNORE_LIST).toContain('*.obj')
     })
 
     it('contains next.js build directory', () => {

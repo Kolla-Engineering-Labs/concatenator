@@ -37,11 +37,13 @@ export class FileUploadHelper {
     }
   }
 
+  private isWebKitCached: boolean | null = null
   /**
    * Detects if the current browser is WebKit (Safari).
    */
   private async isWebKit(): Promise<boolean> {
-    return this.page.evaluate(() => {
+    if (this.isWebKitCached !== null) return this.isWebKitCached
+    this.isWebKitCached = await this.page.evaluate(() => {
       const ua = navigator.userAgent.toLowerCase()
       return (
         ua.includes('safari') &&
@@ -49,6 +51,7 @@ export class FileUploadHelper {
         !ua.includes('chromium')
       )
     })
+    return this.isWebKitCached
   }
 
   /**
@@ -98,10 +101,7 @@ export class FileUploadHelper {
     // via Object.defineProperty (own properties shadow the read-only prototype
     // getter) so that React's handler reads the correct directory path.
     const pathMap = payload.map((f) => f.relativePath ?? f.name)
-    await this.page.evaluate((map) => {
-      const input = document.querySelector(
-        'input[type="file"]'
-      ) as HTMLInputElement
+    await fileInput.evaluate((input: HTMLInputElement, map) => {
       if (!input) return
       const onceHandler = (e: Event) => {
         input.removeEventListener('change', onceHandler, true)
@@ -123,14 +123,11 @@ export class FileUploadHelper {
       }
       // Capture phase: runs before React's bubble-phase synthetic event handler.
       input.addEventListener('change', onceHandler, true)
-    }, pathMap)
 
-    // Temporarily strip webkitdirectory so Playwright's framework-level guard
-    // doesn't reject the buffer payload. The interceptor above has already been
-    // registered and will fire when the change event is dispatched.
-    await fileInput.evaluate((el: HTMLInputElement) =>
-      el.removeAttribute('webkitdirectory')
-    )
+      // Temporarily strip webkitdirectory so Playwright's framework-level guard
+      // doesn't reject the buffer payload.
+      input.removeAttribute('webkitdirectory')
+    }, pathMap)
     try {
       await fileInput.setInputFiles(payload, { timeout })
     } finally {

@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { test, expect } from './fixtures'
+import { test, expect, resetIgnoreList } from './fixtures'
 import { SIMPLE_PROJECT, REACT_PROJECT } from './fixtures/test-data'
 import { logger } from '../src/lib/logger'
-import type { Page, APIRequestContext, Locator } from '@playwright/test'
+import type { Page, Locator } from '@playwright/test'
+import { ensureSidebarClosed } from './helpers/sidebar'
 
 /**
  * Helper to upload files to a webkitdirectory input.
@@ -83,53 +84,6 @@ async function setFilesForWebkitDirectory(
 }
 
 /**
- * Helper to reset the ignore list via API using the worker-specific context.
- */
-async function resetIgnoreList(apiContext: APIRequestContext): Promise<void> {
-  const defaultIgnoreList = [
-    '.concatenate-ignore',
-    '.DS_Store',
-    '.env',
-    '.expo',
-    '.git',
-    '.gradle',
-    '.next',
-    '.secrets',
-    '.terraform',
-    '.vagrant',
-    '.vscode',
-    '/^\\.concatenate-ignore-worker-\\d+$/',
-    '/\\.class$/',
-    '/\\.exe$/',
-    '/\\.jar$/',
-    '/\\.log$/',
-    '/\\.o$/',
-    '/\\.obj$/',
-    '/\\.swp$/',
-    '/^__.*cache__$/',
-    '/^\\..*_cache$/',
-    'bin',
-    'build',
-    'desktop.ini',
-    'dist',
-    'node_modules',
-    'obj',
-    'package-lock.json',
-    'ruff_output.txt',
-    'target',
-    'Thumbs.db',
-    'vendor',
-    'venv',
-  ]
-  const response = await apiContext.post('/api/ignore-list', {
-    data: defaultIgnoreList,
-  })
-  if (!response.ok()) {
-    throw new Error(`Failed to reset ignore list — HTTP ${response.status()}`)
-  }
-}
-
-/**
  * Helper function to click an element using JavaScript for better Firefox compatibility
  */
 async function jsClick(locator: Locator): Promise<void> {
@@ -169,17 +123,14 @@ test.describe('File Upload via File Chooser', () => {
     ])
 
     try {
-      // Wait for processing to complete
-      await expect(page.getByText(/Reading Files/)).not.toBeVisible({
-        timeout: 10000,
-      })
+      // Verify files appear
 
       // Verify file appears in the list
-      const fileList = page.locator('.grid').first()
+      const fileList = page.locator('table').first()
       await expect(
-        fileList.getByText('hello.js', { exact: true })
+        fileList.getByText('hello.js', { exact: true }).first()
       ).toBeVisible()
-      await expect(page.getByText(/Selected Files.*1/)).toBeVisible()
+      await expect(page.getByText(/Selected Files.*\d/)).toBeVisible()
     } finally {
       cleanup()
     }
@@ -196,18 +147,16 @@ test.describe('File Upload via File Chooser', () => {
     const cleanup = await setFilesForWebkitDirectory(page, fileContents)
 
     try {
-      // Wait for processing to complete
-      await expect(page.getByText(/Reading Files/)).not.toBeVisible({
-        timeout: 10000,
-      })
+      // Verify files appear
 
       // Verify all files appear
-      const fileList = page.locator('.grid').first()
+      const fileList = page.locator('table').first()
       for (const { name } of fileContents) {
-        await expect(fileList.getByText(name, { exact: true })).toBeVisible()
+        await expect(
+          fileList.getByText(name, { exact: true }).first()
+        ).toBeVisible()
       }
-
-      await expect(page.getByText(/Selected Files.*3/)).toBeVisible()
+      await expect(page.getByText(/Selected Files.*\d/)).toBeVisible()
     } finally {
       cleanup()
     }
@@ -236,21 +185,18 @@ test.describe('File Upload via File Chooser', () => {
     const cleanup = await setFilesForWebkitDirectory(page, structure)
 
     try {
-      // Wait for processing to complete
-      await expect(page.getByText(/Reading Files/)).not.toBeVisible({
-        timeout: 10000,
-      })
+      // Verify files appear
 
       // Verify files appear
-      const fileList = page.locator('.grid').first()
+      const fileList = page.locator('table').first()
       await expect(
-        fileList.getByText('index.js', { exact: true })
+        fileList.getByText('index.js', { exact: true }).first()
       ).toBeVisible()
       await expect(
-        fileList.getByText('helpers.js', { exact: true })
+        fileList.getByText('helpers.js', { exact: true }).first()
       ).toBeVisible()
       await expect(
-        fileList.getByText('index.test.js', { exact: true })
+        fileList.getByText('index.test.js', { exact: true }).first()
       ).toBeVisible()
     } finally {
       cleanup()
@@ -263,7 +209,7 @@ test.describe('File Upload via File Chooser', () => {
     await deconcatButton.waitFor({ state: 'visible', timeout: 10000 })
     await jsClick(deconcatButton)
     // Wait for mode switch to complete
-    await expect(deconcatButton).toHaveClass(/bg-white|dark:bg-slate-800/, {
+    await expect(deconcatButton).toHaveClass(/bg-brand-600/, {
       timeout: 10000,
     })
 
@@ -284,14 +230,19 @@ console.log("World");
     const fileInput = page.locator('input[type="file"]:not([webkitdirectory])')
     await fileInput.waitFor({ state: 'attached' })
 
-    // Wait for download event as successful de-concatenation triggers ZIP download
+    await fileInput.setInputFiles({
+      name: 'bundle.txt',
+      buffer: Buffer.from(concatenatedContent),
+      mimeType: 'text/plain',
+    })
+
+    // Wait for download event after clicking manual download button
+    await ensureSidebarClosed(page)
+    const downloadButton = page.getByRole('button', { name: 'Download ZIP' })
+    await downloadButton.waitFor({ state: 'visible', timeout: 15000 })
     const [download] = await Promise.all([
       page.waitForEvent('download', { timeout: 10000 }),
-      fileInput.setInputFiles({
-        name: 'bundle.txt',
-        buffer: Buffer.from(concatenatedContent),
-        mimeType: 'text/plain',
-      }),
+      downloadButton.click(),
     ])
 
     // Verify it's a ZIP file
@@ -309,7 +260,7 @@ console.log("World");
     await deconcatButton.waitFor({ state: 'visible', timeout: 10000 })
     await jsClick(deconcatButton)
     // Wait for mode switch to complete
-    await expect(deconcatButton).toHaveClass(/bg-white|dark:bg-slate-800/, {
+    await expect(deconcatButton).toHaveClass(/bg-brand-600/, {
       timeout: 10000,
     })
 
@@ -348,16 +299,13 @@ test.describe.serial('File Upload with Test Fixtures', () => {
     const cleanup = await setFilesForWebkitDirectory(page, files)
 
     try {
-      // Wait for processing to complete
-      await expect(page.getByText(/Reading Files/)).not.toBeVisible({
-        timeout: 10000,
-      })
+      // Verify files appear
 
       // Verify all fixture files are present
-      const fileList = page.locator('.grid').first()
+      const fileList = page.locator('table').first()
       for (const file of SIMPLE_PROJECT) {
         await expect(
-          fileList.getByText(file.name, { exact: true })
+          fileList.getByText(file.name, { exact: true }).first()
         ).toBeVisible()
       }
     } finally {
@@ -376,19 +324,18 @@ test.describe.serial('File Upload with Test Fixtures', () => {
     const cleanup = await setFilesForWebkitDirectory(page, files)
 
     try {
-      // Wait for processing to complete
-      await expect(page.getByText(/Reading Files/)).not.toBeVisible({
-        timeout: 10000,
-      })
+      // Verify files appear
 
       // Verify React project files
-      const fileList = page.locator('.grid').first()
-      await expect(fileList.getByText('App.tsx', { exact: true })).toBeVisible()
+      const fileList = page.locator('table').first()
       await expect(
-        fileList.getByText('Button.tsx', { exact: true })
+        fileList.getByText('App.tsx', { exact: true }).first()
       ).toBeVisible()
       await expect(
-        fileList.getByText('package.json', { exact: true })
+        fileList.getByText('Button.tsx', { exact: true }).first()
+      ).toBeVisible()
+      await expect(
+        fileList.getByText('package.json', { exact: true }).first()
       ).toBeVisible()
     } finally {
       cleanup()

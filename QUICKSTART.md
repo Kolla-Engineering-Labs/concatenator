@@ -35,7 +35,9 @@ Choose your preferred interface:
 #### 1. Concatenate Files
 
 - **Drag & Drop**: Drop your project folder onto the upload zone.
-- **Filter**: Review the file tree. Use the **Ignore List** to filter out unwanted noise (e.g., `node_modules`, `.git`, or build artifacts).
+- **Analyze**: Review file sizes and **Token Estimates** in real-time. Toggle between **Tree** and **List** views to inspect your project structure. The Tree View automatically prunes redundant levels to start at the **Minimum Common Root**.
+- **Quick Look**: Click the preview icon next to any file to instantly inspect its content (Code, PDF, or SVG) without leaving the app.
+- **Filter**: Use the **Ignore List** to filter out unwanted noise (e.g., `node_modules`, `.git`).
 - **Export**: Choose your format and click **"Concatenate & Download."**
   - **Select `.txt`**: Best for Claude, GPT-4o, and general data recovery.
   - **Select `.pdf`**: Recommended for **Google Gemini** or archiving.
@@ -70,14 +72,20 @@ npm link
 concatenator --help
 ```
 
-#### Quick CLI Examples
+# Quick CLI Examples
 
 ```bash
-# Concatenate directory to file
-concatenator concat -o context.txt ./src
+# Concatenate with token budget (warns if > 100k tokens)
+concatenator concat -o context.txt --max-tokens 100000 ./src
 
-# Concatenate with exclusions
-concatenator concat -o output.txt -e node_modules,dist ./project
+# Concatenate with verbose token reporting (-vv for per-file breakdown)
+concatenator concat -o context.txt -vv ./src
+
+# Pre-flight Audit: See token weight of a directory without bundling
+concatenator validate ./src --tokens
+
+# Multi-path concatenation (automatically prunes redundant sub-paths)
+concatenator concat -o bundle.txt ./src ./lib ./src/components
 
 # Extract and restore files
 concatenator extract -o ./restored bundle.txt
@@ -87,12 +95,6 @@ concatenator extract --zip -o backup.zip bundle.txt
 
 # Validate file integrity
 concatenator validate bundle.txt
-
-# Validate with detailed output (shows foreign markers)
-concatenator validate -v bundle.txt
-
-# Very verbose (shows all foreign markers)
-concatenator validate -vv bundle.txt
 ```
 
 > [!TIP]

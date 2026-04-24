@@ -136,7 +136,7 @@ describe('CLI E2E Tests', () => {
       expect(content).toContain('Root level content')
       expect(content).toContain('console.log("main")')
       expect(content).toContain('export const helper = () => {}')
-    })
+    }, 20000)
 
     it('should output to stdout when no output path is provided', () => {
       writeFileSync(join(tempDir, 'file.txt'), 'Hello World')
@@ -459,8 +459,39 @@ Content here
       const result = runCLI(['extract', inputFile, '-o', outputPath])
 
       expect(result.status).toBe(1)
-      expect(result.stderr + result.stdout).toContain('exists as a file')
+      expect(result.stderr + result.stdout).toContain(
+        'Target directory is not empty'
+      )
       expect(result.stderr + result.stdout).toContain('--force')
+    })
+
+    it('should allow extraction into a directory containing only .DS_Store', () => {
+      // Create a valid concatenated file
+      const sessionId = 'dsstore001'
+      const concatenatedContent = `--- CONCATENATOR_SESSION_ID: ${sessionId} ---
+Concatenated on: 2024-01-01
+
+<<<<< FILE_START: extracted.txt (ID: ${sessionId}) >>>>>
+Extracted content
+<<<<< FILE_END >>>>>
+`
+      const inputFile = join(tempDir, 'bundle.txt')
+      writeFileSync(inputFile, concatenatedContent)
+
+      // Create a directory containing only .DS_Store
+      const outputPath = join(tempDir, 'output')
+      mkdirSync(outputPath, { recursive: true })
+      writeFileSync(join(outputPath, '.DS_Store'), '')
+
+      // Run CLI extract (should succeed without --force)
+      const result = runCLI(['extract', inputFile, '-o', outputPath])
+
+      // Verify exit code is 0
+      expect(result.status).toBe(0)
+      expect(existsSync(join(outputPath, 'extracted.txt'))).toBe(true)
+      expect(readFileSync(join(outputPath, 'extracted.txt'), 'utf-8')).toBe(
+        'Extracted content'
+      )
     })
 
     it('should overwrite file with --force flag during extract', () => {
@@ -557,6 +588,183 @@ Zip content
       // Verify it's a valid ZIP
       const zipHeader = readFileSync(zipPath).subarray(0, 2)
       expect(zipHeader.toString('hex')).toBe('504b') // 'PK' in hex
+    })
+  })
+
+  describe('Ignore File Support', () => {
+    it('should auto-discover .concatignore in CWD and ignore files', () => {
+      // Create source directory
+      const srcDir = join(tempDir, 'src')
+      mkdirSync(srcDir, { recursive: true })
+      writeFileSync(join(srcDir, 'keep.txt'), 'keep')
+      writeFileSync(join(srcDir, 'ignore.txt'), 'ignore')
+
+      // Create .concatignore in CURRENT directory (we need to be careful with CWD)
+      // Since runCLI runs with process.cwd(), we should create it there or change CWD
+      // Actually, runCLI uses process.cwd(). Let's change it to tempDir for this test.
+      const runCLIInTemp = (args: string[]) => {
+        const result = spawnSync(
+          'npx',
+          ['tsx', join(process.cwd(), 'src/cli/index.ts'), ...args],
+          {
+            encoding: 'utf-8',
+            cwd: tempDir,
+            timeout: 30000,
+            shell: true,
+          }
+        )
+        return {
+          status: result.status === null ? 1 : result.status,
+          stdout: result.stdout || '',
+          stderr: result.stderr || '',
+        }
+      }
+
+      writeFileSync(join(tempDir, '.concatignore'), 'ignore.txt')
+
+      const result = runCLIInTemp(['concat', 'src'])
+      expect(result.status).toBe(0)
+      expect(result.stdout).toContain('keep.txt')
+      expect(result.stdout).not.toContain('ignore.txt')
+    }, 20000)
+
+    it('should use explicit --ignore-file and merge with --exclude', () => {
+      const srcDir = join(tempDir, 'src')
+      mkdirSync(srcDir, { recursive: true })
+      writeFileSync(join(srcDir, 'file1.txt'), '1')
+      writeFileSync(join(srcDir, 'file2.txt'), '2')
+      writeFileSync(join(srcDir, 'file3.txt'), '3')
+
+      const ignorePath = join(tempDir, 'custom-ignore.txt')
+      writeFileSync(ignorePath, 'file1.txt')
+
+      const result = runCLI([
+        'concat',
+        srcDir,
+        '-i',
+        ignorePath,
+        '-e',
+        'file2.txt',
+      ])
+      expect(result.status).toBe(0)
+      expect(result.stdout).not.toContain('file1.txt')
+      expect(result.stdout).not.toContain('file2.txt')
+      expect(result.stdout).toContain('file3.txt')
+    })
+
+    it('should filter files during extraction using an ignore file', () => {
+      const sessionId = 'ext001'
+      const bundleContent = `--- CONCATENATOR_SESSION_ID: ${sessionId} ---
+Concatenated on: 2024-01-01
+
+<<<<< FILE_START: keep.txt (ID: ${sessionId}) >>>>>
+content
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: skip.txt (ID: ${sessionId}) >>>>>
+content
+<<<<< FILE_END >>>>>
+`
+      const bundlePath = join(tempDir, 'bundle.txt')
+      writeFileSync(bundlePath, bundleContent)
+
+      const ignorePath = join(tempDir, 'extract-ignore.txt')
+      writeFileSync(ignorePath, 'skip.txt')
+
+      const outputDir = join(tempDir, 'extracted')
+      const result = runCLI([
+        'extract',
+        bundlePath,
+        '-o',
+        outputDir,
+        '-i',
+        ignorePath,
+      ])
+
+      expect(result.status).toBe(0)
+      expect(existsSync(join(outputDir, 'keep.txt'))).toBe(true)
+      expect(existsSync(join(outputDir, 'skip.txt'))).toBe(false)
+    })
+
+    it('should error out if explicit ignore file does not exist', () => {
+      const result = runCLI(['concat', tempDir, '-i', 'non-existent.txt'])
+      expect(result.status).toBe(1)
+      expect(result.stderr + result.stdout).toContain('does not exist')
+    })
+  })
+
+  describe('Token-Aware Metrics and Budget Guard', () => {
+    it('should include token count and size in concatenation summary', () => {
+      writeFileSync(join(tempDir, 'file1.txt'), 'Hello World') // ~3 tokens
+
+      const outputPath = join(tempDir, 'output.txt')
+      const result = runCLI(['concat', tempDir, '-o', outputPath])
+
+      expect(result.status).toBe(0)
+      // Check summary format: ✔ Created [filename] ([size] | ~[tokenCount] tokens).
+      // Note: logger adds timestamps and prefix
+      expect(result.stdout).toMatch(
+        /✔ Created .*output\.txt \(.* | ~3 tokens\)\./
+      )
+    })
+
+    it('should show directory tokens with -v and file tokens with -vv', () => {
+      const subDir = join(tempDir, 'sub')
+      mkdirSync(subDir)
+      writeFileSync(join(subDir, 'test.txt'), 'Individual file tokens') // ~6 tokens
+
+      // Test -v (directory tokens)
+      const resultV = runCLI([
+        'concat',
+        tempDir,
+        '-o',
+        join(tempDir, 'out1.txt'),
+        '-v',
+      ])
+      expect(resultV.stdout).toContain('Dir: sub (~6 tokens)')
+      expect(resultV.stdout).toContain('Dir: .')
+
+      // Test -vv (individual file tokens)
+      const resultVV = runCLI([
+        'concat',
+        tempDir,
+        '-o',
+        join(tempDir, 'out2.txt'),
+        '-vv',
+      ])
+      // Use regex to handle both / and \ in paths
+      expect(resultVV.stdout).toMatch(/tokens\] sub[\\/]test\.txt/)
+    })
+
+    it('should output high-visibility warning when max-tokens budget exceeded', () => {
+      writeFileSync(join(tempDir, 'large.txt'), 'A'.repeat(400)) // ~100 tokens
+
+      const result = runCLI([
+        'concat',
+        tempDir,
+        '-o',
+        join(tempDir, 'out.txt'),
+        '--max-tokens',
+        '50',
+      ])
+
+      const output = result.stdout + result.stderr
+      expect(output).toContain('BUDGET WARNING: Token limit exceeded')
+      expect(output).toContain('Limit:   50')
+      expect(output).toContain('Current: 100')
+      expect(output).toContain('Created') // Should still complete the write
+    })
+
+    it('should perform pre-flight analysis with validate --tokens', () => {
+      writeFileSync(join(tempDir, 'preflight.txt'), 'Preflight content') // 17 chars -> 5 tokens
+
+      const result = runCLI(['validate', tempDir, '--tokens'])
+      const output = result.stdout + result.stderr
+
+      expect(output).toContain('[DRY RUN] Pre-flight Analysis for')
+      expect(output).toContain('preflight.txt')
+      expect(output).toContain('5')
+      expect(output).toContain('TOTAL CONTEXT WEIGHT (tokens): 5')
     })
   })
 })

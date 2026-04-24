@@ -5,7 +5,8 @@
 
 import React, { useState, useRef, useCallback } from 'react'
 import JSZip from 'jszip'
-import { FileItem, AppMode, OutputFormat } from '../../../../core/types'
+import { FileItem, OutputFormat } from '../../../../core/types'
+import { AppMode } from '../../../types/workbench'
 import {
   START_DELIMITER,
   END_DELIMITER,
@@ -16,16 +17,23 @@ import {
   concatenate,
   generateFileTimestamp,
   validateConcatenation,
+  parseBundle,
 } from '../../../../core/engine'
+import { reconcileFiles } from '../../../../core/reconciler'
 import type { ValidationResult } from '../../../../core/types'
-import { createZipFromVirtualFiles } from '../../../../drivers/zip-driver'
 import { logger } from '../../../../lib/logger'
+import {
+  isImageFile,
+  isPdfFile,
+  estimateTokenCount,
+} from '../../../../lib/utils'
 
 interface UseFileProcessingProps {
   appMode: AppMode
-  compiledIgnores: (string | RegExp)[]
+  isIgnored: (path: string) => boolean
   maxFileLimit: number
   isIgnoreListLoading: boolean
+  setVirtualFileSystem: (vfs: Record<string, string>) => void
 }
 
 /**
@@ -33,9 +41,10 @@ interface UseFileProcessingProps {
  */
 export const useFileProcessing = ({
   appMode,
-  compiledIgnores,
+  isIgnored,
   maxFileLimit,
   isIgnoreListLoading,
+  setVirtualFileSystem,
 }: UseFileProcessingProps) => {
   const [files, setFiles] = useState<FileItem[]>([])
   const [isProcessing, setIsProcessingState] = useState(false)
@@ -58,61 +67,6 @@ export const useFileProcessing = ({
     }
   }, [])
 
-  const isIgnored = useCallback(
-    (path: string) => {
-      if (!path) return false
-      const normalizedPath = path.replace(/\\/g, '/')
-      const segments = normalizedPath.split('/').filter(Boolean)
-      const fileName = segments.length > 0 ? segments[segments.length - 1] : ''
-
-      if (segments.length === 0) return false
-
-      const result = compiledIgnores.some((ignore) => {
-        if (ignore instanceof RegExp) {
-          // Test regex against full path, filename, and each segment
-          if (ignore.test(normalizedPath)) return true
-          if (ignore.test(fileName)) return true
-          return segments.some((segment) => ignore.test(segment))
-        }
-
-        const ignoreStr =
-          typeof ignore === 'string' ? ignore.replace(/\/$/, '') : ignore
-
-        // Check if pattern contains glob characters
-        if (ignoreStr.includes('*') || ignoreStr.includes('?')) {
-          // Convert glob pattern to regex
-          const globToRegex = (glob: string) => {
-            const escaped = glob
-              .replace(/[.+^${}()|[\]\\]/g, '\\$&') // Escape regex special chars except * and ?
-              .replace(/\*/g, '.*') // * matches any sequence
-              .replace(/\?/g, '.') // ? matches single char
-            return new RegExp(`^${escaped}$`)
-          }
-
-          const patternRegex = globToRegex(ignoreStr)
-
-          // Match against filename for simple patterns (no / in pattern)
-          if (!ignoreStr.includes('/')) {
-            if (patternRegex.test(fileName)) return true
-          }
-
-          // Also match against full path and each segment
-          if (patternRegex.test(normalizedPath)) return true
-          return segments.some((segment) => patternRegex.test(segment))
-        }
-
-        // For non-glob patterns, use exact matching against segments and filename
-        return (
-          segments.some((segment) => segment === ignoreStr) ||
-          fileName === ignoreStr
-        )
-      })
-
-      return result
-    },
-    [compiledIgnores]
-  )
-
   const handleDeconcatenate = useCallback(
     async (inputFiles?: FileItem[]) => {
       const targetFiles = inputFiles || files
@@ -123,6 +77,12 @@ export const useFileProcessing = ({
       const skippedFiles: string[] = []
 
       try {
+        if (appMode === AppMode.DECONCATENATE && targetFiles.length > 0) {
+          // In de-concatenate mode, we might just be downloading what's already in the virtualFileSystem
+          // or we are processing dropped files.
+          // If we have virtualFileSystem, we should use that to generate the ZIP.
+        }
+
         for (const fileItem of targetFiles) {
           if (fileItem.kind !== 'file' || !fileItem.content) continue
 
@@ -157,8 +117,8 @@ export const useFileProcessing = ({
             document.body.appendChild(a)
             a.click()
             document.body.removeChild(a)
-            await new Promise((resolve) => setTimeout(resolve, 200))
-            URL.revokeObjectURL(url)
+            // Ensure the browser has time to initiate the download before revoking
+            setTimeout(() => URL.revokeObjectURL(url), 1000)
           }
         }
 
@@ -188,12 +148,13 @@ export const useFileProcessing = ({
         setIsProcessing(false)
       }
     },
-    [files, setIsProcessing]
+    [files, setIsProcessing, appMode]
   )
 
   const processUploadedFiles = useCallback(
     async (uploadedFiles: File[]) => {
       setIsProcessing(true)
+      setImportError(null)
       cancelImportRef.current = false
       activeReaderRef.current = null
       setImportProgress({ current: 0, total: uploadedFiles.length })
@@ -219,7 +180,12 @@ export const useFileProcessing = ({
             reader.onerror = () =>
               reject(new Error(`Failed to read file: ${file.name}`))
             reader.onabort = () => resolve(null) // Resolve to null on abort for silent cleanup
-            reader.readAsText(file)
+
+            if (isImageFile(file.name) || isPdfFile(file.name)) {
+              reader.readAsDataURL(file)
+            } else {
+              reader.readAsText(file)
+            }
           }
         ).catch((err) => {
           logger.error('Failed to read file:', err)
@@ -243,6 +209,7 @@ export const useFileProcessing = ({
           kind: 'file',
           content,
           size: file.size,
+          tokens: estimateTokenCount(content, file.size),
         })
 
         const parts = path.split('/')
@@ -269,20 +236,106 @@ export const useFileProcessing = ({
       }
 
       if (!cancelImportRef.current) {
-        if (appMode === 'deconcatenate') {
-          await handleDeconcatenate(newFiles)
-        } else {
-          setFiles((prev) => {
-            // Optimized Deduplication preventing Array [...spread] max call stack and Map loop limits
-            const newPaths = new Set(newFiles.map((f) => f.path))
-            const filteredPrev = prev.filter((f) => !newPaths.has(f.path))
+        if (appMode === AppMode.DECONCATENATE) {
+          // De-concatenate mode: we only allow ONE bundle file at a time
+          if (newFiles.length > 1) {
+            setImportError(
+              'Please upload only one concatenated file at a time.'
+            )
+            setIsProcessing(false)
+            return
+          }
 
-            const uniqueNewFilesMap = new Map()
-            for (const nf of newFiles) {
-              uniqueNewFilesMap.set(nf.path, nf)
+          const bundle = newFiles[0]
+          if (!bundle || typeof bundle.content !== 'string') {
+            setImportError('Failed to read concatenated file.')
+            setIsProcessing(false)
+            return
+          }
+
+          // Validate bundle format
+          const validation = validateConcatenation(bundle.content)
+          if (validation.targetFileCount === 0) {
+            setImportError(
+              'No concatenated files were found in the uploaded file(s). Make sure you are uploading a file generated by this tool.'
+            )
+            setIsProcessing(false)
+            return
+          }
+
+          // Parse and populate virtualFileSystem
+          try {
+            const { fileMap, skippedPaths } = parseBundle(bundle.content)
+            if (Object.keys(fileMap).length === 0) {
+              setImportError(
+                'No concatenated files were found in the uploaded file(s). Make sure you are uploading a file generated by this tool.'
+              )
+              setIsProcessing(false)
+              return
             }
 
-            return filteredPrev.concat(Array.from(uniqueNewFilesMap.values()))
+            // Convert fileMap to FileItem[] for consistent state
+            const vfsFiles: FileItem[] = Object.entries(fileMap).map(
+              ([path, content]) => ({
+                name: path.split('/').pop() || '',
+                path,
+                kind: 'file',
+                content,
+                size: content.length,
+                tokens: estimateTokenCount(content, content.length),
+              })
+            )
+
+            setVirtualFileSystem(fileMap)
+            // Store the extracted files in the state for the UI to display
+            setFiles(vfsFiles)
+
+            // Show warnings for skipped files if any
+            if (skippedPaths.length > 0) {
+              const fileList = skippedPaths.slice(0, 3).join(', ')
+              const moreCount = skippedPaths.length - 3
+              const warningMsg =
+                moreCount > 0
+                  ? `Warning: ${skippedPaths.length} file(s) were skipped due to missing end markers: ${fileList} and ${moreCount} more. Check the console for details.`
+                  : `Warning: ${skippedPaths.length} file(s) were skipped due to missing end markers: ${fileList}. Check the console for details.`
+              logger.warn(
+                `Skipped ${skippedPaths.length} file(s) with missing end markers:`,
+                skippedPaths
+              )
+              setImportError(warningMsg)
+            }
+          } catch (err) {
+            logger.error('Failed to parse concatenated file:', err)
+            setImportError('Failed to parse concatenated file.')
+          }
+        } else {
+          setFiles((prev) => {
+            const { files: reconciledFiles, absorptions } = reconcileFiles(
+              prev,
+              newFiles
+            )
+
+            if (absorptions.length > 0) {
+              // Group by parent for cleaner logging
+              const parentMap = new Map<string, string[]>()
+              absorptions.forEach((abs) => {
+                const list = parentMap.get(abs.parent) || []
+                list.push(abs.child.split('/').pop() || abs.child)
+                parentMap.set(abs.parent, list)
+              })
+
+              parentMap.forEach((children, parent) => {
+                const childrenList =
+                  children.length > 3
+                    ? `${children.slice(0, 3).join(', ')} and ${children.length - 3} more`
+                    : children.join(', ')
+                logger.info(
+                  `Root Pruning: Merged '${childrenList}' into parent '${parent}'.`
+                )
+              })
+            }
+
+            return reconciledFiles
           })
         }
       }
@@ -292,7 +345,14 @@ export const useFileProcessing = ({
       cancelImportRef.current = false
       activeReaderRef.current = null
     },
-    [appMode, handleDeconcatenate, setIsProcessing]
+    [
+      appMode,
+      setIsProcessing,
+      setVirtualFileSystem,
+      setFiles,
+      setImportError,
+      setImportProgress,
+    ]
   )
 
   const handleFileUpload = useCallback(
@@ -370,6 +430,9 @@ export const useFileProcessing = ({
           return
         }
 
+        // Defensive check: if cancelled, stop immediately
+        if (cancelImportRef.current) return
+
         if (entry.isFile && 'file' in entry) {
           // Check max file limit before adding (halt immediately when exceeded)
           if (droppedFiles.length >= maxFileLimit) {
@@ -431,6 +494,8 @@ export const useFileProcessing = ({
           for (const childEntry of entriesBatch) {
             if (cancelImportRef.current) break
             await traverseEntry(childEntry, fullPath + '/')
+            // Stop processing siblings if cancelled
+            if (cancelImportRef.current) break
           }
         }
       }
@@ -471,6 +536,7 @@ export const useFileProcessing = ({
   const handleConcatenate = useCallback(
     async (filteredFiles: FileItem[], outputFormat: OutputFormat = 'text') => {
       if (filteredFiles.length === 0) return
+      setImportError(null)
 
       if (filteredFiles.length > maxFileLimit) {
         setImportError(
@@ -519,23 +585,32 @@ export const useFileProcessing = ({
           // Add file header with delimiters
           doc.setFont('helvetica', 'bold')
           const headerText = `${START_DELIMITER}${file.path}${END_DELIMITER}`
-          const headerLines = doc.splitTextToSize(headerText, contentWidth)
+          // Robust text splitting
+          const safeHeaderText = String(headerText || '')
+          const headerLines = doc.splitTextToSize(safeHeaderText, contentWidth)
           doc.text(headerLines, margin, yPosition)
           yPosition += headerLines.length * lineHeight
 
           // Add file content
           doc.setFont('helvetica', 'normal')
-          const content = typeof file.content === 'string' ? file.content : ''
-          const contentLines = doc.splitTextToSize(content, contentWidth)
+          const rawContent = file.content
+          const content = typeof rawContent === 'string' ? rawContent : ''
 
-          // Handle page breaks for long content
-          for (let i = 0; i < contentLines.length; i++) {
-            if (yPosition > doc.internal.pageSize.getHeight() - margin) {
-              doc.addPage()
-              yPosition = margin
-            }
-            doc.text(contentLines[i], margin, yPosition)
+          if (!content) {
+            doc.text('[Empty or Binary Content]', margin, yPosition)
             yPosition += lineHeight
+          } else {
+            const contentLines = doc.splitTextToSize(content, contentWidth)
+
+            // Handle page breaks for long content
+            for (let i = 0; i < contentLines.length; i++) {
+              if (yPosition > doc.internal.pageSize.getHeight() - margin) {
+                doc.addPage()
+                yPosition = margin
+              }
+              doc.text(contentLines[i], margin, yPosition)
+              yPosition += lineHeight
+            }
           }
 
           // Add file end delimiter
@@ -582,7 +657,8 @@ export const useFileProcessing = ({
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
-        URL.revokeObjectURL(url)
+        // Ensure the browser has time to initiate the download before revoking
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
       }
 
       setIsProcessing(false)
@@ -599,24 +675,34 @@ export const useFileProcessing = ({
       setIsProcessing(true)
 
       try {
-        const virtualFiles = fileList.map((f) => ({
-          path: f.path,
-          content: typeof f.content === 'string' ? f.content : '',
-        }))
+        const zip = new JSZip()
 
-        const zipData = await createZipFromVirtualFiles(virtualFiles)
-        const blob = new Blob([zipData.buffer as ArrayBuffer], {
-          type: 'application/zip',
-        })
+        // Add files to ZIP
+        for (const f of fileList) {
+          if (isIgnored(f.path)) {
+            logger.info(
+              `Skipping ignored file during ZIP generation: ${f.path}`
+            )
+            continue
+          }
+          zip.file(f.path, typeof f.content === 'string' ? f.content : '')
+        }
+
+        const blob = await zip.generateAsync({ type: 'blob' })
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
         const fileTimestamp = generateFileTimestamp()
-        a.download = `concatenator-${fileTimestamp}.zip`
+        const downloadName =
+          appMode === AppMode.DECONCATENATE
+            ? `extracted-${fileTimestamp}.zip`
+            : `concatenator-${fileTimestamp}.zip`
+        a.download = downloadName
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
-        URL.revokeObjectURL(url)
+        // Ensure the browser has time to initiate the download before revoking
+        setTimeout(() => URL.revokeObjectURL(url), 1000)
       } catch (error) {
         logger.error('Failed to create ZIP:', error)
         setImportError('Failed to create ZIP archive')
@@ -624,7 +710,7 @@ export const useFileProcessing = ({
         setIsProcessing(false)
       }
     },
-    [setIsProcessing]
+    [setIsProcessing, appMode, isIgnored]
   )
 
   /**
@@ -652,12 +738,12 @@ export const useFileProcessing = ({
     importError,
     setImportError,
     cancelProcessing,
-    isIgnored,
     handleFileUpload,
     handleDrop,
     handleConcatenate,
     handleDeconcatenate,
     handleDownloadAsZip,
+    isIgnored,
     validationResult,
     validateContent,
     clearValidation,

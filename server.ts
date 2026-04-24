@@ -5,6 +5,7 @@ import fs from 'fs/promises'
 import { mkdirSync } from 'fs'
 import { rateLimit } from 'express-rate-limit'
 import { logger } from './src/lib/logger.js'
+import { DEFAULT_IGNORE_LIST } from './src/core/constants.js'
 
 async function startServer() {
   const app = express()
@@ -105,7 +106,7 @@ async function startServer() {
         (error as { code?: string }).code === 'ENOENT'
       ) {
         // If file doesn't exist, return default list
-        return res.json(['node_modules', '.git', '.DS_Store', 'dist', '.next'])
+        return res.json(DEFAULT_IGNORE_LIST)
       }
       logger.error('Error reading ignore file:', error)
       res.status(500).json({ error: 'Failed to read ignore list' })
