@@ -1,2 +1,17 @@
+# Handle all text files as LF on check-in, auto-detect binary files.
 * text=auto eol=lf
-*.{js,ts,jsx,tsx,css,json,md,html} text eol=lf
+
+# Language-Specific Explicit Overrides
+# This is redundant but good for documentation; it ensures these extensions
+# are NEVER treated as binary, even if they contain weird characters.
+*.js text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+
+# Infrastructure & Binary Assets
+# We must ensure Git does NOT touch the bytes of our compiled blobs or zips.
+*.blob binary
+*.zip binary
+*.exe binary
