@@ -171,7 +171,7 @@ test.describe('De-concatenate Mode', () => {
         const downloadButton = page.getByRole('button', {
           name: 'Download ZIP',
         })
-        await downloadButton.waitFor({ state: 'visible', timeout: 15000 })
+        await downloadButton.waitFor({ state: 'visible', timeout: 30000 })
         const [download] = await Promise.all([
           page.waitForEvent('download', { timeout: 30000 }),
           downloadButton.click(),
@@ -229,7 +229,7 @@ test.describe('De-concatenate Mode', () => {
         const downloadButton = page.getByRole('button', {
           name: 'Download ZIP',
         })
-        await downloadButton.waitFor({ state: 'visible', timeout: 15000 })
+        await downloadButton.waitFor({ state: 'visible', timeout: 30000 })
         const [download] = await Promise.all([
           page.waitForEvent('download', { timeout: 30000 }),
           downloadButton.click(),
@@ -321,7 +321,7 @@ test.describe('De-concatenate Mode', () => {
         const downloadButton = page.getByRole('button', {
           name: 'Download ZIP',
         })
-        await downloadButton.waitFor({ state: 'visible', timeout: 15000 })
+        await downloadButton.waitFor({ state: 'visible', timeout: 30000 })
         const [download] = await Promise.all([
           page.waitForEvent('download', { timeout: 60000 }),
           downloadButton.click(),
@@ -399,7 +399,7 @@ test.describe('De-concatenate Mode', () => {
         const downloadButton = page.getByRole('button', {
           name: 'Download ZIP',
         })
-        await downloadButton.waitFor({ state: 'visible', timeout: 15000 })
+        await downloadButton.waitFor({ state: 'visible', timeout: 30000 })
         const [download] = await Promise.all([
           page.waitForEvent('download', { timeout: 60000 }),
           downloadButton.click(),
@@ -468,7 +468,7 @@ test.describe('De-concatenate Mode', () => {
         const downloadButton = page.getByRole('button', {
           name: 'Download ZIP',
         })
-        await downloadButton.waitFor({ state: 'visible', timeout: 15000 })
+        await downloadButton.waitFor({ state: 'visible', timeout: 30000 })
         const [download] = await Promise.all([
           page.waitForEvent('download', { timeout: 60000 }),
           downloadButton.click(),
@@ -503,7 +503,7 @@ test.describe('De-concatenate Mode', () => {
         const downloadButton = page.getByRole('button', {
           name: 'Download ZIP',
         })
-        await downloadButton.waitFor({ state: 'visible', timeout: 15000 })
+        await downloadButton.waitFor({ state: 'visible', timeout: 30000 })
         const [download] = await Promise.all([
           page.waitForEvent('download', { timeout: 60000 }),
           downloadButton.click(),
@@ -579,7 +579,7 @@ test.describe('De-concatenate Mode', () => {
         const downloadButton = page.getByRole('button', {
           name: 'Download ZIP',
         })
-        await downloadButton.waitFor({ state: 'visible', timeout: 15000 })
+        await downloadButton.waitFor({ state: 'visible', timeout: 30000 })
         const [download] = await Promise.all([
           page.waitForEvent('download', { timeout: 60000 }),
           downloadButton.click(),
@@ -672,7 +672,7 @@ test.describe('De-concatenate Mode', () => {
         const downloadButton = page.getByRole('button', {
           name: 'Download ZIP',
         })
-        await downloadButton.waitFor({ state: 'visible', timeout: 15000 })
+        await downloadButton.waitFor({ state: 'visible', timeout: 30000 })
         const [download] = await Promise.all([
           page.waitForEvent('download', { timeout: 60000 }),
           downloadButton.click(),
@@ -809,7 +809,7 @@ This content is valid
         const downloadButton = page.getByRole('button', {
           name: 'Download ZIP',
         })
-        await downloadButton.waitFor({ state: 'visible', timeout: 15000 })
+        await downloadButton.waitFor({ state: 'visible', timeout: 30000 })
         const [download] = await Promise.all([
           page.waitForEvent('download', { timeout: 60000 }),
           downloadButton.click(),

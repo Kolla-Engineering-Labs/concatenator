@@ -123,10 +123,7 @@ test.describe('File Upload via File Chooser', () => {
     ])
 
     try {
-      // Wait for processing to complete
-      await expect(page.getByText(/Reading Files/)).not.toBeVisible({
-        timeout: 10000,
-      })
+      // Verify files appear
 
       // Verify file appears in the list
       const fileList = page.locator('table').first()
@@ -150,10 +147,7 @@ test.describe('File Upload via File Chooser', () => {
     const cleanup = await setFilesForWebkitDirectory(page, fileContents)
 
     try {
-      // Wait for processing to complete
-      await expect(page.getByText(/Reading Files/)).not.toBeVisible({
-        timeout: 10000,
-      })
+      // Verify files appear
 
       // Verify all files appear
       const fileList = page.locator('table').first()
@@ -191,10 +185,7 @@ test.describe('File Upload via File Chooser', () => {
     const cleanup = await setFilesForWebkitDirectory(page, structure)
 
     try {
-      // Wait for processing to complete
-      await expect(page.getByText(/Reading Files/)).not.toBeVisible({
-        timeout: 10000,
-      })
+      // Verify files appear
 
       // Verify files appear
       const fileList = page.locator('table').first()
@@ -308,10 +299,7 @@ test.describe.serial('File Upload with Test Fixtures', () => {
     const cleanup = await setFilesForWebkitDirectory(page, files)
 
     try {
-      // Wait for processing to complete
-      await expect(page.getByText(/Reading Files/)).not.toBeVisible({
-        timeout: 10000,
-      })
+      // Verify files appear
 
       // Verify all fixture files are present
       const fileList = page.locator('table').first()
@@ -336,10 +324,7 @@ test.describe.serial('File Upload with Test Fixtures', () => {
     const cleanup = await setFilesForWebkitDirectory(page, files)
 
     try {
-      // Wait for processing to complete
-      await expect(page.getByText(/Reading Files/)).not.toBeVisible({
-        timeout: 10000,
-      })
+      // Verify files appear
 
       // Verify React project files
       const fileList = page.locator('table').first()

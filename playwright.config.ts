@@ -19,6 +19,9 @@ export default defineConfig({
     baseURL: 'http://127.0.0.1:3000',
   },
   timeout: 60000, // Increase global test timeout
+  expect: {
+    timeout: 10000, // Increase global expect timeout for slower CI runners
+  },
 
   /* Enable fully parallel for faster test execution with worker-specific ignore files */
   fullyParallel: true,

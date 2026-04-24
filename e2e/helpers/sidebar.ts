@@ -53,12 +53,27 @@ export async function ensureSidebarClosed(page: Page): Promise<void> {
     : false
   if (!isMobile) return
 
+  // Wait for the UI to be ready by waiting for one of the toggle buttons.
+  // This ensures hydration has finished before we decide whether to close.
+  const openButton = page.getByTitle('Open menu')
   const closeButton = page.getByTitle('Close menu')
+
+  try {
+    await Promise.race([
+      openButton.waitFor({ state: 'visible', timeout: 5000 }),
+      closeButton.waitFor({ state: 'visible', timeout: 5000 }),
+    ])
+  } catch {
+    // If neither is visible, the page might still be loading or it's not a mobile view.
+    // We continue anyway and try to check visibility.
+  }
+
   if (await closeButton.isVisible()) {
     await jsClick(closeButton)
     // Wait for sidebar to be hidden and animation to finish
     await page.locator('aside').waitFor({ state: 'hidden', timeout: 10000 })
-    await page.waitForTimeout(1000)
+    // Extra grace period for CSS transition/overlay to clear
+    await page.waitForTimeout(500)
   }
 }
 
