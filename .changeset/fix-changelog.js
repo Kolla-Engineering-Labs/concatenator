@@ -1,5 +1,5 @@
-import fs from 'node:fs';
-import path from 'node:path';
+import fs from 'node:fs'
+import path from 'node:path'
 
 const date = new Date().toISOString().split('T')[0] // Ensure it's just YYYY-MM-DD
 const changelogPath = path.resolve('CHANGELOG.md')

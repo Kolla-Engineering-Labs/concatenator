@@ -58,8 +58,8 @@ export default defineConfig(({ mode }) => {
         oidc: {
           useGitHubOIDC: true,
         },
-        // @ts-expect-error - Ignore the type error to force debug logs if they exist in your version
-        logLevel: 'debug',
+        // @ts-expect-error - Keep debug logs for development/CI; reduce noise in production builds
+        logLevel: mode === 'development' || !!env.CI ? 'debug' : 'info',
       }),
       visualizer({
         open: true,
