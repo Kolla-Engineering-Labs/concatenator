@@ -1,6 +1,7 @@
 node_modules/
 build/
 dist/
+src/cli/web-assets.ts
 coverage/
 .DS_Store
 *.log
@@ -15,6 +16,10 @@ blob-report/
 test-output/
 concatenator-db/
 concatenator-bundle-stats.html
+smoke-test-sandbox/
+test-symlink-behavior/
+tests/symlink-test/
+tests/smoke-sandbox/
 
 # Worker-specific ignore files (parallel testing)
 .concatenate-ignore-worker-*

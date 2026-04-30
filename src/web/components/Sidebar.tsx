@@ -25,6 +25,8 @@ interface SidebarProps {
   setNewIgnoreItem: (item: string) => void
   ignoredTokens?: number
   ignoredIsPrecise?: boolean
+  filterText: string
+  setFilterText: (text: string) => void
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -38,6 +40,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setNewIgnoreItem,
   ignoredTokens,
   ignoredIsPrecise,
+  filterText,
+  setFilterText,
 }) => {
   const {
     mode: appMode,
@@ -48,6 +52,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     ignoreList,
     addIgnorePattern,
     removeIgnorePattern,
+    autoSaveIgnore,
+    setAutoSaveIgnore,
   } = useWorkbench()
 
   return (
@@ -140,6 +146,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
         )}
 
+        {appMode === AppMode.CONCATENATE && (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-2">
+                Filter Files
+              </label>
+              <div className="px-2">
+                <input
+                  type="text"
+                  placeholder="Filter by path..."
+                  value={filterText}
+                  onChange={(e) => setFilterText(e.target.value)}
+                  className="w-full text-xs px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
           <Suspense
             fallback={
@@ -154,6 +179,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               setNewIgnoreItem={setNewIgnoreItem}
               ignoredTokens={ignoredTokens}
               ignoredIsPrecise={ignoredIsPrecise}
+              autoSaveIgnore={autoSaveIgnore}
+              setAutoSaveIgnore={setAutoSaveIgnore}
               addIgnoreItem={() => {
                 if (newIgnoreItem) {
                   addIgnorePattern(newIgnoreItem)

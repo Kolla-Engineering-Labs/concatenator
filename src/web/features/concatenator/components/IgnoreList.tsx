@@ -19,6 +19,8 @@ interface IgnoreListProps {
   removeIgnoreItem: (item: string) => void
   ignoredTokens?: number
   ignoredIsPrecise?: boolean
+  autoSaveIgnore: boolean
+  setAutoSaveIgnore: (autoSave: boolean) => void
 }
 
 /**
@@ -34,6 +36,8 @@ export const IgnoreList: React.FC<IgnoreListProps> = ({
   removeIgnoreItem,
   ignoredTokens,
   ignoredIsPrecise,
+  autoSaveIgnore,
+  setAutoSaveIgnore,
 }) => {
   const [isIgnoreListExpanded, setIsIgnoreListExpanded] = useLocalStorage(
     'concat_ignore_expanded',
@@ -123,13 +127,32 @@ export const IgnoreList: React.FC<IgnoreListProps> = ({
                   <Plus className="w-4 h-4" />
                 </button>
               </div>
-              <p className="mt-2 text-[10px] text-slate-400 px-1">
-                Tip: Use{' '}
-                <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded font-mono">
-                  /regex/
-                </code>{' '}
-                for advanced matching
-              </p>
+              <div className="mt-3 flex items-center justify-between">
+                <p className="text-[10px] text-slate-400 px-1">
+                  Tip: Use{' '}
+                  <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded font-mono">
+                    /regex/
+                  </code>{' '}
+                  for advanced matching
+                </p>
+                <label
+                  className="flex items-center gap-2 cursor-pointer group"
+                  title="When enabled, any changes you make will be saved back to the ignore file on disk."
+                >
+                  <span className="text-[10px] text-slate-400 font-medium group-hover:text-slate-600 dark:group-hover:text-slate-300">
+                    Auto-save
+                  </span>
+                  <div className="relative inline-flex items-center">
+                    <input
+                      type="checkbox"
+                      className="sr-only peer"
+                      checked={autoSaveIgnore}
+                      onChange={(e) => setAutoSaveIgnore(e.target.checked)}
+                    />
+                    <div className="w-7 h-4 bg-slate-200 peer-focus:outline-none dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-brand-600 rounded-full"></div>
+                  </div>
+                </label>
+              </div>
             </div>
 
             {/* Scrollable Tag List */}

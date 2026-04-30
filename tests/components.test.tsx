@@ -122,6 +122,8 @@ describe('ModeSwitch Component', () => {
       setTokenBudget: vi.fn(),
       addIgnorePattern: vi.fn(),
       removeIgnorePattern: vi.fn(),
+      autoSaveIgnore: false,
+      setAutoSaveIgnore: vi.fn(),
     })
   })
 
@@ -163,6 +165,8 @@ describe('ModeSwitch Component', () => {
       setTokenBudget: vi.fn(),
       addIgnorePattern: vi.fn(),
       removeIgnorePattern: vi.fn(),
+      autoSaveIgnore: false,
+      setAutoSaveIgnore: vi.fn(),
     })
 
     render(<ModeSwitch />)
@@ -195,6 +199,8 @@ describe('ModeSwitch Component', () => {
       setTokenBudget: vi.fn(),
       addIgnorePattern: vi.fn(),
       removeIgnorePattern: vi.fn(),
+      autoSaveIgnore: false,
+      setAutoSaveIgnore: vi.fn(),
     })
 
     render(<ModeSwitch />)
@@ -225,6 +231,8 @@ describe('ModeSwitch Component', () => {
       setTokenBudget: vi.fn(),
       addIgnorePattern: vi.fn(),
       removeIgnorePattern: vi.fn(),
+      autoSaveIgnore: false,
+      setAutoSaveIgnore: vi.fn(),
     })
 
     render(<ModeSwitch />)

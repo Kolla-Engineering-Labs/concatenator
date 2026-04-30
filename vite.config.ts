@@ -68,24 +68,29 @@ export default defineConfig(({ mode }) => {
         brotliSize: true,
       }),
     ],
-    define: {
-      'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY || ''),
-      'process.env.OPENAI_API_KEY': JSON.stringify(env.OPENAI_API_KEY || ''),
-      'process.env.ANTHROPIC_API_KEY': JSON.stringify(
-        env.ANTHROPIC_API_KEY || ''
-      ),
-    },
+    define: {},
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
       },
     },
     server: {
-      port: 3000, // Forces Vite to use the port Playwright expects
-      strictPort: true, // CI will fail fast if 3000 is occupied, rather than picking a random port
+      port: 5173,
+      host: '127.0.0.1',
+      strictPort: true,
+      proxy: {
+        '^/api': {
+          target: 'http://127.0.0.1:3000',
+          changeOrigin: true,
+        },
+      },
       hmr: process.env.DISABLE_HMR !== 'true',
       watch: {
-        ignored: ['**/.concatenate-ignore'],
+        ignored: [
+          '**/.concatenate-ignore',
+          '**/.changeset/**',
+          '**/test-results/**',
+        ],
       },
     },
     preview: {

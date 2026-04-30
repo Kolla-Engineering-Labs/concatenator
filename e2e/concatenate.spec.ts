@@ -27,8 +27,8 @@ test.describe('Concatenate Mode', () => {
       localStorage.removeItem('concatenate-dark-mode')
       localStorage.removeItem('concat_mode')
       localStorage.removeItem('concat_view')
-      localStorage.removeItem('concat_ignore')
       localStorage.removeItem('concat_sidebar')
+      localStorage.setItem('concat_auto_save_ignore', 'true')
 
       // Set sidebar to true for desktop (>=1024px), false for mobile to avoid obscuring content
       const isMobile = window.innerWidth < 1024
@@ -260,9 +260,10 @@ test.describe('Concatenate Mode', () => {
           page.waitForResponse(
             (resp) =>
               resp.url().includes('/api/ignore-list') &&
-              resp.request().method() === 'POST'
+              resp.request().method() === 'POST',
+            { timeout: 30000 }
           ),
-          page.getByTitle('Add ignore pattern').click(),
+          jsClick(page.getByTitle('Add ignore pattern')),
         ])
 
         // Verify pattern was added - use test ID for reliability
@@ -334,9 +335,10 @@ test.describe('Concatenate Mode', () => {
           page.waitForResponse(
             (resp) =>
               resp.url().includes('/api/ignore-list') &&
-              resp.request().method() === 'POST'
+              resp.request().method() === 'POST',
+            { timeout: 30000 }
           ),
-          page.getByTitle('Add ignore pattern').click(),
+          jsClick(page.getByTitle('Add ignore pattern')),
         ])
 
         // Verify pattern added
@@ -363,9 +365,10 @@ test.describe('Concatenate Mode', () => {
           page.waitForResponse(
             (resp) =>
               resp.url().includes('/api/ignore-list') &&
-              resp.request().method() === 'POST'
+              resp.request().method() === 'POST',
+            { timeout: 30000 }
           ),
-          removeButton.click({ timeout: 10000 }),
+          jsClick(removeButton),
         ])
 
         // Wait for the remove button to be removed from the DOM (indicates state updated)
@@ -435,9 +438,10 @@ test.describe('Concatenate Mode', () => {
           page.waitForResponse(
             (resp) =>
               resp.url().includes('/api/ignore-list') &&
-              resp.request().method() === 'POST'
+              resp.request().method() === 'POST',
+            { timeout: 30000 }
           ),
-          page.getByTitle('Add ignore pattern').click(),
+          jsClick(page.getByTitle('Add ignore pattern')),
         ])
 
         // Verify pattern added
@@ -671,9 +675,10 @@ test.describe('Concatenate Mode', () => {
           page.waitForResponse(
             (resp) =>
               resp.url().includes('/api/ignore-list') &&
-              resp.request().method() === 'POST'
+              resp.request().method() === 'POST',
+            { timeout: 30000 }
           ),
-          ignoreButton.click({ timeout: 10000 }),
+          jsClick(ignoreButton),
         ])
 
         // Wait for the ignored file text to disappear from the file list

@@ -111,6 +111,11 @@ export const TreeNode: React.FC<TreeNodeProps> = ({
                   Ignored
                 </span>
               )}
+              {node.isNegated && (
+                <span className="ml-2 text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 px-1.5 py-0.5 rounded uppercase tracking-tighter font-bold inline-block align-middle">
+                  Negated
+                </span>
+              )}
               {!node.isIgnored && inheritedIgnored && (
                 <span className="ml-2 text-[10px] bg-slate-100 dark:bg-slate-800/50 px-1.5 py-0.5 rounded uppercase tracking-tighter font-bold opacity-40 inline-block align-middle">
                   Inherited

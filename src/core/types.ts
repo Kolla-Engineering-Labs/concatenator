@@ -12,6 +12,7 @@ export interface FileItem {
   tokens?: number
   isPrecise?: boolean
   isIgnored?: boolean
+  isNegated?: boolean
 }
 
 export interface TreeItem {
@@ -20,6 +21,7 @@ export interface TreeItem {
   kind: 'file' | 'directory'
   children?: TreeItem[]
   isIgnored?: boolean
+  isNegated?: boolean
   file?: FileItem
   tokenWeight?: number
   isPrecise?: boolean

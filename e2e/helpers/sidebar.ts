@@ -70,8 +70,15 @@ export async function ensureSidebarClosed(page: Page): Promise<void> {
 
   if (await closeButton.isVisible()) {
     await jsClick(closeButton)
-    // Wait for sidebar to be hidden and animation to finish
-    await page.locator('aside').waitFor({ state: 'hidden', timeout: 10000 })
+    // Wait for sidebar to animate off-screen (has -translate-x-full class when closed)
+    // Note: Playwright considers visibility:hidden elements as "visible" since they still take up layout space
+    await page.waitForFunction(
+      () => {
+        const aside = document.querySelector('aside')
+        return aside && aside.classList.contains('-translate-x-full')
+      },
+      { timeout: 10000 }
+    )
     // Extra grace period for CSS transition/overlay to clear
     await page.waitForTimeout(500)
   }

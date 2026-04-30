@@ -592,14 +592,14 @@ Zip content
   })
 
   describe('Ignore File Support', () => {
-    it('should auto-discover .concatignore in CWD and ignore files', () => {
+    it('should auto-discover .concatenate-ignore in CWD and ignore files', () => {
       // Create source directory
       const srcDir = join(tempDir, 'src')
       mkdirSync(srcDir, { recursive: true })
       writeFileSync(join(srcDir, 'keep.txt'), 'keep')
       writeFileSync(join(srcDir, 'ignore.txt'), 'ignore')
 
-      // Create .concatignore in CURRENT directory (we need to be careful with CWD)
+      // Create .concatenate-ignore in CURRENT directory (we need to be careful with CWD)
       // Since runCLI runs with process.cwd(), we should create it there or change CWD
       // Actually, runCLI uses process.cwd(). Let's change it to tempDir for this test.
       const runCLIInTemp = (args: string[]) => {
@@ -620,7 +620,7 @@ Zip content
         }
       }
 
-      writeFileSync(join(tempDir, '.concatignore'), 'ignore.txt')
+      writeFileSync(join(tempDir, '.concatenate-ignore'), 'ignore.txt')
 
       const result = runCLIInTemp(['concat', 'src'])
       expect(result.status).toBe(0)

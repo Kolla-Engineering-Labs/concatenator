@@ -40,14 +40,22 @@ Thank you for your interest in contributing to Concatenator! This document provi
 
    ```bash
    cp .env.example .env
-   # Edit .env and add your API keys (optional for basic development)
+   # Edit .env and add your PostHog keys, LOG_LEVEL, and CONCATENATOR_API_TOKEN
    ```
+
+   #### API Security
+
+   > [!IMPORTANT]
+   > **API Security**: You MUST set a `CONCATENATOR_API_TOKEN` in your `.env` to run the development server or E2E tests. Generate a random string: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
+
+   > [!IMPORTANT]
+   > **Naming Convention**: When adding new environment variables, use the `VITE_` prefix for client-side access. For PostHog specifically, always use the `VITE_PUBLIC_` prefix (e.g., `VITE_PUBLIC_POSTHOG_KEY`).
 
 4. **Start the development server**:
    ```bash
    npm run dev
    ```
-   The application will be available at `http://localhost:3000`.
+   The application will be available at `http://localhost:5173`.
 
 ### ⌨️ Available Scripts
 
@@ -63,6 +71,7 @@ Thank you for your interest in contributing to Concatenator! This document provi
 | `npm run test:e2e:ui`     | Run E2E tests with Playwright UI mode          |
 | `npm run test:e2e:debug`  | Run E2E tests in debug mode                    |
 | `npm run test:e2e:headed` | Run E2E tests in headed mode (visible browser) |
+| `npm run build:exe`       | Build the single executable application (SEA)  |
 
 ---
 

@@ -8,7 +8,7 @@ import { FileUploadHelper } from './helpers/file-upload'
 import { logger } from '../src/lib/logger'
 import * as fs from 'fs'
 import JSZip from 'jszip'
-import { ensureSidebarClosed } from './helpers/sidebar'
+import { ensureSidebarClosed, jsClick } from './helpers/sidebar'
 
 /**
  * Creates a mock concatenated file content that the de-concatenator can parse.
@@ -174,7 +174,7 @@ test.describe('De-concatenate Mode', () => {
         await downloadButton.waitFor({ state: 'visible', timeout: 30000 })
         const [download] = await Promise.all([
           page.waitForEvent('download', { timeout: 30000 }),
-          downloadButton.click(),
+          jsClick(downloadButton),
         ])
 
         // Verify it's a ZIP file
@@ -232,7 +232,7 @@ test.describe('De-concatenate Mode', () => {
         await downloadButton.waitFor({ state: 'visible', timeout: 30000 })
         const [download] = await Promise.all([
           page.waitForEvent('download', { timeout: 30000 }),
-          downloadButton.click(),
+          jsClick(downloadButton),
         ])
 
         // Verify it's a ZIP file
@@ -324,7 +324,7 @@ test.describe('De-concatenate Mode', () => {
         await downloadButton.waitFor({ state: 'visible', timeout: 30000 })
         const [download] = await Promise.all([
           page.waitForEvent('download', { timeout: 60000 }),
-          downloadButton.click(),
+          jsClick(downloadButton),
         ])
 
         const downloadPath = await download.path()
@@ -402,7 +402,7 @@ test.describe('De-concatenate Mode', () => {
         await downloadButton.waitFor({ state: 'visible', timeout: 30000 })
         const [download] = await Promise.all([
           page.waitForEvent('download', { timeout: 60000 }),
-          downloadButton.click(),
+          jsClick(downloadButton),
         ])
 
         const downloadPath = await download.path()
@@ -471,7 +471,7 @@ test.describe('De-concatenate Mode', () => {
         await downloadButton.waitFor({ state: 'visible', timeout: 30000 })
         const [download] = await Promise.all([
           page.waitForEvent('download', { timeout: 60000 }),
-          downloadButton.click(),
+          jsClick(downloadButton),
         ])
 
         // Verify it's a ZIP file
@@ -506,7 +506,7 @@ test.describe('De-concatenate Mode', () => {
         await downloadButton.waitFor({ state: 'visible', timeout: 30000 })
         const [download] = await Promise.all([
           page.waitForEvent('download', { timeout: 60000 }),
-          downloadButton.click(),
+          jsClick(downloadButton),
         ])
 
         const downloadPath = await download.path()
@@ -582,7 +582,7 @@ test.describe('De-concatenate Mode', () => {
         await downloadButton.waitFor({ state: 'visible', timeout: 30000 })
         const [download] = await Promise.all([
           page.waitForEvent('download', { timeout: 60000 }),
-          downloadButton.click(),
+          jsClick(downloadButton),
         ])
 
         // Verify it's a ZIP file
@@ -675,7 +675,7 @@ test.describe('De-concatenate Mode', () => {
         await downloadButton.waitFor({ state: 'visible', timeout: 30000 })
         const [download] = await Promise.all([
           page.waitForEvent('download', { timeout: 60000 }),
-          downloadButton.click(),
+          jsClick(downloadButton),
         ])
 
         const downloadPath = await download.path()
@@ -806,13 +806,24 @@ This content is valid
         // Wait for the download event
         await uploadHelper.uploadSingleFile('partial.txt', partialContent)
         await ensureSidebarClosed(page)
+
+        // Wait for the file list to appear (indicates processing completed)
+        await expect(
+          page.locator('span').filter({ hasText: 'valid.txt' }).first()
+        ).toBeVisible({ timeout: 30000 })
+
+        // Small delay to allow React state updates to propagate
+        await page.waitForTimeout(500)
+
         const downloadButton = page.getByRole('button', {
           name: 'Download ZIP',
         })
         await downloadButton.waitFor({ state: 'visible', timeout: 30000 })
+
+        await expect(downloadButton).toBeEnabled({ timeout: 30000 })
         const [download] = await Promise.all([
           page.waitForEvent('download', { timeout: 60000 }),
-          downloadButton.click(),
+          jsClick(downloadButton),
         ])
 
         // Verify ZIP was downloaded (valid file should still be extracted)
@@ -841,7 +852,7 @@ This content is valid
 
         // Warning should be visible about skipped files
         await expect(
-          page.getByText(/skipped due to missing end markers/i)
+          page.getByText(/skipped due to missing end markers/i).first()
         ).toBeVisible({ timeout: 10000 })
       } finally {
         uploadHelper.cleanup()

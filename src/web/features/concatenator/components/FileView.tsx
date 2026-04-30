@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
   Files,
   FolderTree,
@@ -9,6 +9,8 @@ import {
   FolderArchive,
   AlertTriangle,
   Info,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react'
 import { cn } from '../../../../lib/utils'
 import { useWorkbench } from '../../../hooks/useWorkbench'
@@ -16,7 +18,12 @@ import {
   AppMode as WorkbenchMode,
   ViewPreference,
 } from '../../../types/workbench'
-import { FileItem, TreeItem, OutputFormat } from '../../../../core/types'
+import {
+  FileItem,
+  TreeItem,
+  OutputFormat,
+  ValidationResult,
+} from '../../../../core/types'
 import { TreeNode } from './TreeNode'
 import { OutputFormatToggle } from './OutputFormatToggle'
 import { FileTable } from './FileTable'
@@ -35,6 +42,10 @@ interface FileViewProps {
   onDownloadAsZip?: () => void
   outputFormat: OutputFormat
   setOutputFormat: (format: OutputFormat) => void
+  validationResult?: ValidationResult | null
+  tokenBudget?: number
+  totalTokens?: number
+  importError?: string | null
 }
 
 /**
@@ -53,6 +64,10 @@ export const FileView: React.FC<FileViewProps> = ({
   onDownloadAsZip,
   outputFormat,
   setOutputFormat,
+  validationResult,
+  tokenBudget,
+  totalTokens = 0,
+  importError,
 }) => {
   const {
     mode,
@@ -61,6 +76,42 @@ export const FileView: React.FC<FileViewProps> = ({
     setView: setViewMode,
   } = useWorkbench()
   const [quickLookFile, setQuickLookFile] = useState<FileItem | null>(null)
+
+  // Compute download button disabled state with proper memoization
+  // to ensure React re-renders when dependencies change
+  const downloadButtonDisabled = useMemo(() => {
+    const nonIgnoredCount = filteredFiles.filter((f) => !f.isIgnored).length
+    const hasNoFiles = nonIgnoredCount === 0
+    const hasNoHandler = !onDownloadAsZip
+
+    // For de-concatenate mode, bypass the isProcessing check if files are actually present
+    // This fixes the issue where isProcessing gets stuck in true state
+    const shouldBypassProcessing =
+      mode === WorkbenchMode.DECONCATENATE && !hasNoFiles
+    const effectiveIsProcessing = shouldBypassProcessing ? false : isProcessing
+
+    const isDisabled = hasNoFiles || effectiveIsProcessing || hasNoHandler
+    // Debug logging to diagnose button state issues - ALWAYS log in deconcatenate mode
+    if (typeof window !== 'undefined') {
+      console.debug('[FileView] Download button state:', {
+        isDisabled,
+        hasNoFiles,
+        isProcessing,
+        effectiveIsProcessing,
+        shouldBypassProcessing,
+        hasNoHandler,
+        nonIgnoredCount,
+        filteredFilesLength: filteredFiles.length,
+        allFiles: filteredFiles.map((f) => ({
+          path: f.path,
+          isIgnored: f.isIgnored,
+          kind: f.kind,
+        })),
+        mode,
+      })
+    }
+    return isDisabled
+  }, [filteredFiles, isProcessing, onDownloadAsZip, mode])
 
   return (
     <div className="space-y-4">
@@ -178,15 +229,26 @@ export const FileView: React.FC<FileViewProps> = ({
                 />
               </div>
 
-              {/* Center: Info or spacer */}
+              {/* Center: Budget warning or info pill */}
               <div className="flex-1 flex justify-center">
-                <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-50 dark:bg-slate-800/50 text-slate-500 border border-slate-200 dark:border-slate-700">
-                  <Info className="w-3.5 h-3.5" />
-                  <span className="text-[10px] font-medium leading-none">
-                    Files will be bundled into a single{' '}
-                    {outputFormat.toUpperCase()} file.
-                  </span>
-                </div>
+                {tokenBudget && totalTokens > tokenBudget ? (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800/50">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    <span className="text-[10px] font-medium leading-none">
+                      ~{totalTokens.toLocaleString()} tokens &mdash;{' '}
+                      {Math.round((totalTokens / tokenBudget) * 100)}% of{' '}
+                      {tokenBudget.toLocaleString()} token budget
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-50 dark:bg-slate-800/50 text-slate-500 border border-slate-200 dark:border-slate-700">
+                    <Info className="w-3.5 h-3.5" />
+                    <span className="text-[10px] font-medium leading-none">
+                      Files will be bundled into a single{' '}
+                      {outputFormat.toUpperCase()} file.
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Right: Clear All */}
@@ -224,6 +286,81 @@ export const FileView: React.FC<FileViewProps> = ({
           </div>
         ) : (
           <div className="space-y-6">
+            {/* Import Error Warning (for de-concatenate mode skipped files) */}
+            {importError && mode === WorkbenchMode.DECONCATENATE && (
+              <div className="flex flex-wrap items-center gap-3 px-4 py-3 rounded-xl border text-xs font-medium bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800/50 text-amber-700 dark:text-amber-400">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span className="font-medium">{importError}</span>
+              </div>
+            )}
+
+            {/* Validation Result Panel */}
+            {validationResult && (
+              <div
+                className={cn(
+                  'flex flex-wrap items-center gap-3 px-4 py-3 rounded-xl border text-xs font-medium',
+                  validationResult.isValid &&
+                    validationResult.errors.length === 0
+                    ? 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800/50 text-emerald-700 dark:text-emerald-400'
+                    : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/50 text-red-700 dark:text-red-400'
+                )}
+              >
+                {validationResult.isValid &&
+                validationResult.errors.length === 0 ? (
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                ) : (
+                  <XCircle className="w-4 h-4 shrink-0" />
+                )}
+
+                <span className="font-bold">
+                  {validationResult.isValid &&
+                  validationResult.errors.length === 0
+                    ? 'Validated'
+                    : `${validationResult.errors.length} validation error(s)`}
+                </span>
+
+                {/* Session ID */}
+                {validationResult.sessionId && (
+                  <span className="opacity-60 font-mono">
+                    · ID {validationResult.sessionId.slice(0, 8)}
+                  </span>
+                )}
+
+                {/* Target file count */}
+                <span className="opacity-70">
+                  · {validationResult.targetFileCount} target{' '}
+                  {validationResult.targetFileCount === 1 ? 'file' : 'files'}
+                </span>
+
+                {/* Foreign markers */}
+                {validationResult.foreignFileCount > 0 && (
+                  <span className="opacity-50">
+                    · {validationResult.foreignFileCount} foreign marker
+                    {validationResult.foreignFileCount === 1 ? '' : 's'} ignored
+                  </span>
+                )}
+
+                {/* Warnings */}
+                {validationResult.warnings.length > 0 && (
+                  <span className="text-amber-600 dark:text-amber-400">
+                    · {validationResult.warnings.length} warning
+                    {validationResult.warnings.length === 1 ? '' : 's'}
+                  </span>
+                )}
+
+                {/* Error details */}
+                {validationResult.errors.length > 0 && (
+                  <ul className="w-full mt-1 space-y-0.5 list-none pl-0">
+                    {validationResult.errors.map((err, i) => (
+                      <li key={i} className="opacity-80">
+                        · {err}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
             <div className="flex items-center justify-between gap-4">
               {/* Left: Extracting info */}
               <div className="flex flex-col gap-1 min-w-[140px]">
@@ -285,11 +422,19 @@ export const FileView: React.FC<FileViewProps> = ({
             <div className="flex justify-center pb-2">
               <button
                 onClick={onDownloadAsZip}
-                disabled={
-                  filteredFiles.filter((f) => !f.isIgnored).length === 0 ||
-                  isProcessing ||
-                  !onDownloadAsZip
-                }
+                disabled={downloadButtonDisabled}
+                data-debug={JSON.stringify({
+                  downloadButtonDisabled,
+                  nonIgnoredCount: filteredFiles.filter((f) => !f.isIgnored)
+                    .length,
+                  filteredFilesLength: filteredFiles.length,
+                  isProcessing,
+                  hasHandler: !!onDownloadAsZip,
+                  files: filteredFiles.map((f) => ({
+                    path: f.path,
+                    isIgnored: f.isIgnored,
+                  })),
+                })}
                 className={cn(
                   'px-12 py-3 rounded-xl font-semibold shadow-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95',
                   forceMode

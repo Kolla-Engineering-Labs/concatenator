@@ -25,6 +25,7 @@ test.describe('UI Interactions and Edge Cases', () => {
       localStorage.removeItem('concat_mode')
       localStorage.removeItem('concat_view')
       localStorage.removeItem('concat_ignore')
+      localStorage.setItem('concat_auto_save_ignore', 'true')
     })
 
     // Reset server-side ignore list BEFORE navigation so client fetches correct state.
