@@ -9,13 +9,22 @@ import {
   IncomingMessage,
   ServerResponse,
 } from 'node:http'
-import { readFileSync, writeFileSync, existsSync } from 'node:fs'
+import * as fsDefault from 'node:fs'
 import { join, resolve, dirname } from 'node:path'
 import { URL, fileURLToPath } from 'node:url'
 import { VFSManager } from './VFSManager.js'
 import { DEFAULT_IGNORE_LIST } from './constants.js'
 import { logger } from '../lib/logger.js'
 import { mergeIgnoreFileWithComments } from '../lib/ignore-file.js'
+
+export interface UIServerFileSystem {
+  readFileSync: typeof fsDefault.readFileSync
+  writeFileSync: typeof fsDefault.writeFileSync
+  existsSync: typeof fsDefault.existsSync
+  lstatSync?: typeof fsDefault.lstatSync
+  readdirSync?: typeof fsDefault.readdirSync
+  realpathSync?: typeof fsDefault.realpathSync
+}
 
 export interface WebAsset {
   contentType: string
@@ -38,7 +47,8 @@ export class UIServer {
   constructor(
     port: number,
     assets: Record<string, WebAsset>,
-    uiConfig: UIConfig = {}
+    uiConfig: UIConfig = {},
+    private fs: UIServerFileSystem = fsDefault
   ) {
     this.port = port
     this.assets = assets
@@ -104,9 +114,10 @@ export class UIServer {
    */
   private resolveIgnoreListSync(primaryPath: string): string[] {
     const tryRead = (filePath: string): string[] | null => {
-      if (!existsSync(filePath)) return null
+      if (!this.fs.existsSync(filePath)) return null
       try {
-        return readFileSync(filePath, 'utf-8')
+        return this.fs
+          .readFileSync(filePath, 'utf-8')
           .split('\n')
           .map((l) => l.trim())
           .filter((l) => l !== '' && !l.startsWith('#'))
@@ -132,7 +143,7 @@ export class UIServer {
         dirname(fileURLToPath(import.meta.url)),
         '../../package.json'
       )
-      version = JSON.parse(readFileSync(pkgPath, 'utf-8')).version
+      version = JSON.parse(this.fs.readFileSync(pkgPath, 'utf-8')).version
     } catch {
       /* ignore */
     }
@@ -176,15 +187,15 @@ export class UIServer {
       }
       // Read existing file to preserve comments, then merge
       let existingContent = ''
-      if (existsSync(this.ignoreFilePath)) {
+      if (this.fs.existsSync(this.ignoreFilePath)) {
         try {
-          existingContent = readFileSync(this.ignoreFilePath, 'utf-8')
+          existingContent = this.fs.readFileSync(this.ignoreFilePath, 'utf-8')
         } catch {
           /* unreadable — treat as empty */
         }
       }
       const mergedContent = mergeIgnoreFileWithComments(existingContent, list)
-      writeFileSync(this.ignoreFilePath, mergedContent, 'utf-8')
+      this.fs.writeFileSync(this.ignoreFilePath, mergedContent, 'utf-8')
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ success: true }))
     } catch {
@@ -220,7 +231,12 @@ export class UIServer {
     const vfs = new VFSManager(
       vfsRoot,
       ignoreList,
-      this.uiConfig.maxFiles || 10000
+      this.uiConfig.maxFiles || 10000,
+      {
+        lstatSync: this.fs.lstatSync || fsDefault.lstatSync,
+        readdirSync: this.fs.readdirSync || fsDefault.readdirSync,
+        realpathSync: this.fs.realpathSync || fsDefault.realpathSync,
+      }
     )
     const result = vfs.getTree()
 
@@ -252,14 +268,14 @@ export class UIServer {
       return
     }
 
-    if (!existsSync(fullPath)) {
+    if (!this.fs.existsSync(fullPath)) {
       res.writeHead(404, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ error: 'File not found' }))
       return
     }
 
     try {
-      const buffer = readFileSync(fullPath)
+      const buffer = this.fs.readFileSync(fullPath)
       res.writeHead(200, { 'Content-Type': 'application/octet-stream' })
       res.end(buffer)
     } catch {

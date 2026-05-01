@@ -3,18 +3,24 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { lstatSync, readdirSync, realpathSync } from 'fs'
-import { join, resolve } from 'path'
+import * as fsDefault from 'node:fs'
+import { join, resolve } from 'node:path'
 import micromatch from 'micromatch'
 import { DEFAULT_IGNORE_LIST } from './constants.js'
+
+export interface VFSFileSystem {
+  lstatSync: typeof fsDefault.lstatSync
+  readdirSync: typeof fsDefault.readdirSync
+  realpathSync: typeof fsDefault.realpathSync
+}
 
 export interface VFSNode {
   name: string
   path: string
   kind: 'file' | 'directory'
   size?: number
-  isIgnored?: boolean
-  isNegated?: boolean
+  isIgnored: boolean
+  isNegated: boolean
   children?: VFSNode[]
 }
 
@@ -41,9 +47,10 @@ export class VFSManager {
   constructor(
     baseDir: string,
     additionalIgnores: string[] = [],
-    maxFiles: number = 10000
+    maxFiles: number = 10000,
+    private fs: VFSFileSystem = fsDefault
   ) {
-    this.baseDir = realpathSync(resolve(baseDir))
+    this.baseDir = this.fs.realpathSync(resolve(baseDir))
     this.maxFiles = maxFiles
 
     const allPatterns = [...DEFAULT_IGNORE_LIST, ...additionalIgnores]
@@ -148,18 +155,17 @@ export class VFSManager {
       let children: VFSNode[] | undefined = undefined
 
       try {
-        // Use lstatSync so symlinks are NOT automatically resolved/followed.
-        // This ensures VFS parity with the CLI (followSymlinks: false by default).
-        const lstats = lstatSync(currentPath)
+        const lstats = this.fs.lstatSync(currentPath)
 
         if (lstats.isSymbolicLink()) {
-          // Symlinks are shown in the tree as ignored ghost entries — not traversed.
           return {
             name,
             path: relPath || '.',
             kind: 'file',
             size: 0,
             isIgnored: true,
+            isNegated: false,
+            children: undefined,
           }
         }
 
@@ -167,20 +173,23 @@ export class VFSManager {
           kind = 'directory'
           children = []
 
-          // Don't traverse into ignored directories — return them as empty.
           if (!isIgnored) {
-            const entries = readdirSync(currentPath)
-            for (const entry of entries) {
-              if (fileCount >= this.maxFiles) {
-                partial = true
-                break
+            try {
+              const entries = this.fs.readdirSync(currentPath)
+              for (const entry of entries) {
+                if (fileCount >= this.maxFiles) {
+                  partial = true
+                  break
+                }
+                const childFullPath = join(currentPath, entry)
+                const childRelPath = relPath ? `${relPath}/${entry}` : entry
+                const childNode = buildTree(childFullPath, childRelPath)
+                if (childNode) {
+                  children.push(childNode)
+                }
               }
-              const childFullPath = join(currentPath, entry)
-              const childRelPath = relPath ? `${relPath}/${entry}` : entry
-              const childNode = buildTree(childFullPath, childRelPath)
-              if (childNode) {
-                children.push(childNode)
-              }
+            } catch {
+              // Skip children if readdir fails
             }
           }
         } else if (lstats.isFile()) {
@@ -188,7 +197,6 @@ export class VFSManager {
           size = lstats.size
           fileCount++
         } else {
-          // Skip sockets, FIFOs, device files, etc.
           return null
         }
       } catch {
@@ -199,9 +207,10 @@ export class VFSManager {
         name,
         path: relPath || '.',
         kind,
-        ...(kind === 'file' ? { size } : { children }),
-        ...(isIgnored ? { isIgnored: true } : {}),
-        ...(isNegated ? { isNegated: true } : {}),
+        size: kind === 'file' ? size : undefined,
+        children: kind === 'directory' ? children : undefined,
+        isIgnored,
+        isNegated,
       }
     }
 
@@ -212,6 +221,8 @@ export class VFSManager {
         path: '.',
         kind: 'directory',
         children: [],
+        isIgnored: false,
+        isNegated: false,
       },
       partial,
     }

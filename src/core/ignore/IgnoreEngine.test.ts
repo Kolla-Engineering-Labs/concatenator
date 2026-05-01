@@ -54,6 +54,11 @@ describe('IgnoreEngine', () => {
       expect(engine.isIgnored('TEMP_FOLDER/file.js')).toBe(true)
       expect(engine.isIgnored('item_template.html')).toBe(true) // 'temp' is in 'template'
     })
+
+    it('falls back to string match for invalid regex', () => {
+      const engine = new IgnoreEngine(['/[invalid/'])
+      expect(engine.isIgnored('[invalid')).toBe(true)
+    })
   })
 
   describe('normalization', () => {
@@ -138,6 +143,25 @@ describe('IgnoreEngine', () => {
       ])
       expect(engine.isExplicitlyNegated('tests/schema.ts')).toBe(false)
       expect(engine.isIgnored('tests/schema.ts')).toBe(true)
+    })
+  })
+
+  describe('Edge Cases', () => {
+    it('handles empty paths', () => {
+      const engine = new IgnoreEngine(['node_modules'])
+      expect(engine.isIgnored('')).toBe(false)
+      expect(engine.isExplicitlyNegated('')).toBe(false)
+    })
+
+    it('handles special glob characters', () => {
+      const engine = new IgnoreEngine(['path+^[].txt'])
+      expect(engine.isIgnored('path+^[].txt')).toBe(true)
+    })
+
+    it('handles /** suffix matching parent directory', () => {
+      const engine = new IgnoreEngine(['src/**'])
+      expect(engine.isIgnored('src')).toBe(true)
+      expect(engine.isIgnored('src/file.js')).toBe(true)
     })
   })
 })

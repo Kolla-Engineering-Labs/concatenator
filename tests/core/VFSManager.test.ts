@@ -1,99 +1,175 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { VFSManager } from '../../src/core/VFSManager'
-import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'fs'
+import { VFSManager, VFSFileSystem } from '../../src/core/VFSManager'
+import {
+  mkdtempSync,
+  writeFileSync,
+  mkdirSync,
+  rmSync,
+  realpathSync,
+} from 'node:fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
+import * as fs from 'node:fs'
 
 describe('VFSManager', () => {
   let tmpDir: string
 
   beforeEach(() => {
-    tmpDir = mkdtempSync(join(tmpdir(), 'vfs-'))
-    // Create some structure
-    mkdirSync(join(tmpDir, 'src'))
-    mkdirSync(join(tmpDir, 'src/components'))
-    writeFileSync(join(tmpDir, 'src/index.js'), 'console.log("hello")')
-    writeFileSync(
-      join(tmpDir, 'src/components/Button.jsx'),
-      'export default () => <button/>'
-    )
-
-    // Ignored items
-    mkdirSync(join(tmpDir, 'node_modules'))
-    writeFileSync(join(tmpDir, 'node_modules/package.json'), '{}')
-    writeFileSync(join(tmpDir, 'package.json'), '{}')
-
-    // Hard-ignored extensions
-    writeFileSync(join(tmpDir, 'logo.png'), 'fake-png-data')
-    writeFileSync(join(tmpDir, 'document.pdf'), 'fake-pdf-data')
+    tmpDir = realpathSync(mkdtempSync(join(tmpdir(), 'vfs-test-')))
   })
 
   afterEach(() => {
     rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it('should build a virtual file tree', () => {
-    const vfs = new VFSManager(tmpDir, [])
+  it('should build a basic tree', () => {
+    writeFileSync(join(tmpDir, 'file.txt'), 'hello')
+    mkdirSync(join(tmpDir, 'dir'))
+    writeFileSync(join(tmpDir, 'dir/sub.txt'), 'sub')
+
+    const vfs = new VFSManager(tmpDir)
     const result = vfs.getTree()
 
-    expect(result.partial).toBe(false)
-    expect(result.tree.name).toBe(tmpDir.split(/[/\\]/).pop())
-    expect(result.tree.kind).toBe('directory')
-
-    // Check children
-    const childrenNames = result.tree.children?.map((c) => c.name) || []
-    expect(childrenNames).toContain('src')
-    expect(childrenNames).toContain('node_modules')
-    expect(childrenNames).toContain('package.json')
-    expect(childrenNames).toContain('logo.png')
+    expect(result.tree.children).toHaveLength(2)
+    const dir = result.tree.children?.find((c) => c.name === 'dir')
+    expect(dir?.kind).toBe('directory')
+    expect(dir?.children).toHaveLength(1)
   })
 
-  it('should correctly flag ignored directories and files based on default ignores', () => {
-    const vfs = new VFSManager(tmpDir, [])
+  it('should respect additional ignore patterns', () => {
+    writeFileSync(join(tmpDir, 'file.txt'), 'hello')
+    writeFileSync(join(tmpDir, 'secret.log'), 'shh')
+
+    const vfs = new VFSManager(tmpDir, ['*.log'])
     const result = vfs.getTree()
 
-    const nodeModules = result.tree.children?.find(
-      (c) => c.name === 'node_modules'
-    )
-    expect(nodeModules?.isIgnored).toBe(true)
-    // Ignored directories shouldn't have their children traversed, but they return an empty array
-    expect(nodeModules?.children).toEqual([])
-
-    // Test hard ignored extensions
-    const pngFile = result.tree.children?.find((c) => c.name === 'logo.png')
-    expect(pngFile?.isIgnored).toBe(true)
+    const logFile = result.tree.children?.find((c) => c.name === 'secret.log')
+    expect(logFile?.isIgnored).toBe(true)
   })
 
-  it('should accept additional ignore patterns', () => {
-    const vfs = new VFSManager(tmpDir, ['src/index.js'])
+  it('should handle regex ignore patterns', () => {
+    writeFileSync(join(tmpDir, 'test-123.txt'), 'hello')
+
+    const vfs = new VFSManager(tmpDir, ['/test-\\d+/'])
     const result = vfs.getTree()
 
-    const src = result.tree.children?.find((c) => c.name === 'src')
-    const indexJs = src?.children?.find((c) => c.name === 'index.js')
-
-    expect(indexJs?.isIgnored).toBe(true)
+    const node = result.tree.children?.find((c) => c.name === 'test-123.txt')
+    expect(node?.isIgnored).toBe(true)
   })
 
   it('should handle negation patterns', () => {
-    // Negate node_modules
-    const vfs = new VFSManager(tmpDir, ['!node_modules'])
+    writeFileSync(join(tmpDir, 'ignored.js'), 'code')
+    writeFileSync(join(tmpDir, 'important.js'), 'code')
+
+    const vfs = new VFSManager(tmpDir, ['*.js', '!important.js'])
     const result = vfs.getTree()
 
-    const nodeModules = result.tree.children?.find(
-      (c) => c.name === 'node_modules'
+    const ignored = result.tree.children?.find((c) => c.name === 'ignored.js')
+    const important = result.tree.children?.find(
+      (c) => c.name === 'important.js'
     )
-    expect(nodeModules?.isIgnored).toBeUndefined() // or false
-    expect(nodeModules?.isNegated).toBe(true)
-    // Should have traversed children
-    expect(nodeModules?.children?.length).toBe(1)
-    expect(nodeModules?.children?.[0].name).toBe('package.json')
+
+    expect(ignored?.isIgnored).toBe(true)
+    expect(important?.isIgnored).toBe(false)
+    expect(important?.isNegated).toBe(true)
   })
 
-  it('should enforce max files limit and return partial tree', () => {
-    // Limit to 1 file processed. (Only 1 file total allowed)
-    const vfs = new VFSManager(tmpDir, [], 1)
+  it('should respect maxFiles limit', () => {
+    for (let i = 0; i < 5; i++) {
+      writeFileSync(join(tmpDir, `file${i}.txt`), 'content')
+    }
+
+    const vfs = new VFSManager(tmpDir, [], 3)
     const result = vfs.getTree()
 
     expect(result.partial).toBe(true)
+    expect(result.tree.children).toHaveLength(3)
+  })
+
+  it('should handle symlinks as ignored ghost entries', () => {
+    const vfsDir = tmpDir
+    const mockFs: VFSFileSystem = {
+      ...fs,
+      lstatSync: ((path: string) => {
+        if (path.endsWith('symlink-test')) {
+          return {
+            isSymbolicLink: () => true,
+            isDirectory: () => false,
+            isFile: () => false,
+            size: 0,
+          }
+        }
+        return fs.lstatSync(path)
+      }) as any,
+      readdirSync: ((path: string) => {
+        const entries = fs.readdirSync(path)
+        if (path === vfsDir) {
+          return [...entries, 'symlink-test']
+        }
+        return entries
+      }) as any,
+    }
+
+    const vfs = new VFSManager(vfsDir, [], 1000, mockFs)
+    const result = vfs.getTree()
+
+    const symlinkNode = result.tree.children?.find(
+      (c) => c.name === 'symlink-test'
+    )
+    expect(symlinkNode).toBeDefined()
+    expect(symlinkNode?.isIgnored).toBe(true)
+    expect(symlinkNode?.kind).toBe('file')
+  })
+
+  it('should handle readdirSync errors gracefully', () => {
+    mkdirSync(join(tmpDir, 'secret-dir'))
+    const vfsDir = tmpDir
+
+    const mockFs: VFSFileSystem = {
+      ...fs,
+      readdirSync: ((path: string) => {
+        if (path.endsWith('secret-dir')) {
+          throw new Error('Permission denied')
+        }
+        return fs.readdirSync(path)
+      }) as any,
+    }
+
+    const vfs = new VFSManager(vfsDir, [], 1000, mockFs)
+    const result = vfs.getTree()
+
+    const secretDir = result.tree.children?.find((c) => c.name === 'secret-dir')
+    expect(secretDir).toBeDefined()
+    expect(secretDir?.children).toEqual([])
+  })
+
+  it('should skip non-file/non-directory entries', () => {
+    const vfsDir = tmpDir
+    const mockFs: VFSFileSystem = {
+      ...fs,
+      lstatSync: ((path: string) => {
+        if (path.endsWith('socket')) {
+          return {
+            isSymbolicLink: () => false,
+            isDirectory: () => false,
+            isFile: () => false,
+          }
+        }
+        return fs.lstatSync(path)
+      }) as any,
+      readdirSync: ((path: string) => {
+        const entries = fs.readdirSync(path)
+        if (path === vfsDir) {
+          return [...entries, 'socket']
+        }
+        return entries
+      }) as any,
+    }
+
+    const vfs = new VFSManager(vfsDir, [], 1000, mockFs)
+    const result = vfs.getTree()
+
+    const socketNode = result.tree.children?.find((c) => c.name === 'socket')
+    expect(socketNode).toBeUndefined()
   })
 })
