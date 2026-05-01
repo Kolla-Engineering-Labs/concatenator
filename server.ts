@@ -109,6 +109,13 @@ async function startServer() {
     legacyHeaders: false,
   })
 
+  const vfsFileLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 120, // limit file fetch bursts per client IP
+    standardHeaders: true,
+    legacyHeaders: false,
+  })
+
   // API Routes
   const DEFAULT_IGNORE_FILE_PATH = path.join(
     process.cwd(),
@@ -163,6 +170,7 @@ async function startServer() {
   // Only apply rate limiting in production (skip for E2E tests)
   if (process.env.NODE_ENV === 'production') {
     app.use('/api/ignore-list', ignoreListLimiter)
+    app.use('/api/vfs', vfsFileLimiter)
   }
 
   app.get('/api/ignore-list', async (req, res) => {
