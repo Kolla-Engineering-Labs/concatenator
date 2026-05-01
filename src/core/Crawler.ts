@@ -78,7 +78,7 @@ export class UnifiedCrawler {
           continue
         }
 
-        let kind: 'file' | 'directory' = 'file'
+        let kind: 'file' | 'directory'
         let stats: Stats
 
         try {

@@ -143,7 +143,7 @@ export class VFSManager {
 
       const { isIgnored, isNegated } = this.checkNodeIgnoreState(relPath, name)
 
-      let kind: 'file' | 'directory' = 'file'
+      let kind: 'file' | 'directory'
       let size = 0
       let children: VFSNode[] | undefined = undefined
 
