@@ -4,7 +4,7 @@
  */
 
 import { lstatSync, readdirSync, realpathSync, statSync, Stats } from 'fs'
-import { join, resolve } from 'path'
+import { join, resolve, relative } from 'path'
 import { IgnoreEngine } from './ignore/IgnoreEngine.js'
 import { SecurityViolation } from './errors.js'
 
@@ -28,12 +28,14 @@ export interface CrawlerEntry {
  * across CLI and UI.
  */
 export class UnifiedCrawler {
+  private logicalRoot: string
   private resolvedRoot: string
   private followSymlinks: boolean
   private ignoreEngine: IgnoreEngine
 
   constructor(options: CrawlerOptions) {
-    this.resolvedRoot = realpathSync(resolve(options.rootPath))
+    this.logicalRoot = resolve(options.rootPath)
+    this.resolvedRoot = realpathSync(this.logicalRoot)
     this.followSymlinks = options.followSymlinks ?? false
     this.ignoreEngine = options.ignoreEngine
   }
@@ -56,7 +58,7 @@ export class UnifiedCrawler {
    * Recursively collect entries from the filesystem.
    */
   public collect(
-    currentDir: string = this.resolvedRoot,
+    currentDir: string = this.logicalRoot,
     onEntry?: (entry: CrawlerEntry) => void
   ): CrawlerEntry[] {
     const results: CrawlerEntry[] = []
@@ -66,12 +68,12 @@ export class UnifiedCrawler {
 
       for (const entry of entries) {
         const fullPath = join(dir, entry.name)
-        const relativePath = join(
-          resolve(dir)
-            .replace(this.resolvedRoot, '')
-            .replace(/^[/\\]/, ''),
-          entry.name
-        ).replace(/\\/g, '/')
+        // Use logicalRoot with path.relative for robust relative path calculation.
+        // This avoids issues where the system might have symlinked parent paths (like macOS /var -> /private/var).
+        const relativePath = relative(this.logicalRoot, fullPath).replace(
+          /\\/g,
+          '/'
+        )
 
         // Check if path is ignored
         if (this.ignoreEngine.isIgnored(relativePath)) {
