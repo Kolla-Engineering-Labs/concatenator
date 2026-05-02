@@ -24,11 +24,12 @@ test.describe('UI Interactions and Edge Cases', () => {
     // Uses worker-specific ignore file via X-Worker-Id header from apiContext fixture.
     await resetIgnoreList(apiContext)
 
-    // Navigate to the app first to set the origin context for localStorage
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    // Clear and set defaults via init script BEFORE navigation
+    // This avoids the goto -> evaluate -> reload cycle which is unstable in WebKit
+    // Uses sessionStorage guard to ensure it only runs once per test (survives reloads within test)
+    await page.addInitScript(() => {
+      if (sessionStorage.getItem('__test_init__')) return
 
-    // Clear all relevant localStorage keys once to ensure a clean slate for every test
-    await page.evaluate(() => {
       // Clear keys starting with 'concat' or 'concatenate'
       Object.keys(localStorage).forEach((key) => {
         if (key.startsWith('concat')) {
@@ -37,10 +38,11 @@ test.describe('UI Interactions and Edge Cases', () => {
       })
       // Set test defaults
       localStorage.setItem('concat_auto_save_ignore', 'true')
+      sessionStorage.setItem('__test_init__', 'true')
     })
 
-    // Reload to ensure the app starts with the fresh state
-    await page.reload({ waitUntil: 'domcontentloaded' })
+    // Navigate once
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
 
     // Small stability wait for hydration
     await page.waitForTimeout(500)

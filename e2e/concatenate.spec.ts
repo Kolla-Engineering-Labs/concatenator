@@ -22,6 +22,8 @@ test.describe('Concatenate Mode', () => {
   test.beforeEach(async ({ page, apiContext }) => {
     // Clear localStorage before navigation to avoid needing a reload
     await page.addInitScript(() => {
+      if (sessionStorage.getItem('__test_init__')) return
+
       localStorage.removeItem('concatenate-ignore')
       localStorage.removeItem('concatenate-view-mode')
       localStorage.removeItem('concatenate-dark-mode')
@@ -33,6 +35,7 @@ test.describe('Concatenate Mode', () => {
       // Set sidebar to true for desktop (>=1024px), false for mobile to avoid obscuring content
       const isMobile = window.innerWidth < 1024
       localStorage.setItem('concat_sidebar', isMobile ? 'false' : 'true')
+      sessionStorage.setItem('__test_init__', 'true')
     })
 
     // Reset server-side ignore list BEFORE navigation so client fetches correct state.
@@ -42,6 +45,9 @@ test.describe('Concatenate Mode', () => {
     // Navigate to page with 'domcontentloaded' for faster Firefox navigation
     // 'networkidle' and 'load' can be slow/flaky in Firefox
     await page.goto('/', { waitUntil: 'domcontentloaded' })
+
+    // Small stability wait for hydration
+    await page.waitForTimeout(500)
 
     // Ensure sidebar is open to access mode switch and other controls
     await ensureSidebarOpen(page)

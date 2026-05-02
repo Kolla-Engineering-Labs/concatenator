@@ -25,12 +25,15 @@ test.describe('Max File Limit Feature', () => {
     // Clear localStorage before navigation to avoid interference from previous test runs
     // Note: concatenator-max-files is NOT cleared here to allow persistence testing
     await page.addInitScript(() => {
+      if (sessionStorage.getItem('__test_init__')) return
+
       localStorage.removeItem('concatenate-ignore')
       localStorage.removeItem('concatenate-view-mode')
       localStorage.removeItem('concatenate-dark-mode')
       localStorage.removeItem('concat_mode')
       localStorage.removeItem('concat_view')
       localStorage.removeItem('concat_ignore')
+      sessionStorage.setItem('__test_init__', 'true')
     })
 
     // Reset server-side ignore list BEFORE navigation so client fetches correct state.
@@ -149,6 +152,7 @@ test.describe('Max File Limit Feature', () => {
       await page.evaluate(() => {
         localStorage.removeItem('concatenator-max-files')
       })
+      await page.waitForTimeout(500)
       await page.reload({ waitUntil: 'domcontentloaded' })
 
       const maxFileLimitSelect = page.locator('select#max-file-limit')
@@ -191,7 +195,7 @@ test.describe('Max File Limit Feature', () => {
       await page.evaluate(() => {
         localStorage.setItem('concatenator-max-files', '2500')
       })
-
+      await page.waitForTimeout(500)
       // Reload the page
       await page.reload({ waitUntil: 'domcontentloaded' })
 
