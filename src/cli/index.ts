@@ -31,13 +31,27 @@ import { logger } from '../lib/logger.js'
 import { IgnoreEngine } from '../core/ignore/IgnoreEngine.js'
 import { TokenService } from '../core/TokenService.js'
 import { formatFileSize } from '../lib/utils.js'
+import { UnifiedCrawler } from '../core/Crawler.js'
 
 // Load version from package.json
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
-const packageJson = JSON.parse(
-  readFileSync(join(__dirname, '../../package.json'), 'utf-8')
-)
+let cliVersion = '0.3.0'
+try {
+  if (
+    typeof import.meta !== 'undefined' &&
+    (import.meta as { url?: string }).url
+  ) {
+    const __filename = fileURLToPath(
+      (import.meta as { url?: string }).url as string
+    )
+    const __dirname = dirname(__filename)
+    const packageJson = JSON.parse(
+      readFileSync(join(__dirname, '../../package.json'), 'utf-8')
+    )
+    cliVersion = packageJson.version
+  }
+} catch {
+  // Fallback if not available
+}
 
 /**
  * File metadata with token and size info
@@ -118,10 +132,13 @@ function collectFiles(
  * Resolve ignore patterns from explicit flags and auto-discovery
  * @returns Array of ignore patterns
  */
-function getIgnorePatterns(options: {
-  exclude?: string
-  ignoreFile?: string
-}): string[] {
+function getIgnorePatterns(
+  options: {
+    exclude?: string
+    ignoreFile?: string
+  },
+  inputPaths: string[] = []
+): string[] {
   let patterns: string[] = []
 
   // 1. Parse explicit --exclude patterns (comma-separated)
@@ -139,15 +156,15 @@ function getIgnorePatterns(options: {
   const isExplicit = !!options.ignoreFile
 
   if (!ignoreFilePath) {
-    // Auto-discovery: .concatignore then .gitignore
-    if (existsSync('.concatignore')) {
-      ignoreFilePath = '.concatignore'
+    // Auto-discovery in CWD: .concatenate-ignore then .gitignore
+    if (existsSync('.concatenate-ignore')) {
+      ignoreFilePath = '.concatenate-ignore'
     } else if (existsSync('.gitignore')) {
       ignoreFilePath = '.gitignore'
     }
   }
 
-  // 3. Load patterns from file
+  // 3. Load patterns from explicit or auto-discovered file
   if (ignoreFilePath) {
     if (existsSync(ignoreFilePath)) {
       try {
@@ -165,7 +182,30 @@ function getIgnorePatterns(options: {
     }
   }
 
-  return patterns
+  // 4. If no explicit ignore file, also look for local ignore files in input paths
+  if (!isExplicit) {
+    for (const inputPath of inputPaths) {
+      try {
+        const stats = statSync(inputPath)
+        const baseDir = stats.isDirectory() ? inputPath : dirname(inputPath)
+
+        const candidates = ['.concatenate-ignore', '.gitignore']
+        for (const candidate of candidates) {
+          const localPath = join(baseDir, candidate)
+          if (existsSync(localPath) && localPath !== ignoreFilePath) {
+            const content = readFileSync(localPath, 'utf-8')
+            const localPatterns = IgnoreEngine.parseIgnoreFile(content)
+            patterns = patterns.concat(localPatterns)
+          }
+        }
+      } catch {
+        // Skip if path doesn't exist or other error
+      }
+    }
+  }
+
+  // Deduplicate patterns
+  return Array.from(new Set(patterns))
 }
 
 /**
@@ -390,13 +430,24 @@ const program = new Command()
   .description(
     'Bundle and unbundle directories into LLM-ready concatenated files'
   )
-  .version(packageJson.version)
+  .version(cliVersion)
+  .option('--ui', 'Launch the web-based Workbench UI')
   .configureOutput({
     writeErr: (str) => logger.error(str.trim()),
     outputError: (str, write) => {
       logger.error(str.trim())
       write(str.trim())
     },
+  })
+
+// UI command
+program
+  .command('ui [path]')
+  .description('Launch the web-based Workbench UI')
+  .option('-m, --max-files <number>', 'Preset the maximum file limit', parseInt)
+  .option('-i, --ignore-file <file>', 'Specify a custom ignore file')
+  .action((path, options) => {
+    launchUI(path, options)
   })
 
 // Concat command (default action)
@@ -412,7 +463,7 @@ program
   )
   .option(
     '-i, --ignore-file <path>',
-    'Path to an ignore file (.concatignore, .gitignore, etc.)'
+    'Path to an ignore file (.concatenate-ignore, .gitignore, etc.)'
   )
   .option(
     '-v, --verbose',
@@ -428,6 +479,12 @@ program
     'Overwrite existing files or directories without prompting',
     false
   )
+  .option(
+    '--follow-symlinks',
+    'Follow symbolic links during traversal (CAUTION: may cause infinite loops)',
+    false
+  )
+  .option('-q, --quiet', 'Suppress all logging output', false)
   .action(
     async (
       paths: string[],
@@ -438,9 +495,14 @@ program
         verbose: number
         maxTokens?: number
         force: boolean
+        followSymlinks: boolean
+        quiet: boolean
       }
     ) => {
       try {
+        if (options.quiet) {
+          logger._setLevel('error')
+        }
         // Path Normalization & Pruning
         const absolutePaths = paths.map((p) => resolve(p))
         const { pruned, remaining } = prunePaths(absolutePaths)
@@ -455,7 +517,7 @@ program
         }
 
         // Get ignore patterns and initialize engine
-        const ignorePatterns = getIgnorePatterns(options)
+        const ignorePatterns = getIgnorePatterns(options, remaining)
         const ignoreEngine = new IgnoreEngine(ignorePatterns)
 
         const allFiles: FileWithMetadata[] = []
@@ -468,34 +530,78 @@ program
           }
 
           const stats = statSync(inputPath)
-          if (stats.isDirectory()) {
-            // For a single input directory, we keep paths relative to it (traditional behavior).
-            // For multiple inputs, we preserve the directory name to avoid collisions.
-            const baseDir =
-              remaining.length === 1 ? inputPath : dirname(inputPath)
+          const baseDir = stats.isDirectory()
+            ? remaining.length === 1
+              ? inputPath
+              : dirname(inputPath)
+            : dirname(inputPath)
 
-            const { totalTokens: tokens } = collectFiles(
-              inputPath,
-              baseDir,
-              ignoreEngine,
-              options.verbose,
-              allFiles
-            )
-            totalTokens += tokens
-          } else if (stats.isFile()) {
-            const content = readFileSync(inputPath, 'utf-8')
-            const tokens = TokenService.getTokenEstimate(content)
-            // For files, we always use the parent dir as base to get just the filename
-            const relativePath = relative(dirname(inputPath), inputPath)
+          const crawler = new UnifiedCrawler({
+            rootPath: baseDir,
+            ignoreEngine,
+            followSymlinks: options.followSymlinks,
+          })
 
-            if (!ignoreEngine.isIgnored(relativePath)) {
-              allFiles.push({
-                path: relativePath,
-                content,
-                tokens,
-                size: stats.size,
-              })
-              totalTokens += tokens
+          const entries = crawler.collect(inputPath)
+
+          // ── Pass 1: read files and accumulate tokens per directory ──────────
+          // dirTokens maps each directory's relative path to its cumulative tokens.
+          const dirTokens = new Map<string, number>()
+
+          for (const entry of entries) {
+            if (entry.kind === 'file') {
+              try {
+                const content = readFileSync(entry.fullPath, 'utf-8')
+                const tokens = TokenService.getTokenEstimate(content)
+
+                allFiles.push({
+                  path: entry.path,
+                  content,
+                  tokens,
+                  size: entry.size,
+                })
+
+                totalTokens += tokens
+
+                if (options.verbose >= 2) {
+                  logger.info(
+                    `  [${tokens.toLocaleString().padStart(8)} tokens] ${entry.path}`
+                  )
+                }
+
+                // Roll tokens up to every ancestor directory
+                if (options.verbose >= 1) {
+                  const parts = entry.path.split('/')
+                  // e.g. "sub/file.ts" → ancestors: "sub", "."
+                  for (let depth = 1; depth < parts.length; depth++) {
+                    const dirPath = parts.slice(0, depth).join('/')
+                    dirTokens.set(
+                      dirPath,
+                      (dirTokens.get(dirPath) ?? 0) + tokens
+                    )
+                  }
+                  // root dir
+                  dirTokens.set('.', (dirTokens.get('.') ?? 0) + tokens)
+                }
+              } catch {
+                // Skip files that can't be read
+              }
+            }
+          }
+
+          // ── Pass 2: log directory summaries (verbose -v) ────────────────────
+          if (options.verbose >= 1) {
+            // Log in the same order the original recursive walk did: deepest dirs first,
+            // then the root. Collect and sort by depth descending.
+            const sortedDirs = [...dirTokens.entries()].sort((a, b) => {
+              const depthA = a[0] === '.' ? 0 : a[0].split('/').length
+              const depthB = b[0] === '.' ? 0 : b[0].split('/').length
+              return depthB - depthA // deepest first
+            })
+            for (const [dirPath, tokens] of sortedDirs) {
+              logger.info(
+                `Dir: ${dirPath} (~${tokens.toLocaleString()} tokens)`
+              )
             }
           }
         }
@@ -549,7 +655,7 @@ program
   )
   .option(
     '-z, --zip',
-    'Output as a .zip archive instead of writing to disk',
+    'Bundle extracted files into a single .zip archive instead of reconstructing the directory tree on disk',
     false
   )
   .option(
@@ -568,6 +674,7 @@ program
     'Overwrite existing files or directories without prompting',
     false
   )
+  .option('-q, --quiet', 'Suppress all logging output', false)
   .action(
     async (
       inputFile: string,
@@ -579,9 +686,13 @@ program
         dryRun: boolean
         verbose: number
         force: boolean
+        quiet: boolean
       }
     ) => {
       try {
+        if (options.quiet) {
+          logger._setLevel('error')
+        }
         const content = readFileSync(inputFile, 'utf-8')
         const result = deconcatenate(content)
 
@@ -700,8 +811,9 @@ program
   )
   .option(
     '-i, --ignore-file <path>',
-    'Path to an ignore file (.concatignore, .gitignore, etc.)'
+    'Path to an ignore file (.concatenate-ignore, .gitignore, etc.)'
   )
+  .option('-q, --quiet', 'Suppress all logging output', false)
   .action(
     async (
       paths: string[],
@@ -710,9 +822,13 @@ program
         verbose: number
         exclude: string
         ignoreFile?: string
+        quiet: boolean
       }
     ) => {
       try {
+        if (options.quiet) {
+          logger._setLevel('error')
+        }
         // Path Normalization & Pruning
         const absolutePaths = paths.map((p) => resolve(p))
         const { pruned, remaining } = prunePaths(absolutePaths)
@@ -802,6 +918,7 @@ program
 program.on('--help', () => {
   console.log('')
   console.log('Examples:')
+  console.log('  $ concatenator --ui')
   console.log('  $ concatenator concat -o context.txt ./src')
   console.log('  $ concatenator concat -v -e node_modules,dist ./my-project')
   console.log('  $ concatenator extract -o ./restored bundle.txt')
@@ -809,5 +926,53 @@ program.on('--help', () => {
   console.log('  $ concatenator validate --verbose bundle.txt')
 })
 
-// Parse CLI arguments
-program.parse()
+export interface UIConfig {
+  maxFiles?: number
+  ignoreFile?: string
+}
+
+async function launchUI(path?: string, options: UIConfig = {}) {
+  try {
+    const { UIServer } = await import('../core/UIServer.js')
+    const { webAssets } = await import('./web-assets.js')
+    const server = new UIServer(0, webAssets, {
+      path,
+      maxFiles: options.maxFiles,
+      ignoreFile: options.ignoreFile,
+    })
+    const port = await server.start()
+
+    const url = `http://localhost:${port}`
+    logger.info(`\n🚀 Starting Concatenator Workbench UI at ${url}\n`)
+
+    // Launch browser
+    const { exec } = await import('child_process')
+    const startCmd =
+      process.platform === 'win32'
+        ? 'start ""'
+        : process.platform === 'darwin'
+          ? 'open'
+          : 'xdg-open'
+    exec(`${startCmd} "${url}"`, (err) => {
+      if (err) {
+        logger.warn(
+          `\nCould not automatically open browser. Please manually visit: ${url}`
+        )
+      }
+    })
+
+    // Keep process alive
+    process.stdin.resume()
+  } catch (e) {
+    logger.error('Failed to start UI:', e)
+    process.exit(1)
+  }
+}
+
+// Parse CLI arguments if not launching UI
+if (process.argv.includes('--ui') && !process.argv.includes('ui')) {
+  // Backwards compatibility for --ui flag without arguments
+  launchUI()
+} else {
+  program.parse()
+}

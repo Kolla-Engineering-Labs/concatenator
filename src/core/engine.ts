@@ -520,6 +520,18 @@ export function validateConcatenation(input: string): ValidationResult {
   // Extract session ID from manifest header
   const sessionId = extractSessionId(input)
 
+  // 1. Strict Manifest Placement Check
+  // The manifest should be the very first non-whitespace thing in the file
+  if (sessionId) {
+    const manifestIndex = input.indexOf(MANIFEST_PREFIX)
+    if (manifestIndex > 0) {
+      const leadingContent = input.substring(0, manifestIndex).trim()
+      if (leadingContent.length > 0) {
+        errors.push('Unauthorized content detected before session manifest')
+      }
+    }
+  }
+
   // Check if first line looks like a corrupted manifest (starts with --- but wrong content)
   const lines = input.split(/\r?\n/)
   const firstLine = lines.find((l) => l.trim().length > 0) || ''
@@ -663,8 +675,22 @@ export function validateConcatenation(input: string): ValidationResult {
         // Only add to targetFiles if it has a matching end marker (will be extracted)
         targetFiles.push(marker.path)
 
-        // Check for empty file warning
         const endIndex = contentAfterStart.indexOf(FILE_END_DELIMITER)
+
+        // Check for inter-segment or trailing corruption
+        const postMarkerContent = contentAfterStart
+          .substring(endIndex + FILE_END_DELIMITER.length)
+          .trim()
+        if (postMarkerContent.length > 0) {
+          // We only flag this if it's not another marker starting (which shouldn't happen here anyway as we use nextTargetMarkerStart)
+          if (!postMarkerContent.startsWith(START_DELIMITER)) {
+            errors.push(
+              `Unauthorized data detected after end of file: ${marker.path}`
+            )
+          }
+        }
+
+        // Check for empty file warning
         const content = contentAfterStart.substring(0, endIndex).trim()
         if (content.length === 0) {
           warnings.push(`Empty file detected: ${marker.path}`)

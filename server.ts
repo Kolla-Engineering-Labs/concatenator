@@ -1,17 +1,99 @@
+import 'dotenv/config'
 import express from 'express'
-import { createServer as createViteServer } from 'vite'
 import path from 'path'
 import fs from 'fs/promises'
 import { mkdirSync } from 'fs'
 import { rateLimit } from 'express-rate-limit'
 import { logger } from './src/lib/logger.js'
 import { DEFAULT_IGNORE_LIST } from './src/core/constants.js'
+import { VFSManager } from './src/core/VFSManager.js'
+import { mergeIgnoreFileWithComments } from './src/lib/ignore-file.js'
+
+/**
+ * Read an ignore list from `primaryPath`.
+ * Falls back to `.gitignore` if the primary file is absent, then to DEFAULT_IGNORE_LIST.
+ */
+async function resolveIgnoreList(
+  primaryPath: string,
+  defaultList: string[]
+): Promise<string[]> {
+  const tryRead = async (filePath: string): Promise<string[] | null> => {
+    try {
+      const content = await fs.readFile(filePath, 'utf-8')
+      return content
+        .split('\n')
+        .map((l) => l.trim())
+        .filter((l) => l !== '' && !l.startsWith('#'))
+    } catch (e: unknown) {
+      if (
+        typeof e === 'object' &&
+        e !== null &&
+        'code' in e &&
+        (e as { code?: string }).code === 'ENOENT'
+      ) {
+        return null
+      }
+      throw e
+    }
+  }
+
+  const primary = await tryRead(primaryPath)
+  if (primary !== null) return primary
+
+  const gitignorePath = path.join(process.cwd(), '.gitignore')
+  const gitignore = await tryRead(gitignorePath)
+  if (gitignore !== null) return gitignore
+
+  return [...defaultList]
+}
 
 async function startServer() {
   const app = express()
-  const PORT = 3000
+  const PORT = parseInt(process.env.PORT || '3000')
 
   app.use(express.json())
+  // Load version from package.json
+  let version = '0.0.0'
+  try {
+    const pkgPath = path.join(process.cwd(), 'package.json')
+    const pkgContent = await fs.readFile(pkgPath, 'utf-8')
+    version = JSON.parse(pkgContent).version
+  } catch {
+    logger.warn('Failed to read package.json for version, defaulting to 0.0.0')
+  }
+
+  // ── API Token Guard ──────────────────────────────────────────────────────────
+  // Reject requests that don't carry the correct X-Concatenator-Token header.
+  // This prevents bots probing the local server from triggering filesystem ops.
+  // Token is read from CONCATENATOR_API_TOKEN env var (set in .env).
+  // Health-check and static assets bypass this guard.
+  const API_TOKEN = process.env.CONCATENATOR_API_TOKEN
+  if (API_TOKEN) {
+    app.use((req, res, next) => {
+      // Allow health checks and static assets through without a token
+      if (req.path === '/health' || !req.path.startsWith('/api')) {
+        return next()
+      }
+      const provided = req.headers['x-concatenator-token']
+      if (provided !== API_TOKEN) {
+        return res.status(403).json({ error: 'Forbidden' })
+      }
+      next()
+    })
+  } else {
+    logger.warn(
+      '[Security] CONCATENATOR_API_TOKEN is not set. API endpoints are unprotected.'
+    )
+  }
+
+  // Health check endpoint
+  app.get('/health', (req, res) => {
+    res.json({
+      status: 'ok',
+      version,
+      uptime: Math.floor(process.uptime()),
+    })
+  })
 
   const ignoreListLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -23,6 +105,13 @@ async function startServer() {
   const staticFileLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
     max: 1000,
+    standardHeaders: true,
+    legacyHeaders: false,
+  })
+
+  const vfsFileLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 120, // limit file fetch bursts per client IP
     standardHeaders: true,
     legacyHeaders: false,
   })
@@ -81,6 +170,7 @@ async function startServer() {
   // Only apply rate limiting in production (skip for E2E tests)
   if (process.env.NODE_ENV === 'production') {
     app.use('/api/ignore-list', ignoreListLimiter)
+    app.use('/api/vfs', vfsFileLimiter)
   }
 
   app.get('/api/ignore-list', async (req, res) => {
@@ -92,22 +182,9 @@ async function startServer() {
       return res.status(400).json({ error: 'Invalid worker ID' })
     }
     try {
-      const content = await fs.readFile(ignoreFilePath, 'utf-8')
-      const list = content
-        .split('\n')
-        .map((line) => line.trim())
-        .filter((line) => line !== '')
+      const list = await resolveIgnoreList(ignoreFilePath, DEFAULT_IGNORE_LIST)
       res.json(list)
-    } catch (error: unknown) {
-      if (
-        typeof error === 'object' &&
-        error !== null &&
-        'code' in error &&
-        (error as { code?: string }).code === 'ENOENT'
-      ) {
-        // If file doesn't exist, return default list
-        return res.json(DEFAULT_IGNORE_LIST)
-      }
+    } catch (error) {
       logger.error('Error reading ignore file:', error)
       res.status(500).json({ error: 'Failed to read ignore list' })
     }
@@ -126,8 +203,15 @@ async function startServer() {
       if (!Array.isArray(list)) {
         return res.status(400).json({ error: 'Invalid ignore list format' })
       }
-      const content = list.join('\n')
-      await fs.writeFile(ignoreFilePath, content, 'utf-8')
+      // Read existing file to preserve comments, then merge
+      let existingContent = ''
+      try {
+        existingContent = await fs.readFile(ignoreFilePath, 'utf-8')
+      } catch {
+        /* file doesn't exist yet — start fresh */
+      }
+      const mergedContent = mergeIgnoreFileWithComments(existingContent, list)
+      await fs.writeFile(ignoreFilePath, mergedContent, 'utf-8')
       res.json({ success: true })
     } catch (error) {
       logger.error('Error writing ignore file:', error)
@@ -156,17 +240,71 @@ async function startServer() {
     })
   }
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== 'production') {
-    const vite = await createViteServer({
-      server: {
-        middlewareMode: true,
-        hmr: true,
-      },
-      appType: 'spa',
+  app.get('/api/config', (req, res) => {
+    res.json({
+      path: process.env.VFS_PATH,
+      maxFiles: 10000,
+      autoSaveIgnore: false,
     })
-    app.use(vite.middlewares)
-  } else {
+  })
+
+  app.get('/api/vfs', async (req, res) => {
+    try {
+      const workerId = req.headers['x-worker-id'] as string | undefined
+      let ignoreFilePath: string
+      try {
+        ignoreFilePath = getIgnoreFilePath(workerId)
+      } catch {
+        return res.status(400).json({ error: 'Invalid worker ID' })
+      }
+
+      if (!process.env.VFS_PATH) {
+        return res.json({ tree: null, partial: false })
+      }
+
+      const ignoreList = await resolveIgnoreList(
+        ignoreFilePath,
+        DEFAULT_IGNORE_LIST
+      )
+
+      const vfsRoot = path.resolve(process.cwd(), process.env.VFS_PATH)
+      const vfs = new VFSManager(vfsRoot, ignoreList, 10000)
+      const result = vfs.getTree()
+      res.json(result)
+    } catch (error) {
+      logger.error('Error generating VFS tree:', error)
+      res.status(500).json({ error: 'Failed to generate VFS tree' })
+    }
+  })
+
+  app.get('/api/vfs/file', async (req, res) => {
+    const filePath = req.query.path as string
+    if (!filePath) {
+      return res.status(400).json({ error: 'Missing path parameter' })
+    }
+
+    const vfsRoot = process.env.VFS_PATH
+      ? path.resolve(process.cwd(), process.env.VFS_PATH)
+      : process.cwd()
+    const fullPath = path.join(vfsRoot, filePath)
+
+    // Security check to prevent path traversal
+    if (!fullPath.startsWith(vfsRoot)) {
+      return res.status(403).json({ error: 'Access denied' })
+    }
+
+    try {
+      await fs.access(fullPath)
+      const buffer = await fs.readFile(fullPath)
+      res.setHeader('Content-Type', 'application/octet-stream')
+      res.send(buffer)
+    } catch {
+      return res.status(404).json({ error: 'File not found' })
+    }
+  })
+
+  // Vite middleware removed since we use concurrently with Vite dev server directly
+  if (process.env.NODE_ENV === 'production') {
     const distPath = path.join(process.cwd(), 'dist')
     app.use(express.static(distPath))
     app.get('*', staticFileLimiter, (req, res) => {
@@ -174,8 +312,12 @@ async function startServer() {
     })
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    logger.info(`Server running on http://localhost:${PORT}`)
+  // Bind strictly to localhost — external network traffic is rejected at the OS level.
+  // This prevents bots or other machines on the LAN from probing the API.
+  const server = app.listen(PORT, '127.0.0.1', () => {
+    const addr = server.address()
+    const actualPort = typeof addr === 'object' && addr ? addr.port : PORT
+    logger.info(`Server running on http://localhost:${actualPort}`)
   })
 }
 

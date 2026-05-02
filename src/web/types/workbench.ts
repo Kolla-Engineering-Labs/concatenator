@@ -18,4 +18,5 @@ export interface WorkbenchState {
   forceMode: boolean
   virtualFileSystem: Record<string, string>
   tokenBudget: number
+  autoSaveIgnore: boolean
 }

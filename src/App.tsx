@@ -12,6 +12,7 @@ import { StatusBar } from './web/components/StatusBar'
 import { UploadZone as Dropzone } from './web/features/concatenator/components/UploadZone'
 import { FileView } from './web/features/concatenator/components/FileView'
 import { ConcatenatorLogo } from './web/features/concatenator/components/ConcatenatorLogo'
+import { ApiClient } from './web/services/ApiClient'
 import { useFileProcessing } from './web/features/concatenator/hooks/useFileProcessing'
 import { useFileTree } from './web/features/concatenator/hooks/useFileTree'
 import { useWorkbench } from './web/hooks/useWorkbench'
@@ -42,6 +43,7 @@ export default function App() {
     'concatenate-output-format',
     'text'
   )
+  const [filterText, setFilterText] = useState('')
 
   const {
     mode: appMode,
@@ -50,6 +52,7 @@ export default function App() {
     setSidebarOpen,
     virtualFileSystem,
     setVirtualFileSystem,
+    tokenBudget,
   } = useWorkbench()
 
   const {
@@ -64,6 +67,9 @@ export default function App() {
     handleDrop,
     handleConcatenate,
     handleDownloadAsZip,
+    loadVfsFiles,
+    validationResult,
+    clearValidation,
   } = useFileProcessing({
     appMode,
     isIgnored,
@@ -171,7 +177,62 @@ export default function App() {
     setFiles([])
     setVirtualFileSystem({})
     setImportError(null)
-  }, [appMode, setFiles, setVirtualFileSystem, setImportError])
+    clearValidation()
+  }, [appMode, setFiles, setVirtualFileSystem, setImportError, clearValidation])
+
+  // Fetch VFS tree and Config from backend on mount
+  useEffect(() => {
+    let mounted = true
+    const initWorkspace = async () => {
+      try {
+        const config = await ApiClient.getConfig()
+        if (mounted && config.maxFiles) {
+          setMaxFileLimit(config.maxFiles)
+        }
+      } catch {
+        // Not running via CLI or config unavailable
+      }
+
+      try {
+        const { tree, partial } = await ApiClient.getVfsState()
+        // tree is null if no path was specified (Blank Slate)
+        if (mounted && tree && tree.children && tree.children.length > 0) {
+          const flatFiles: FileItem[] = []
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const flatten = (node: any) => {
+            if (node.path === '.') {
+              if (node.children) node.children.forEach(flatten)
+              return
+            }
+            flatFiles.push({
+              name: node.name,
+              path: node.path,
+              kind: node.kind,
+              size: node.size || 0,
+              content: '', // content isn't loaded yet
+              isIgnored: node.isIgnored,
+              isNegated: node.isNegated,
+            })
+            if (node.children) node.children.forEach(flatten)
+          }
+          flatten(tree)
+
+          if (partial) {
+            console.warn('VFS scan hit the file limit, tree is partial.')
+          }
+
+          loadVfsFiles(flatFiles)
+        }
+      } catch (err) {
+        console.warn('Failed to fetch VFS tree:', err)
+      }
+    }
+    initWorkspace()
+    return () => {
+      mounted = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Track previously seen paths to only auto-expand new ones
   const seenPathsRef = useRef<Set<string>>(new Set(['']))
@@ -239,6 +300,8 @@ export default function App() {
           ignoredIsPrecise={displayFiles
             .filter((f) => f.isIgnored)
             .every((f) => f.isPrecise)}
+          filterText={filterText}
+          setFilterText={setFilterText}
         />
 
         {/* Main Content */}
@@ -310,14 +373,25 @@ export default function App() {
               {(appMode === AppMode.CONCATENATE || files.length > 0) && (
                 <FileView
                   files={files}
-                  filteredFiles={displayFiles}
+                  filteredFiles={displayFiles.filter(
+                    (f) =>
+                      !filterText ||
+                      f.path.toLowerCase().includes(filterText.toLowerCase())
+                  )}
                   fileTree={fileTree}
                   expandedPaths={expandedPaths}
                   setExpandedPaths={setExpandedPaths}
                   isProcessing={isProcessing}
                   onConcatenate={() =>
                     handleConcatenate(
-                      displayFiles.filter((f) => !f.isIgnored),
+                      displayFiles.filter(
+                        (f) =>
+                          !f.isIgnored &&
+                          (!filterText ||
+                            f.path
+                              .toLowerCase()
+                              .includes(filterText.toLowerCase()))
+                      ),
                       outputFormat
                     )
                   }
@@ -330,6 +404,10 @@ export default function App() {
                   onRemoveFile={handleRemoveFile}
                   outputFormat={outputFormat}
                   setOutputFormat={setOutputFormat}
+                  validationResult={validationResult}
+                  tokenBudget={tokenBudget}
+                  totalTokens={totalTokens}
+                  importError={importError}
                 />
               )}
             </div>

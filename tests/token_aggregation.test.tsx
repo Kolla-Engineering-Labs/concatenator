@@ -1,29 +1,34 @@
 import { describe, it, expect, vi } from 'vitest'
-import { renderHook, waitFor } from '@testing-library/react'
+import { renderHook, waitFor, act } from '@testing-library/react'
 import { useTokenAggregation } from '../src/web/hooks/useTokenAggregation'
 import { useFileTree } from '../src/web/features/concatenator/hooks/useFileTree'
 import { FileItem } from '../src/core/types'
 
 // Mock Worker
+const mockInstances: any[] = []
 class MockWorker {
-  onmessage: (e: any) => void = () => {}
+  onmessage: any = null
   postMessage = vi.fn((data) => {
     // Simulate worker processing and returning results
     setTimeout(() => {
-      this.onmessage({
-        data: {
-          results: data.files.map((f: any) => ({
-            id: f.id,
-            tokens: f.content.length, // Simple mock calculation
-            success: true,
-          })),
-        },
-      })
+      if (this.onmessage) {
+        this.onmessage({
+          data: {
+            results: data.files.map((f: any) => ({
+              id: f.id,
+              tokens: f.content.length, // Simple mock calculation
+              success: true,
+            })),
+          },
+        })
+      }
     }, 10)
   })
   terminate = vi.fn()
+  constructor() {
+    mockInstances.push(this)
+  }
 }
-
 global.Worker = MockWorker as any
 
 describe('useTokenAggregation Hook', () => {
@@ -56,6 +61,68 @@ describe('useTokenAggregation Hook', () => {
     )
 
     expect(result.current.tokenMap['test.ts'].tokens).toBe(11) // Our mock worker returns length
+  })
+
+  it('skips non-file items and empty content', async () => {
+    const mixedFiles: any[] = [
+      { name: 'dir', path: 'dir', kind: 'directory' },
+      { name: 'empty.ts', path: 'empty.ts', kind: 'file', content: '' },
+      { name: 'binary.ts', path: 'binary.ts', kind: 'file', content: null },
+    ]
+    const { result } = renderHook(() => useTokenAggregation(mixedFiles))
+
+    expect(Object.keys(result.current.tokenMap).length).toBe(0)
+  })
+
+  it('debounces multiple worker messages', async () => {
+    vi.useFakeTimers()
+    const { result } = renderHook(() => useTokenAggregation(files))
+
+    // Access the internal worker instance
+    const worker = mockInstances[mockInstances.length - 1]
+
+    // Simulate multiple messages
+    act(() => {
+      worker.onmessage({
+        data: { results: [{ id: 'test.ts', tokens: 10, success: true }] },
+      })
+      worker.onmessage({
+        data: { results: [{ id: 'test.ts', tokens: 20, success: true }] },
+      })
+    })
+
+    // Advance timer but not all the way
+    act(() => {
+      vi.advanceTimersByTime(100)
+    })
+    expect(result.current.tokenMap['test.ts'].isPrecise).toBe(false) // Still heuristic
+
+    // Advance all the way
+    act(() => {
+      vi.advanceTimersByTime(200)
+    })
+    expect(result.current.tokenMap['test.ts'].tokens).toBe(20) // Final message won
+    vi.useRealTimers()
+  })
+
+  it('uses hash cache for identical content', async () => {
+    const { result, rerender } = renderHook(({ f }) => useTokenAggregation(f), {
+      initialProps: { f: files },
+    })
+
+    // Wait for precise
+    await waitFor(() =>
+      expect(result.current.tokenMap['test.ts'].isPrecise).toBe(true)
+    )
+    const firstTokens = result.current.tokenMap['test.ts'].tokens
+
+    // Swap files out and back in with same content
+    rerender({ f: [] })
+    rerender({ f: files })
+
+    // Should be immediate precise now from cache
+    expect(result.current.tokenMap['test.ts'].isPrecise).toBe(true)
+    expect(result.current.tokenMap['test.ts'].tokens).toBe(firstTokens)
   })
 })
 

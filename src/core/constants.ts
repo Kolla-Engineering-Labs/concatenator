@@ -112,7 +112,6 @@ export const DEFAULT_IGNORE_LIST = [
   '*.o',
   '*.obj',
   '*.png',
-  '*.svg',
   '*.swp',
   '*.tif',
   '*.tiff',

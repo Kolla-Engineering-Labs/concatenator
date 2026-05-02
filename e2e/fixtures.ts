@@ -9,6 +9,7 @@ import {
   type APIRequestContext,
 } from '@playwright/test'
 import { DEFAULT_IGNORE_LIST as CORE_IGNORE_LIST } from '../src/core/constants'
+import 'dotenv/config'
 
 type TestFixtures = {
   apiContext: APIRequestContext
@@ -35,10 +36,12 @@ export const test = baseTest.extend<TestFixtures>({
   // Test-scoped fixture: provides API context with worker ID header
   apiContext: async ({ playwright, baseURL }, use, testInfo) => {
     const workerId = getWorkerId(testInfo.workerIndex)
+    const apiToken = process.env.CONCATENATOR_API_TOKEN || ''
     const apiContext = await playwright.request.newContext({
       baseURL,
       extraHTTPHeaders: {
         'X-Worker-Id': workerId,
+        ...(apiToken && { 'X-Concatenator-Token': apiToken }),
       },
     })
 
@@ -48,12 +51,31 @@ export const test = baseTest.extend<TestFixtures>({
     await apiContext.dispose()
   },
 
-  // Override page fixture to add worker ID header
+  // Override page fixture to add worker ID header and mock routes
   page: async ({ page }, use, testInfo) => {
     const workerId = getWorkerId(testInfo.workerIndex)
-    // Add X-Worker-Id header to all requests from the page
+    // Add X-Worker-Id and auth token headers to all requests from the page
+    const apiToken = process.env.CONCATENATOR_API_TOKEN || ''
     await page.setExtraHTTPHeaders({
       'X-Worker-Id': workerId,
+      ...(apiToken && { 'X-Concatenator-Token': apiToken }),
+    })
+
+    // Mock /api/vfs to return an empty tree so tests start in a clean state
+    await page.route('**/api/vfs', (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          tree: { name: 'root', path: '.', kind: 'directory', children: [] },
+          partial: false,
+        }),
+      })
+    })
+
+    // Enable autoSaveIgnore guard-rail by default for E2E tests
+    await page.addInitScript(() => {
+      window.localStorage.setItem('concat_auto_save_ignore', 'true')
     })
 
     await use(page)

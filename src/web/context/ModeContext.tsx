@@ -4,6 +4,7 @@ import { AppMode, ViewPreference } from '../types/workbench'
 import { ModeContext } from './ModeContextCore'
 import { DEFAULT_IGNORE_LIST } from '../../core/constants'
 import { IgnoreEngine } from '../../core/ignore/IgnoreEngine'
+import { ApiClient } from '../services/ApiClient'
 
 export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -20,6 +21,10 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
     'concat_ignore',
     [...DEFAULT_IGNORE_LIST]
   )
+  const [autoSaveIgnore, setAutoSaveIgnore] = useLocalStorage<boolean>(
+    'concat_auto_save_ignore',
+    false
+  )
   const isInitialMount = React.useRef(true)
   const isInitialized = React.useRef(false)
   const lastSyncedList = React.useRef<string[] | null>(null)
@@ -27,33 +32,54 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
 
   // Fetch initial ignore list from server and sync with local
   React.useEffect(() => {
+    let mounted = true
     const fetchFromServer = async () => {
       try {
-        const response = await fetch('/api/ignore-list')
-        if (response.ok) {
-          const serverList = await response.json()
-          if (Array.isArray(serverList)) {
-            // sync with server list
-            setIgnoreList(
-              serverList.sort((a: string, b: string) => a.localeCompare(b))
-            )
+        const serverList = await ApiClient.getIgnoreList()
+        if (mounted && Array.isArray(serverList)) {
+          const sorted = serverList.sort((a: string, b: string) =>
+            a.localeCompare(b)
+          )
+          setIgnoreList(sorted)
+          lastSyncedList.current = sorted
+        }
+
+        // Also fetch VFS tree if available
+        try {
+          const vfsData = await ApiClient.getVfsState()
+          if (mounted && vfsData && vfsData.tree && vfsData.tree.children) {
+            // ... to be implemented ...
           }
+        } catch {
+          // Ignore VFS fetch errors
         }
       } catch {
         console.warn(
           'Failed to fetch ignore list from server, using local only.'
         )
+        if (mounted) {
+          lastSyncedList.current = [...ignoreList]
+        }
       } finally {
-        isInitialized.current = true
-        lastSyncedList.current = [...ignoreList]
+        if (mounted) {
+          isInitialized.current = true
+        }
       }
     }
     fetchFromServer()
+    return () => {
+      mounted = false
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setIgnoreList])
 
   // Sync back to server on changes
   React.useEffect(() => {
+    // CRITICAL: Prevent auto-saving if the guard-rail is disabled
+    if (!autoSaveIgnore) {
+      return
+    }
+
     // Skip if it's the very first render
     if (isInitialMount.current) {
       isInitialMount.current = false
@@ -77,14 +103,8 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
       if (isSyncing.current) return
       isSyncing.current = true
       try {
-        const response = await fetch('/api/ignore-list', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(ignoreList),
-        })
-        if (response.ok) {
-          lastSyncedList.current = [...ignoreList]
-        }
+        await ApiClient.updateIgnoreList(ignoreList)
+        lastSyncedList.current = [...ignoreList]
       } catch {
         console.error('Failed to sync ignore list to server')
       } finally {
@@ -92,7 +112,7 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     }
     saveToServer()
-  }, [ignoreList])
+  }, [ignoreList, autoSaveIgnore])
 
   const [isSidebarOpen, setIsSidebarOpen] = useLocalStorage<boolean>(
     'concat_sidebar',
@@ -165,6 +185,7 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
         forceMode,
         virtualFileSystem,
         tokenBudget,
+        autoSaveIgnore,
         setMode: handleModeChange,
         setView,
         setIgnoreList,
@@ -174,6 +195,7 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
         setForceMode,
         setVirtualFileSystem,
         setTokenBudget,
+        setAutoSaveIgnore,
         resetWorkbench,
       }}
     >

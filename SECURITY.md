@@ -26,33 +26,21 @@ We use GitHub's native **Private Vulnerability Reporting** feature to ensure sec
 
 ## Security Best Practices for Users
 
-### 🔑 API Key Safety
-
-Concatenator implements an **"in-memory only"** storage policy for all API keys:
-
-- **No persistent storage**: API keys entered in the Settings modal are held only in memory for the current browser session
-- **No browser storage**: Keys are never written to `localStorage`, `sessionStorage`, cookies, or IndexedDB
-- **Session-scoped**: Keys must be re-entered after each page reload
-- **No server transmission**: API keys are not transmitted to our servers (they are used directly from the browser for any LLM integrations)
-
-> [!NOTE]
-> This design prioritizes your security over convenience. While you must re-enter keys on each session, you can be confident they won't persist in browser storage or be accessible to other websites.
-
-> [!TIP]
-> **Key Management**: Use a `.env` file for local development to avoid re-entering keys while keeping them out of browser memory. [Get a Gemini API Key here](https://aistudio.google.com/app/apikey) 💡
-
-### Recommendations
-
-1. **Use environment variables** for local development when possible (defined in `.env` file). This avoids re-entering keys on every page reload while keeping them out of browser storage. See `.env.example` for the required format.
-2. **Never commit API keys** to version control - the `.env` file is already in `.gitignore`
-3. **Use API key rotation** regularly if your provider supports it
-4. **Report any suspected key exposure** immediately to your API provider
-
 ### 📂 File System Security
 
 - **No silent file access**: All file operations require explicit user interaction (drag-and-drop or file picker)
 - **No persistent permissions**: The browser does not retain file system permissions between sessions
-- **Path Traversal Protection**: All paths are sanitized and verified to stay within the user-granted scope
+- **Path Traversal Protection**: All paths are sanitized and verified to stay within the user-granted scope using standard resolution (`fs.realpathSync`) to block ".." or malicious symlink escapes.
+
+### 🛡️ Network & API Security
+
+Concatenator implements a multi-layered defense to protect your local machine from unauthorized access when running the API server:
+
+- **Localhost Binding**: The API server binds strictly to `127.0.0.1`. This ensures that external machines on your local network (LAN) cannot probe or access the server.
+- **Readiness Probe (`/health`)**: A lightweight endpoint providing server status, version, and uptime. It is explicitly excluded from the API Token Guard to allow the CLI to verify server readiness before launching the browser. No sensitive data or file access is exposed via this probe.
+- **API Token Guard**: All sensitive API endpoints (VFS, file read, config) are protected by a mandatory `X-Concatenator-Token` header.
+  - **How it works**: The server reads a token from the `CONCATENATOR_API_TOKEN` environment variable.
+  - **Protection**: This prevents malicious websites or local bots from triggering filesystem operations on your machine via CSRF or simple automated probing. See the [API Security guide](./CONTRIBUTING.md#api-security) for instructions on generating and setting this token.
 
 ## Security-Related Configuration
 
@@ -72,8 +60,9 @@ These limits are disabled in development mode for testing purposes.
 All file path operations include strict validation to prevent path traversal attacks:
 
 - Worker IDs are sanitized to allow only numeric characters
-- File paths are resolved and verified to stay within allowed directories
-- Path traversal attempts are rejected with 400 errors
+- **Unified Crawler**: Standardized filesystem traversal via the `UnifiedCrawler` class enforces strict boundary checks at the engine level.
+- **Symlink Policy**: By default, symbolic links are **not followed** to prevent infinite loops or unauthorized access to sensitive files outside the target directory. Use the `--follow-symlinks` flag in the CLI only when necessary.
+- Path traversal attempts are rejected with 403 Forbidden or 400 Bad Request errors.
 
 ## Known Security Considerations
 
@@ -108,4 +97,4 @@ We thank the security researchers and community members who have responsibly dis
 
 ---
 
-Last updated: 2026-04-16
+Last updated: 2026-04-30

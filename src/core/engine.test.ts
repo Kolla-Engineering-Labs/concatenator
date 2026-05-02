@@ -223,6 +223,49 @@ foreign content
       expect(result.foreignFiles).toContain('foreign.txt')
       expect(result.warnings[0]).toContain('mismatched Session IDs')
     })
+
+    it('detects unauthorized content before manifest', () => {
+      const content =
+        'Malicious content\n--- CONCATENATOR_SESSION_ID: abc123 ---'
+      const result = validateConcatenation(content)
+      expect(result.errors).toContain(
+        'Unauthorized content detected before session manifest'
+      )
+    })
+
+    it('detects corrupted manifest header', () => {
+      const content = '--- WRONG_HEADER: abc123 ---'
+      const result = validateConcatenation(content)
+      expect(result.errors).toContain('Corrupted manifest header detected')
+    })
+
+    it('detects orphaned end markers', () => {
+      const content = '<<<<< FILE_END >>>>>'
+      const result = validateConcatenation(content)
+      expect(result.errors).toContain(
+        '1 orphaned end marker(s) found without matching start markers'
+      )
+    })
+
+    it('detects unauthorized data after file end', () => {
+      const content = `--- CONCATENATOR_SESSION_ID: abc123 ---
+<<<<< FILE_START: test.txt (ID: abc123) >>>>>
+content
+<<<<< FILE_END >>>>>
+trailing data`
+      const result = validateConcatenation(content)
+      expect(result.errors).toContain(
+        'Unauthorized data detected after end of file: test.txt'
+      )
+    })
+
+    it('detects empty file warning', () => {
+      const content = `--- CONCATENATOR_SESSION_ID: abc123 ---
+<<<<< FILE_START: empty.txt (ID: abc123) >>>>>
+<<<<< FILE_END >>>>>`
+      const result = validateConcatenation(content)
+      expect(result.warnings).toContain('Empty file detected: empty.txt')
+    })
   })
 
   describe('generateFileTimestamp', () => {

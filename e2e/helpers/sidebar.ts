@@ -18,27 +18,25 @@ export async function jsClick(locator: Locator): Promise<void> {
  * On desktop, ensures state is consistent.
  */
 export async function ensureSidebarOpen(page: Page): Promise<void> {
-  const isMobile = page.viewportSize()
-    ? page.viewportSize()!.width < 1024
-    : false
+  // Wait for the UI to be ready by waiting for either the sidebar content
+  // or the menu toggle button. This ensures hydration has finished.
+  const aside = page.locator('aside')
+  const openButton = page.getByTitle('Open menu')
 
-  if (isMobile) {
-    const openButton = page.getByTitle('Open menu')
-    if (await openButton.isVisible()) {
-      await jsClick(openButton)
-      // Wait for sidebar to be visible and animation to finish
-      await page.locator('aside').waitFor({ state: 'visible', timeout: 10000 })
-      await page.waitForTimeout(1000)
-    }
-  } else {
-    // On desktop, we might still need to toggle if it was manually closed
-    // but the app design usually keeps it open.
-    // If there's an open button, click it.
-    const openButton = page.getByTitle('Open menu')
-    if (await openButton.isVisible()) {
-      await jsClick(openButton)
-      await page.waitForTimeout(1000)
-    }
+  try {
+    await Promise.race([
+      aside.waitFor({ state: 'visible', timeout: 5000 }),
+      openButton.waitFor({ state: 'visible', timeout: 5000 }),
+    ])
+  } catch {
+    // If neither appears, we'll check visibility below and decide what to do
+  }
+
+  if (await openButton.isVisible()) {
+    await jsClick(openButton)
+    // Wait for sidebar to be visible and animation to finish
+    await aside.waitFor({ state: 'visible', timeout: 10000 })
+    await page.waitForTimeout(500)
   }
 }
 
@@ -70,8 +68,15 @@ export async function ensureSidebarClosed(page: Page): Promise<void> {
 
   if (await closeButton.isVisible()) {
     await jsClick(closeButton)
-    // Wait for sidebar to be hidden and animation to finish
-    await page.locator('aside').waitFor({ state: 'hidden', timeout: 10000 })
+    // Wait for sidebar to animate off-screen (has -translate-x-full class when closed)
+    // Note: Playwright considers visibility:hidden elements as "visible" since they still take up layout space
+    await page.waitForFunction(
+      () => {
+        const aside = document.querySelector('aside')
+        return aside && aside.classList.contains('-translate-x-full')
+      },
+      { timeout: 10000 }
+    )
     // Extra grace period for CSS transition/overlay to clear
     await page.waitForTimeout(500)
   }

@@ -24,7 +24,10 @@ npm install
 npm run dev
 ```
 
-The app will open at `http://localhost:3000`.
+The app will open at `http://localhost:5173`.
+
+> [!TIP]
+> **Setup**: Copy `.env.example` to `.env` and add a `CONCATENATOR_API_TOKEN`. This token secures your local file operations. See [API Security](./CONTRIBUTING.md#api-security) for help generating the token. 🔑
 
 ## 🚀 Quick Usage (1-Minute Guide)
 
@@ -72,6 +75,12 @@ npm link
 concatenator --help
 ```
 
+You can also compile a standalone executable that doesn't require Node.js:
+
+```bash
+npm run build:exe
+```
+
 # Quick CLI Examples
 
 ```bash
@@ -102,9 +111,9 @@ concatenator validate bundle.txt
 
 ## Next Steps
 
-- **Read the full [README](./README.md)** for advanced features (PDF export, API keys, ignore patterns)
+- **Read the full [README](./README.md)** for advanced features (PDF export, ignore patterns)
 - **Set up your [development environment](./CONTRIBUTING.md)** to contribute
-- **Review [security practices](./SECURITY.md)** for API key handling
+- **Review [security practices](./SECURITY.md)** for environment variable handling
 - **Check the [CHANGELOG](./CHANGELOG.md)** for recent updates and release notes
 
 ---

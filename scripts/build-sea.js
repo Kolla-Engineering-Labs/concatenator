@@ -35,11 +35,23 @@ if (majorVersion < 22) {
 if (!existsSync(distDir)) mkdirSync(distDir)
 if (!existsSync(seaDir)) mkdirSync(seaDir)
 
+// Step 0.5: Bundle Web Assets
+console.log('📦 Bundling Web Assets...')
+try {
+  execSync('npx tsx scripts/build-web-assets.ts', {
+    cwd: rootDir,
+    stdio: 'inherit',
+  })
+} catch (error) {
+  console.error('❌ Failed to bundle web assets:', error.message)
+  process.exit(1)
+}
+
 // Step 1: Bundle the CLI with esbuild or similar
-console.log('📦 Bundling CLI...')
+console.log('\n📦 Bundling CLI...')
 try {
   execSync(
-    'npx esbuild src/cli/index.ts --bundle --platform=node --format=esm --outfile=dist/sea/concatenator.js --external:fs --external:path --external:url --external:os',
+    'npx esbuild src/cli/index.ts --bundle --platform=node --format=cjs --outfile=dist/sea/concatenator.js --external:fs --external:path --external:url --external:os',
     {
       cwd: rootDir,
       stdio: 'inherit',
@@ -63,7 +75,7 @@ const seaConfig = {
 }
 writeFileSync(
   join(rootDir, 'sea-config.json'),
-  JSON.stringify(seaConfig, null, 2)
+  JSON.stringify(seaConfig, null, 2) + '\n'
 )
 
 // Step 3: Generate the blob
@@ -89,18 +101,8 @@ try {
   copyFileSync(nodePath, exePath)
 
   // Use postject to inject the blob
-  execFileSync(
-    'npx',
-    [
-      'postject',
-      exePath,
-      'NODE_SEA_BLOB',
-      'dist/sea/concatenator.blob',
-      '--sentinel-fuse',
-      'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2',
-      '--macho-segment-name',
-      'NODE_SEA',
-    ],
+  execSync(
+    `npx postject "${exePath}" NODE_SEA_BLOB "dist/sea/concatenator.blob" --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 --macho-segment-name NODE_SEA`,
     {
       cwd: rootDir,
       stdio: 'inherit',

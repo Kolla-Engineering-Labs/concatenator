@@ -25,12 +25,15 @@ test.describe('Max File Limit Feature', () => {
     // Clear localStorage before navigation to avoid interference from previous test runs
     // Note: concatenator-max-files is NOT cleared here to allow persistence testing
     await page.addInitScript(() => {
+      if (sessionStorage.getItem('__test_init__')) return
+
       localStorage.removeItem('concatenate-ignore')
       localStorage.removeItem('concatenate-view-mode')
       localStorage.removeItem('concatenate-dark-mode')
       localStorage.removeItem('concat_mode')
       localStorage.removeItem('concat_view')
       localStorage.removeItem('concat_ignore')
+      sessionStorage.setItem('__test_init__', 'true')
     })
 
     // Reset server-side ignore list BEFORE navigation so client fetches correct state.
@@ -145,6 +148,13 @@ test.describe('Max File Limit Feature', () => {
     })
 
     test('should default to 10000', async ({ page }) => {
+      // Clear localStorage specifically for this test to ensure we see the default
+      await page.evaluate(() => {
+        localStorage.removeItem('concatenator-max-files')
+      })
+      await page.waitForTimeout(500)
+      await page.reload({ waitUntil: 'domcontentloaded' })
+
       const maxFileLimitSelect = page.locator('select#max-file-limit')
       await expect(maxFileLimitSelect).toBeVisible({ timeout: 10000 })
 
@@ -185,7 +195,7 @@ test.describe('Max File Limit Feature', () => {
       await page.evaluate(() => {
         localStorage.setItem('concatenator-max-files', '2500')
       })
-
+      await page.waitForTimeout(500)
       // Reload the page
       await page.reload({ waitUntil: 'domcontentloaded' })
 
@@ -219,7 +229,9 @@ test.describe('Max File Limit Feature', () => {
         await uploadHelper.setFilesOnInput(files)
 
         // Wait for files to be processed
-        await expect(page.getByText(/Selected Files.*\(501\)/)).toBeVisible({
+        await expect(
+          page.getByText(/Selected Files.*\(\s*501\s*\)/)
+        ).toBeVisible({
           timeout: 15000,
         })
 
@@ -230,9 +242,10 @@ test.describe('Max File Limit Feature', () => {
         await jsClick(concatenateButton)
 
         // Check for error message with correct limit
-        const errorMessage = page.locator(
-          'text=Warning: You are attempting to concatenate over 500 files'
+        const errorMessage = page.getByText(
+          /Warning: You are attempting to concatenate over 500 files/i
         )
+        await errorMessage.scrollIntoViewIfNeeded()
         await expect(errorMessage).toBeVisible({ timeout: 10000 })
       } finally {
         uploadHelper.cleanup()
@@ -262,7 +275,9 @@ test.describe('Max File Limit Feature', () => {
         await uploadHelper.setFilesOnInput(files)
 
         // Wait for files to be processed
-        await expect(page.getByText(/Selected Files.*\(500\)/)).toBeVisible({
+        await expect(
+          page.getByText(/Selected Files.*\(\s*500\s*\)/)
+        ).toBeVisible({
           timeout: 15000,
         })
 
@@ -276,8 +291,8 @@ test.describe('Max File Limit Feature', () => {
         await page.waitForTimeout(500)
 
         // No error should be shown for files under limit
-        const errorMessage = page.locator(
-          'text=Warning: You are attempting to concatenate'
+        const errorMessage = page.getByText(
+          /Warning: You are attempting to concatenate/i
         )
         await expect(errorMessage).not.toBeVisible({ timeout: 5000 })
       } finally {
@@ -321,8 +336,8 @@ test.describe('Max File Limit Feature', () => {
         await page.waitForTimeout(500)
 
         // No error should be shown
-        const errorMessage = page.locator(
-          'text=Warning: You are attempting to concatenate'
+        const errorMessage = page.getByText(
+          /Warning: You are attempting to concatenate/i
         )
         await expect(errorMessage).not.toBeVisible({ timeout: 5000 })
 

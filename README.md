@@ -58,7 +58,8 @@ graph LR
 - **Smart Ignore System**:
   - Exclude common noise (e.g., `node_modules`, `.git`, `package-lock.json`) using simple string matches or powerful Regular Expressions.
   - **Auto-Discovery**: CLI automatically respects `.concatignore` or `.gitignore` in your current working directory.
-  - **CLI Persistence**: Use `-i, --ignore-file <path>` to leverage existing project configurations for both bundling and extraction. Syncs between `localStorage` and server-side `.concatenate-ignore` in the web UI.
+  - **CLI Persistence**: Use `-i, --ignore-file <path>` to leverage existing project configurations for both bundling and extraction.
+  - **Web Auto-Save**: Toggle the **"Auto-Save to .concatenate-ignore"** option in the UI to keep your local workspace in sync with your project's ignore configuration automatically.
 - **Structural Redundancy Fixes**:
   - **Root Pruning (Web)**: Automatically reconciles overlapping folder drops. If you drop a parent folder after a child, the workbench "absorbs" the child into the new, higher-level structure to prevent duplicates.
   - **Input Pruning (CLI)**: Normalizes and filters overlapping command-line arguments. If both `./src` and `./src/components` are passed, the redundant sub-path is automatically pruned.
@@ -76,6 +77,8 @@ graph LR
   - Dark Mode optimized for long coding sessions.
   - Automatic de-concatenation upon dropping a compatible `.txt` file.
   - Output format toggle (TEXT/PDF) with localStorage persistence.
+- **Hybrid SEA Architecture**: Run Concatenator as a high-performance, single standalone executable (SEA) that embeds the full Web UI. Perfect for air-gapped environments or simplified distribution.
+- **Privacy-First Analytics**: Lightweight usage tracking via **PostHog** to help us improve the tool. All data is collected using privacy-preserving, anonymous profiles.
 - **Hardware Safety Guardrails**: Configurable **Max File Limit** (default: 10,000 files) to prevent browser memory exhaustion.
 - **Privacy-First File Access**: Uses the **File System Access API** with explicit user control — directory permissions are granted per-session through native browser picker dialogs. No persistent background access.
 - **Hidden File Handling**: Hidden files and directories (those starting with `.`) are not automatically excluded. Common hidden items (`.git`, `.env`, `.vscode`, etc.) are pre-configured in the default ignore list. You can add custom patterns to exclude additional hidden files.
@@ -170,18 +173,12 @@ To run Concatenator locally, ensure you have [Node.js](https://nodejs.org/) inst
    ```bash
    npm run dev
    ```
-   The app will be available at `http://localhost:3000`.
+   The app will be available at `http://localhost:5173`.
 
 ## Environment Variables
 
 Concatenator uses a hierarchical approach for API key management to ensure flexibility across different environments.
 
-### API Key Handling
-
-**Security Note**: API keys are stored **only in memory** for the current browser session. They are not persisted to `localStorage`, cookies, or any browser storage. This means:
-
-- Keys must be re-entered after each page reload
-- Keys are never written to disk in the browser
 - Environment variables can still be used for server-side builds
 
 ### Configuration
@@ -190,12 +187,16 @@ Create a `.env` file in the root directory and add your API keys:
 
 ```env
 # .env
-GEMINI_API_KEY=your_gemini_key
-OPENAI_API_KEY=your_openai_key
-ANTHROPIC_API_KEY=your_anthropic_key
-
-# Optional: Logging level (debug | info | error)
+# Logging level (debug | info | error)
 LOG_LEVEL=info
+
+# PostHog Analytics
+VITE_PUBLIC_POSTHOG_KEY=your_posthog_key
+VITE_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
+
+# API Security Token — protect local API endpoints from bots/LAN probing.
+# Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+CONCATENATOR_API_TOKEN=your_secret_token_here
 ```
 
 ## Usage
@@ -274,7 +275,35 @@ Or use the development script from the project directory:
 npm run dev:cli -- [command] [options]
 ```
 
+#### Standalone Executable
+
+You can compile Concatenator into a single standalone executable (SEA) that doesn't require Node.js to be installed on the target machine:
+
+```bash
+npm run build:exe
+```
+
+The generated executable will be available in the `dist/` directory.
+
 #### Commands
+
+**`ui [path]`** - Launch the web-based Workbench UI for a specific directory
+
+```bash
+# Open UI in current directory
+concatenator ui
+
+# Open UI for a specific project
+concatenator ui ./my-project
+
+# Launch with custom file limits and ignore rules
+concatenator ui --max-files 5000 --ignore-file .gitignore ./src
+```
+
+Options:
+
+- `-m, --max-files <number>` - Preset the maximum file limit (overrides default 10,000)
+- `-i, --ignore-file <file>` - Specify a custom ignore file to use in the Workbench
 
 **`concat <paths...>`** - Bundle one or more directories/files into a single LLM-ready file
 
@@ -300,6 +329,7 @@ Options:
 - `-v, --verbose` - Verbosity level (-v: dir-level tokens, -vv: file-level tokens)
 - `--max-tokens <number>` - Budget guard: warn if the estimated token count is exceeded
 - `-f, --force` - Overwrite existing files without prompting
+- `--follow-symlinks` - Follow symbolic links during traversal (CAUTION: may cause infinite loops)
 
 **`extract <file>`** - Reconstruct a project from a concatenated file
 

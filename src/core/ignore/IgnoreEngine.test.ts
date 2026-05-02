@@ -54,6 +54,11 @@ describe('IgnoreEngine', () => {
       expect(engine.isIgnored('TEMP_FOLDER/file.js')).toBe(true)
       expect(engine.isIgnored('item_template.html')).toBe(true) // 'temp' is in 'template'
     })
+
+    it('falls back to string match for invalid regex', () => {
+      const engine = new IgnoreEngine(['/[invalid/'])
+      expect(engine.isIgnored('[invalid')).toBe(true)
+    })
   })
 
   describe('normalization', () => {
@@ -76,11 +81,11 @@ describe('IgnoreEngine', () => {
       expect(patterns).toEqual(['node_modules', 'dist', '*.log'])
     })
 
-    it('ignores comments and empty lines', () => {
+    it('ignores comments and empty lines but preserves negation lines', () => {
       const content =
-        '# This is a comment\n\nnode_modules\n  \n# Another comment\ndist'
+        '# This is a comment\n\nnode_modules\n  \n# Another comment\ndist\n!dist/keep.js'
       const patterns = IgnoreEngine.parseIgnoreFile(content)
-      expect(patterns).toEqual(['node_modules', 'dist'])
+      expect(patterns).toEqual(['node_modules', 'dist', '!dist/keep.js'])
     })
 
     it('trims whitespace from patterns', () => {
@@ -92,6 +97,71 @@ describe('IgnoreEngine', () => {
     it('returns empty array for empty content', () => {
       expect(IgnoreEngine.parseIgnoreFile('')).toEqual([])
       expect(IgnoreEngine.parseIgnoreFile('   \n\n  ')).toEqual([])
+    })
+  })
+
+  describe('negation patterns (!)', () => {
+    it('un-ignores a path when a negation rule matches after an ignore rule', () => {
+      // tests/ is ignored, but tests/schema.ts is explicitly un-ignored
+      const engine = new IgnoreEngine(['tests', '!tests/schema.ts'])
+      expect(engine.isIgnored('tests/utils.ts')).toBe(true)
+      expect(engine.isIgnored('tests/schema.ts')).toBe(false)
+    })
+
+    it('respects last-match-wins order — a later ignore overrides a negation', () => {
+      const engine = new IgnoreEngine(['tests', '!tests/schema.ts', 'tests'])
+      // The last rule re-ignores everything in tests/
+      expect(engine.isIgnored('tests/schema.ts')).toBe(true)
+    })
+
+    it('negation works after a glob rule', () => {
+      const engine = new IgnoreEngine(['*.log', '!important.log'])
+      expect(engine.isIgnored('debug.log')).toBe(true)
+      expect(engine.isIgnored('important.log')).toBe(false)
+    })
+
+    it('negation has no effect when nothing was previously ignored', () => {
+      const engine = new IgnoreEngine(['!tests/schema.ts'])
+      // Nothing was ignored, so negation is a no-op
+      expect(engine.isIgnored('tests/schema.ts')).toBe(false)
+      expect(engine.isIgnored('src/index.ts')).toBe(false)
+    })
+
+    it('isExplicitlyNegated returns true only for un-ignored paths', () => {
+      const engine = new IgnoreEngine(['tests', '!tests/schema.ts'])
+      expect(engine.isExplicitlyNegated('tests/schema.ts')).toBe(true)
+      expect(engine.isExplicitlyNegated('tests/utils.ts')).toBe(false)
+      expect(engine.isExplicitlyNegated('src/index.ts')).toBe(false)
+    })
+
+    it('isExplicitlyNegated returns false when last match is a non-negated rule', () => {
+      // Even if there was a negation before, the final non-negated match wins
+      const engine = new IgnoreEngine([
+        'tests',
+        '!tests/schema.ts',
+        'tests/schema.ts',
+      ])
+      expect(engine.isExplicitlyNegated('tests/schema.ts')).toBe(false)
+      expect(engine.isIgnored('tests/schema.ts')).toBe(true)
+    })
+  })
+
+  describe('Edge Cases', () => {
+    it('handles empty paths', () => {
+      const engine = new IgnoreEngine(['node_modules'])
+      expect(engine.isIgnored('')).toBe(false)
+      expect(engine.isExplicitlyNegated('')).toBe(false)
+    })
+
+    it('handles special glob characters', () => {
+      const engine = new IgnoreEngine(['path+^[].txt'])
+      expect(engine.isIgnored('path+^[].txt')).toBe(true)
+    })
+
+    it('handles /** suffix matching parent directory', () => {
+      const engine = new IgnoreEngine(['src/**'])
+      expect(engine.isIgnored('src')).toBe(true)
+      expect(engine.isIgnored('src/file.js')).toBe(true)
     })
   })
 })

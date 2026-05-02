@@ -124,6 +124,11 @@ export const FileTable: React.FC<FileTableProps> = ({
                 >
                   {file.name}
                 </span>
+                {file.isNegated && (
+                  <span className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 px-1.5 py-0.5 rounded uppercase tracking-tighter font-bold inline-block align-middle ml-2">
+                    Negated
+                  </span>
+                )}
               </div>
             </td>
             <td className="px-4 py-2.5 max-w-[250px]">

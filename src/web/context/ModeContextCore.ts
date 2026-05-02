@@ -12,6 +12,7 @@ export interface ModeContextType extends WorkbenchState {
   addIgnorePattern: (pattern: string) => void
   removeIgnorePattern: (pattern: string) => void
   resetWorkbench: () => void
+  setAutoSaveIgnore: Dispatch<SetStateAction<boolean>>
 }
 
 export const ModeContext = createContext<ModeContextType | undefined>(undefined)

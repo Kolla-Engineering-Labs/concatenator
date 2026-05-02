@@ -92,6 +92,23 @@ describe('logger', () => {
         expect.stringContaining('[ERROR] test error message')
       )
     })
+
+    it('should NOT log warn messages when LOG_LEVEL is error', () => {
+      const consoleWarnSpy = vi
+        .spyOn(console, 'warn')
+        .mockImplementation(() => {})
+      logger._setLevel('error')
+      logger.warn('test warn message')
+      expect(consoleWarnSpy).not.toHaveBeenCalled()
+      consoleWarnSpy.mockRestore()
+    })
+
+    it('should NOT log error messages when LOG_LEVEL is higher than error', () => {
+      // @ts-expect-error - simulating a hypothetical level higher than error
+      logger._setLevel('none')
+      logger.error('test error message')
+      expect(consoleErrorSpy).not.toHaveBeenCalled()
+    })
   })
 
   describe('additional arguments', () => {
@@ -146,6 +163,36 @@ describe('logger', () => {
           loggedTimestamp >= beforeCall && loggedTimestamp <= afterCall
         ).toBe(true)
       }
+    })
+  })
+
+  describe('environment variables', () => {
+    const originalEnv = process.env.LOG_LEVEL
+
+    afterEach(() => {
+      process.env.LOG_LEVEL = originalEnv
+    })
+
+    it('should use LOG_LEVEL from environment variable if valid', () => {
+      process.env.LOG_LEVEL = 'debug'
+      logger._setLevel(null) // Clear test override
+      logger.debug('env debug')
+      expect(consoleDebugSpy).toHaveBeenCalled()
+    })
+
+    it('should warn and fallback to default if LOG_LEVEL is invalid', () => {
+      const consoleWarnSpy = vi
+        .spyOn(console, 'warn')
+        .mockImplementation(() => {})
+      process.env.LOG_LEVEL = 'invalid'
+      logger._setLevel(null) // Clear test override
+
+      logger.debug('env debug')
+      expect(consoleDebugSpy).not.toHaveBeenCalled()
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Invalid LOG_LEVEL "invalid"')
+      )
+      consoleWarnSpy.mockRestore()
     })
   })
 })

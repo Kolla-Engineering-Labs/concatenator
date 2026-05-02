@@ -27,8 +27,9 @@ function getCurrentLevel(): LogLevel {
   if (_testLevel !== null) {
     return _testLevel
   }
-  // Then check environment variable
-  const envLevel = process.env.LOG_LEVEL
+  // Then check environment variable (safely)
+  const envLevel =
+    typeof process !== 'undefined' ? process.env.LOG_LEVEL : undefined
   if (envLevel) {
     if (isLogLevel(envLevel)) {
       return envLevel

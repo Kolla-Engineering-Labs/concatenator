@@ -242,7 +242,7 @@ console.log("World");
     await downloadButton.waitFor({ state: 'visible', timeout: 15000 })
     const [download] = await Promise.all([
       page.waitForEvent('download', { timeout: 10000 }),
-      downloadButton.click(),
+      jsClick(downloadButton),
     ])
 
     // Verify it's a ZIP file

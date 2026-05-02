@@ -147,7 +147,6 @@ describe('Constants', () => {
       expect(DEFAULT_IGNORE_LIST).toContain('*.jpeg')
       expect(DEFAULT_IGNORE_LIST).toContain('*.jpg')
       expect(DEFAULT_IGNORE_LIST).toContain('*.png')
-      expect(DEFAULT_IGNORE_LIST).toContain('*.svg')
       expect(DEFAULT_IGNORE_LIST).toContain('*.tif')
       expect(DEFAULT_IGNORE_LIST).toContain('*.tiff')
     })

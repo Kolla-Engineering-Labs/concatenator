@@ -58,6 +58,17 @@ export const useFileProcessing = ({
   const setIsProcessing = useCallback((processing: boolean) => {
     isProcessingRef.current = processing
     setIsProcessingState(processing)
+
+    // Force a state update if we're setting processing to false but it's been true for too long
+    if (!processing) {
+      // Use a timeout to ensure the state update propagates
+      setTimeout(() => {
+        if (isProcessingRef.current !== processing) {
+          setIsProcessingState(processing)
+          isProcessingRef.current = processing
+        }
+      }, 100)
+    }
   }, [])
 
   const cancelProcessing = useCallback(() => {
@@ -75,6 +86,9 @@ export const useFileProcessing = ({
       setIsProcessing(true)
       let foundAnyTotal = false
       const skippedFiles: string[] = []
+
+      // Preserve any existing importError (e.g., from file parsing warnings)
+      const existingError = importError
 
       try {
         if (appMode === AppMode.DECONCATENATE && targetFiles.length > 0) {
@@ -138,6 +152,9 @@ export const useFileProcessing = ({
             skippedFiles
           )
           setImportError(warningMsg)
+        } else if (existingError) {
+          // Restore existing error (e.g., from file parsing warnings)
+          setImportError(existingError)
         }
       } catch (error) {
         logger.error('De-concatenation failed:', error)
@@ -148,125 +165,115 @@ export const useFileProcessing = ({
         setIsProcessing(false)
       }
     },
-    [files, setIsProcessing, appMode]
+    [files, setIsProcessing, appMode, importError]
   )
 
   const processUploadedFiles = useCallback(
     async (uploadedFiles: File[]) => {
-      setIsProcessing(true)
-      setImportError(null)
-      cancelImportRef.current = false
-      activeReaderRef.current = null
-      setImportProgress({ current: 0, total: uploadedFiles.length })
+      try {
+        setIsProcessing(true)
+        setImportError(null)
+        cancelImportRef.current = false
+        activeReaderRef.current = null
+        setImportProgress({ current: 0, total: uploadedFiles.length })
 
-      await new Promise((resolve) => setTimeout(resolve, 50))
+        await new Promise((resolve) => setTimeout(resolve, 50))
 
-      const newFiles: FileItem[] = []
-      let lastRenderTime = Date.now()
+        const newFiles: FileItem[] = []
+        let lastRenderTime = Date.now()
 
-      for (let i = 0; i < uploadedFiles.length; i++) {
-        if (cancelImportRef.current) break
+        for (let i = 0; i < uploadedFiles.length; i++) {
+          if (cancelImportRef.current) break
 
-        const file = uploadedFiles[i]
-        const path =
-          (file as { webkitRelativePath?: string }).webkitRelativePath ||
-          file.name
+          const file = uploadedFiles[i]
+          const path =
+            (file as { webkitRelativePath?: string }).webkitRelativePath ||
+            file.name
 
-        const content = await new Promise<string | ArrayBuffer | null>(
-          (resolve, reject) => {
-            const reader = new FileReader()
-            activeReaderRef.current = reader
-            reader.onload = () => resolve(reader.result as string)
-            reader.onerror = () =>
-              reject(new Error(`Failed to read file: ${file.name}`))
-            reader.onabort = () => resolve(null) // Resolve to null on abort for silent cleanup
+          const content = await new Promise<string | ArrayBuffer | null>(
+            (resolve, reject) => {
+              const reader = new FileReader()
+              activeReaderRef.current = reader
+              reader.onload = () => resolve(reader.result as string)
+              reader.onerror = () =>
+                reject(new Error(`Failed to read file: ${file.name}`))
+              reader.onabort = () => resolve(null) // Resolve to null on abort for silent cleanup
 
-            if (isImageFile(file.name) || isPdfFile(file.name)) {
-              reader.readAsDataURL(file)
-            } else {
-              reader.readAsText(file)
+              if (isImageFile(file.name) || isPdfFile(file.name)) {
+                reader.readAsDataURL(file)
+              } else {
+                reader.readAsText(file)
+              }
+            }
+          ).catch((err) => {
+            logger.error('Failed to read file:', err)
+            return null
+          })
+
+          activeReaderRef.current = null
+
+          if (content === null || cancelImportRef.current) {
+            const now = Date.now()
+            if (now - lastRenderTime > 50 || i === uploadedFiles.length - 1) {
+              setImportProgress((prev) => ({ ...prev, current: i + 1 }))
+              lastRenderTime = now
+            }
+            continue
+          }
+
+          newFiles.push({
+            name: file.name,
+            path: path,
+            kind: 'file',
+            content,
+            size: file.size,
+            tokens: estimateTokenCount(content, file.size),
+          })
+
+          const parts = path.split('/')
+          for (let j = 1; j < parts.length; j++) {
+            const dirPath = parts.slice(0, j).join('/')
+            if (!newFiles.some((f) => f.path === dirPath)) {
+              newFiles.push({
+                name: parts[j - 1],
+                path: dirPath,
+                kind: 'directory',
+              })
             }
           }
-        ).catch((err) => {
-          logger.error('Failed to read file:', err)
-          return null
-        })
 
-        activeReaderRef.current = null
-
-        if (content === null || cancelImportRef.current) {
           const now = Date.now()
           if (now - lastRenderTime > 50 || i === uploadedFiles.length - 1) {
             setImportProgress((prev) => ({ ...prev, current: i + 1 }))
             lastRenderTime = now
           }
-          continue
-        }
 
-        newFiles.push({
-          name: file.name,
-          path: path,
-          kind: 'file',
-          content,
-          size: file.size,
-          tokens: estimateTokenCount(content, file.size),
-        })
-
-        const parts = path.split('/')
-        for (let j = 1; j < parts.length; j++) {
-          const dirPath = parts.slice(0, j).join('/')
-          if (!newFiles.some((f) => f.path === dirPath)) {
-            newFiles.push({
-              name: parts[j - 1],
-              path: dirPath,
-              kind: 'directory',
-            })
+          if (i % 10 === 0) {
+            await new Promise((resolve) => setTimeout(resolve, 0))
           }
         }
 
-        const now = Date.now()
-        if (now - lastRenderTime > 50 || i === uploadedFiles.length - 1) {
-          setImportProgress((prev) => ({ ...prev, current: i + 1 }))
-          lastRenderTime = now
-        }
+        if (!cancelImportRef.current) {
+          if (appMode === AppMode.DECONCATENATE) {
+            // De-concatenate mode: we only allow ONE bundle file at a time
+            if (newFiles.length > 1) {
+              setImportError(
+                'Please upload only one concatenated file at a time.'
+              )
+              setIsProcessing(false)
+              return
+            }
 
-        if (i % 10 === 0) {
-          await new Promise((resolve) => setTimeout(resolve, 0))
-        }
-      }
+            const bundle = newFiles[0]
+            if (!bundle || typeof bundle.content !== 'string') {
+              setImportError('Failed to read concatenated file.')
+              setIsProcessing(false)
+              return
+            }
 
-      if (!cancelImportRef.current) {
-        if (appMode === AppMode.DECONCATENATE) {
-          // De-concatenate mode: we only allow ONE bundle file at a time
-          if (newFiles.length > 1) {
-            setImportError(
-              'Please upload only one concatenated file at a time.'
-            )
-            setIsProcessing(false)
-            return
-          }
-
-          const bundle = newFiles[0]
-          if (!bundle || typeof bundle.content !== 'string') {
-            setImportError('Failed to read concatenated file.')
-            setIsProcessing(false)
-            return
-          }
-
-          // Validate bundle format
-          const validation = validateConcatenation(bundle.content)
-          if (validation.targetFileCount === 0) {
-            setImportError(
-              'No concatenated files were found in the uploaded file(s). Make sure you are uploading a file generated by this tool.'
-            )
-            setIsProcessing(false)
-            return
-          }
-
-          // Parse and populate virtualFileSystem
-          try {
-            const { fileMap, skippedPaths } = parseBundle(bundle.content)
-            if (Object.keys(fileMap).length === 0) {
+            const validation = validateConcatenation(bundle.content)
+            setValidationResult(validation)
+            if (validation.targetFileCount === 0) {
               setImportError(
                 'No concatenated files were found in the uploaded file(s). Make sure you are uploading a file generated by this tool.'
               )
@@ -274,76 +281,107 @@ export const useFileProcessing = ({
               return
             }
 
-            // Convert fileMap to FileItem[] for consistent state
-            const vfsFiles: FileItem[] = Object.entries(fileMap).map(
-              ([path, content]) => ({
-                name: path.split('/').pop() || '',
-                path,
-                kind: 'file',
-                content,
-                size: content.length,
-                tokens: estimateTokenCount(content, content.length),
-              })
-            )
+            // Parse and populate virtualFileSystem
+            try {
+              const { fileMap, skippedPaths } = parseBundle(bundle.content)
 
-            setVirtualFileSystem(fileMap)
-            // Store the extracted files in the state for the UI to display
-            setFiles(vfsFiles)
-
-            // Show warnings for skipped files if any
-            if (skippedPaths.length > 0) {
-              const fileList = skippedPaths.slice(0, 3).join(', ')
-              const moreCount = skippedPaths.length - 3
-              const warningMsg =
-                moreCount > 0
-                  ? `Warning: ${skippedPaths.length} file(s) were skipped due to missing end markers: ${fileList} and ${moreCount} more. Check the console for details.`
-                  : `Warning: ${skippedPaths.length} file(s) were skipped due to missing end markers: ${fileList}. Check the console for details.`
-              logger.warn(
-                `Skipped ${skippedPaths.length} file(s) with missing end markers:`,
-                skippedPaths
-              )
-              setImportError(warningMsg)
-            }
-          } catch (err) {
-            logger.error('Failed to parse concatenated file:', err)
-            setImportError('Failed to parse concatenated file.')
-          }
-        } else {
-          setFiles((prev) => {
-            const { files: reconciledFiles, absorptions } = reconcileFiles(
-              prev,
-              newFiles
-            )
-
-            if (absorptions.length > 0) {
-              // Group by parent for cleaner logging
-              const parentMap = new Map<string, string[]>()
-              absorptions.forEach((abs) => {
-                const list = parentMap.get(abs.parent) || []
-                list.push(abs.child.split('/').pop() || abs.child)
-                parentMap.set(abs.parent, list)
-              })
-
-              parentMap.forEach((children, parent) => {
-                const childrenList =
-                  children.length > 3
-                    ? `${children.slice(0, 3).join(', ')} and ${children.length - 3} more`
-                    : children.join(', ')
-                logger.info(
-                  `Root Pruning: Merged '${childrenList}' into parent '${parent}'.`
+              if (Object.keys(fileMap).length === 0) {
+                setImportError(
+                  'No concatenated files were found in the uploaded file(s). Make sure you are uploading a file generated by this tool.'
                 )
-              })
+                setIsProcessing(false)
+                return
+              }
+
+              // Convert fileMap to FileItem[] for consistent state
+              const vfsFiles: FileItem[] = Object.entries(fileMap).map(
+                ([path, content]) => ({
+                  name: path.split('/').pop() || '',
+                  path,
+                  kind: 'file',
+                  content,
+                  size: content.length,
+                  tokens: estimateTokenCount(content, content.length),
+                })
+              )
+
+              setVirtualFileSystem(fileMap)
+              // Store the extracted files in the state for the UI to display
+              setFiles(vfsFiles)
+
+              // Add a small delay to ensure React state updates propagate before setting processing to false
+              await new Promise((resolve) => setTimeout(resolve, 50))
+
+              // Show warnings for skipped files if any
+              if (skippedPaths.length > 0) {
+                const fileList = skippedPaths.slice(0, 3).join(', ')
+                const moreCount = skippedPaths.length - 3
+                const warningMsg =
+                  moreCount > 0
+                    ? `Warning: ${skippedPaths.length} file(s) were skipped due to missing end markers: ${fileList} and ${moreCount} more. Check the console for details.`
+                    : `Warning: ${skippedPaths.length} file(s) were skipped due to missing end markers: ${fileList}. Check the console for details.`
+                logger.warn(
+                  `Skipped ${skippedPaths.length} file(s) with missing end markers:`,
+                  skippedPaths
+                )
+                setImportError(warningMsg)
+              }
+              setIsProcessing(false)
+              // Additional delay to ensure React state updates propagate
+              await new Promise((resolve) => setTimeout(resolve, 100))
+              return // Exit early to avoid the final setIsProcessing(false) call
+            } catch (err) {
+              console.error('[useFileProcessing] Error in parseBundle:', err)
+              logger.error('Failed to parse concatenated file:', err)
+              setImportError('Failed to parse concatenated file.')
+              setIsProcessing(false)
+              return // Exit early to avoid the final setIsProcessing(false) call
             }
+          } else {
+            setFiles((prev) => {
+              const { files: reconciledFiles, absorptions } = reconcileFiles(
+                prev,
+                newFiles
+              )
 
-            return reconciledFiles
-          })
+              if (absorptions.length > 0) {
+                // Group by parent for cleaner logging
+                const parentMap = new Map<string, string[]>()
+                absorptions.forEach((abs) => {
+                  const list = parentMap.get(abs.parent) || []
+                  list.push(abs.child.split('/').pop() || abs.child)
+                  parentMap.set(abs.parent, list)
+                })
+
+                parentMap.forEach((children, parent) => {
+                  const childrenList =
+                    children.length > 3
+                      ? `${children.slice(0, 3).join(', ')} and ${children.length - 3} more`
+                      : children.join(', ')
+                  logger.info(
+                    `Root Pruning: Merged '${childrenList}' into parent '${parent}'.`
+                  )
+                })
+              }
+
+              return reconciledFiles
+            })
+          }
         }
-      }
 
-      setIsProcessing(false)
-      setImportProgress({ current: 0, total: 0 })
-      cancelImportRef.current = false
-      activeReaderRef.current = null
+        setIsProcessing(false)
+        setImportProgress({ current: 0, total: 0 })
+        cancelImportRef.current = false
+        activeReaderRef.current = null
+      } catch (error) {
+        console.error(
+          '[useFileProcessing] Error in processUploadedFiles:',
+          error
+        )
+        logger.error('Error in processUploadedFiles:', error)
+        setImportError('An unexpected error occurred during file processing.')
+        setIsProcessing(false)
+      }
     },
     [
       appMode,
@@ -353,6 +391,100 @@ export const useFileProcessing = ({
       setImportError,
       setImportProgress,
     ]
+  )
+
+  const loadVfsFiles = useCallback(
+    async (vfsFiles: FileItem[]) => {
+      setIsProcessing(true)
+      setImportError(null)
+      cancelImportRef.current = false
+      activeReaderRef.current = null
+
+      const filesToProcess = vfsFiles.filter(
+        (f) => f.kind === 'file' && !f.isIgnored
+      )
+      setImportProgress({ current: 0, total: filesToProcess.length })
+
+      await new Promise((resolve) => setTimeout(resolve, 50))
+
+      const newFiles: FileItem[] = []
+      let lastRenderTime = Date.now()
+      let processedCount = 0
+
+      // Import ApiClient for this method
+      const { ApiClient } = await import('../../../services/ApiClient')
+
+      for (const file of vfsFiles) {
+        if (cancelImportRef.current) break
+
+        if (file.kind === 'directory' || file.isIgnored) {
+          newFiles.push(file)
+          continue
+        }
+
+        try {
+          const blob = await ApiClient.getFileBlob(file.path)
+
+          const content = await new Promise<string | ArrayBuffer | null>(
+            (resolve, reject) => {
+              const reader = new FileReader()
+              activeReaderRef.current = reader
+              reader.onload = () => resolve(reader.result as string)
+              reader.onerror = () =>
+                reject(new Error(`Failed to read file: ${file.path}`))
+              reader.onabort = () => resolve(null)
+
+              if (isImageFile(file.name) || isPdfFile(file.name)) {
+                reader.readAsDataURL(blob)
+              } else {
+                reader.readAsText(blob)
+              }
+            }
+          )
+
+          activeReaderRef.current = null
+
+          if (content !== null && !cancelImportRef.current) {
+            newFiles.push({
+              ...file,
+              content,
+              size: blob.size,
+              tokens: estimateTokenCount(content, blob.size),
+            })
+          }
+        } catch (err) {
+          logger.error(`Failed to load VFS file ${file.path}:`, err)
+          newFiles.push(file) // keep it but empty
+        }
+
+        processedCount++
+        const now = Date.now()
+        if (
+          now - lastRenderTime > 50 ||
+          processedCount === filesToProcess.length
+        ) {
+          setImportProgress({
+            current: processedCount,
+            total: filesToProcess.length,
+          })
+          lastRenderTime = now
+        }
+
+        if (processedCount % 10 === 0) {
+          await new Promise((resolve) => setTimeout(resolve, 0))
+        }
+      }
+
+      if (!cancelImportRef.current) {
+        setFiles(newFiles) // Replace entire file list for VFS load
+      }
+
+      setIsProcessing(false)
+      setImportProgress({ current: 0, total: 0 })
+      cancelImportRef.current = false
+      activeReaderRef.current = null
+    },
+    [setIsProcessing, setImportProgress, setFiles, setImportError]
   )
 
   const handleFileUpload = useCallback(
@@ -747,5 +879,7 @@ export const useFileProcessing = ({
     validationResult,
     validateContent,
     clearValidation,
+    loadVfsFiles,
+    clearError: () => setImportError(null),
   }
 }

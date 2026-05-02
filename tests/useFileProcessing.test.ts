@@ -23,6 +23,14 @@ vi.mock('jszip', () => {
   }
 })
 
+// Mock ApiClient
+const mockGetFileBlob = vi.fn()
+vi.mock('../src/web/services/ApiClient', () => ({
+  ApiClient: {
+    getFileBlob: mockGetFileBlob,
+  },
+}))
+
 // Mock jsPDF
 const mockSave = vi.fn()
 const mockAddPage = vi.fn()
@@ -2765,6 +2773,193 @@ describe('useFileProcessing', () => {
       expect(result.current.importError).toBe(
         'Please wait for ignore patterns to load before importing files.'
       )
+    })
+  })
+
+  describe('loadVfsFiles', () => {
+    it('successfully loads files from VFS', async () => {
+      const mockBlob = new Blob(['vfs content'], { type: 'text/plain' })
+      mockGetFileBlob.mockResolvedValue(mockBlob)
+
+      const setVirtualFileSystem = vi.fn()
+      const { result } = renderHook(() =>
+        useFileProcessing({
+          appMode: AppMode.CONCATENATE,
+          isIgnored: () => false,
+          maxFileLimit: 100,
+          isIgnoreListLoading: false,
+          setVirtualFileSystem,
+        })
+      )
+
+      const vfsFiles = [
+        { name: 'test.ts', path: 'src/test.ts', kind: 'file' as const },
+        {
+          name: 'ignored.ts',
+          path: 'src/ignored.ts',
+          kind: 'file' as const,
+          isIgnored: true,
+        },
+        { name: 'subdir', path: 'src/subdir', kind: 'directory' as const },
+      ]
+
+      await act(async () => {
+        await result.current.loadVfsFiles(vfsFiles)
+      })
+
+      // Should have loaded 1 file (test.ts)
+      expect(mockGetFileBlob).toHaveBeenCalledWith('src/test.ts')
+      expect(mockGetFileBlob).toHaveBeenCalledTimes(1)
+      expect(result.current.files.length).toBe(3) // 1 file + 1 ignored + 1 directory
+      const loadedFile = result.current.files.find(
+        (f) => f.path === 'src/test.ts'
+      )
+      expect(loadedFile?.content).toBe('vfs content')
+    })
+
+    it('handles VFS load errors gracefully', async () => {
+      mockGetFileBlob.mockRejectedValue(new Error('Network error'))
+
+      const { result } = renderHook(() =>
+        useFileProcessing({
+          appMode: AppMode.CONCATENATE,
+          isIgnored: () => false,
+          maxFileLimit: 100,
+          isIgnoreListLoading: false,
+          setVirtualFileSystem: vi.fn(),
+        })
+      )
+
+      const vfsFiles = [
+        { name: 'fail.ts', path: 'fail.ts', kind: 'file' as const },
+      ]
+
+      await act(async () => {
+        await result.current.loadVfsFiles(vfsFiles)
+      })
+
+      // Should still finish but the file might be empty or as-is
+      expect(result.current.isProcessing).toBe(false)
+      expect(result.current.files.length).toBe(1)
+    })
+
+    it('reports progress during VFS load', async () => {
+      mockGetFileBlob.mockResolvedValue(new Blob(['content']))
+
+      const { result } = renderHook(() =>
+        useFileProcessing({
+          appMode: AppMode.CONCATENATE,
+          isIgnored: () => false,
+          maxFileLimit: 100,
+          isIgnoreListLoading: false,
+          setVirtualFileSystem: vi.fn(),
+        })
+      )
+
+      const vfsFiles = [
+        { name: '1.ts', path: '1.ts', kind: 'file' as const },
+        { name: '2.ts', path: '2.ts', kind: 'file' as const },
+      ]
+
+      await act(async () => {
+        await result.current.loadVfsFiles(vfsFiles)
+      })
+
+      // Progress is reset to 0 at the end of loadVfsFiles
+      expect(result.current.importProgress.total).toBe(0)
+      expect(result.current.importProgress.current).toBe(0)
+    })
+
+    it('handles cancellation during VFS load', async () => {
+      mockGetFileBlob.mockResolvedValue(new Blob(['content']))
+
+      const { result } = renderHook(() =>
+        useFileProcessing({
+          appMode: AppMode.CONCATENATE,
+          isIgnored: () => false,
+          maxFileLimit: 100,
+          isIgnoreListLoading: false,
+          setVirtualFileSystem: vi.fn(),
+        })
+      )
+
+      const vfsFiles = [
+        { name: '1.ts', path: '1.ts', kind: 'file' as const },
+        { name: '2.ts', path: '2.ts', kind: 'file' as const },
+      ]
+
+      // Start loading and immediately cancel
+      const loadPromise = act(async () => {
+        const promise = result.current.loadVfsFiles(vfsFiles)
+        result.current.cancelProcessing()
+        await promise
+      })
+
+      await loadPromise
+
+      expect(result.current.isProcessing).toBe(false)
+      // Should have stopped early (either 0 or 1 file loaded depending on race, but definitely finished)
+    })
+  })
+
+  describe('handleFileUpload and handleDrop', () => {
+    it('handles empty file upload', async () => {
+      const { result } = renderHook(() =>
+        useFileProcessing({
+          appMode: AppMode.CONCATENATE,
+          isIgnored: () => false,
+          maxFileLimit: 10,
+          isIgnoreListLoading: false,
+          setVirtualFileSystem: vi.fn(),
+        })
+      )
+
+      const mockEvent = {
+        target: { files: null },
+      } as any
+
+      await act(async () => {
+        await result.current.handleFileUpload(mockEvent)
+      })
+
+      expect(result.current.importError).toBeNull()
+    })
+
+    it('handles drop with multiple entries', async () => {
+      const setVirtualFileSystem = vi.fn()
+      const { result } = renderHook(() =>
+        useFileProcessing({
+          appMode: AppMode.CONCATENATE,
+          isIgnored: () => false,
+          maxFileLimit: 10,
+          isIgnoreListLoading: false,
+          setVirtualFileSystem,
+        })
+      )
+
+      // Mock entry structure
+      const fileEntry = {
+        isFile: true,
+        isDirectory: false,
+        name: 'test.txt',
+        file: (cb: any) => cb(new File(['content'], 'test.txt')),
+      }
+
+      const mockEvent = {
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn(),
+        dataTransfer: {
+          items: [{ webkitGetAsEntry: () => fileEntry }],
+        },
+      } as any
+
+      await act(async () => {
+        await result.current.handleDrop(mockEvent)
+      })
+
+      // The loop uses FileReader, which is already handled in other tests via processUploadedFiles
+      // But we verify that it didn't error out
+      expect(result.current.importError).toBeNull()
     })
   })
 })

@@ -35,14 +35,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build Project
+        run: npm run build
+
       - name: Type Check (TypeScript)
         run: npm run type-check
 
       - name: Lint (ESLint)
         run: npm run lint
-
-      - name: Build Project
-        run: npm run build
 
       - name: Format Check (Prettier)
         run: npm run format:check
@@ -57,6 +57,13 @@ jobs:
           name: coverage-report-${{ matrix.os }}
           path: ./coverage/
           retention-days: 1
+
+      - name: Update APT Repository
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          for i in {1..5}; do
+            sudo apt-get update && break || (echo "Retry $i..." && sleep 5)
+          done
 
       - name: Install Playwright Browsers
         # Only happens if Build and Unit Tests pass

@@ -13,3 +13,13 @@ export class UserError extends Error {
     this.name = 'UserError'
   }
 }
+
+/**
+ * Custom error class for security violations (e.g. path traversal).
+ */
+export class SecurityViolation extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'SecurityViolation'
+  }
+}
