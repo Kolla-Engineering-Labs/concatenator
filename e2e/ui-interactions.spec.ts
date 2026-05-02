@@ -9,6 +9,7 @@ import { FileUploadHelper } from './helpers/file-upload'
 import {
   jsClick,
   ensureSidebarOpen,
+  ensureSidebarClosed,
   ensureIgnoreListExpanded,
   ensureAllIgnoresVisible,
 } from './helpers/sidebar'
@@ -19,23 +20,30 @@ import {
  */
 test.describe('UI Interactions and Edge Cases', () => {
   test.beforeEach(async ({ page, apiContext }) => {
-    // Clear localStorage before navigation to avoid interference from previous test runs
-    await page.addInitScript(() => {
-      localStorage.removeItem('concatenate-ignore')
-      localStorage.removeItem('concat_mode')
-      localStorage.removeItem('concat_view')
-      localStorage.removeItem('concat_ignore')
-      localStorage.setItem('concat_auto_save_ignore', 'true')
-    })
-
     // Reset server-side ignore list BEFORE navigation so client fetches correct state.
     // Uses worker-specific ignore file via X-Worker-Id header from apiContext fixture.
     await resetIgnoreList(apiContext)
 
-    // Use 'domcontentloaded' for faster Firefox navigation
+    // Navigate to the app first to set the origin context for localStorage
     await page.goto('/', { waitUntil: 'domcontentloaded' })
-    // Small stability wait for hydration and initial state fetch
-    await page.waitForTimeout(200)
+
+    // Clear all relevant localStorage keys once to ensure a clean slate for every test
+    await page.evaluate(() => {
+      // Clear keys starting with 'concat' or 'concatenate'
+      Object.keys(localStorage).forEach((key) => {
+        if (key.startsWith('concat')) {
+          localStorage.removeItem(key)
+        }
+      })
+      // Set test defaults
+      localStorage.setItem('concat_auto_save_ignore', 'true')
+    })
+
+    // Reload to ensure the app starts with the fresh state
+    await page.reload({ waitUntil: 'domcontentloaded' })
+
+    // Small stability wait for hydration
+    await page.waitForTimeout(500)
   })
 
   test.describe('Minimize/Maximize Panels', () => {
@@ -323,21 +331,30 @@ test.describe('UI Interactions and Edge Cases', () => {
 
   test.describe('localStorage Persistence', () => {
     test('should persist minimize state of dropzone', async ({ page }) => {
+      // Ensure sidebar is closed on mobile to avoid any potential interference
+      await ensureSidebarClosed(page)
+
       // Find and click minimize button if visible
       const minimizeButton = page
         .locator('button[title*="Minimize dropzone"]')
         .first()
 
+      // Wait for it to be visible if it's there
       if (await minimizeButton.isVisible().catch(() => false)) {
         await jsClick(minimizeButton)
 
-        // Wait for animation and localStorage write
-        await page.waitForTimeout(500)
+        // Wait for state to be committed and animation
+        await page.waitForTimeout(800)
 
         // Reload page and wait for full load
         await page.reload({ waitUntil: 'domcontentloaded' })
+        await page.waitForTimeout(500)
 
-        // Should still be minimized
+        // Should still be minimized - verify both title and text
+        const expandButton = page
+          .locator('button[title*="Expand dropzone"]')
+          .first()
+        await expect(expandButton).toBeVisible({ timeout: 10000 })
         await expect(page.getByText('Drop here')).toBeVisible({
           timeout: 10000,
         })
@@ -345,6 +362,9 @@ test.describe('UI Interactions and Edge Cases', () => {
     })
 
     test('should persist minimize state of ignore list', async ({ page }) => {
+      // Ensure sidebar is open to access ignore list
+      await ensureSidebarOpen(page)
+
       const uploadHelper = new FileUploadHelper(page)
 
       try {
@@ -367,12 +387,18 @@ test.describe('UI Interactions and Edge Cases', () => {
         await jsClick(minimizeButton)
 
         // Wait for animation and localStorage write
-        await page.waitForTimeout(500)
+        await page.waitForTimeout(800)
 
         // Reload page and wait for full load
         await page.reload({ waitUntil: 'domcontentloaded' })
+        await page.waitForTimeout(500)
 
-        // Upload a file to make ignore list appear
+        // Re-open sidebar if it closed on reload (on mobile)
+        await ensureSidebarOpen(page)
+
+        // Upload a file to make ignore list appear (if it was hidden by clear)
+        // Note: resetIgnoreList in beforeEach only resets the server,
+        // the client might still have local state if we didn't clear it.
         await uploadHelper.dragAndDropDirectory([
           { name: 'test2.js', path: 'test2.js', content: 'test2' },
         ])
@@ -386,6 +412,12 @@ test.describe('UI Interactions and Edge Cases', () => {
         await expect(
           page.getByPlaceholder('Add ignore pattern...')
         ).not.toBeVisible({ timeout: 10000 })
+
+        // Button should show Expand title
+        const expandButton = ignoreSection
+          .locator('button[title*="Expand ignore list"]')
+          .first()
+        await expect(expandButton).toBeVisible({ timeout: 10000 })
       } finally {
         uploadHelper.cleanup()
       }

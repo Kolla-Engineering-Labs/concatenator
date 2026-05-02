@@ -75,7 +75,7 @@ const seaConfig = {
 }
 writeFileSync(
   join(rootDir, 'sea-config.json'),
-  JSON.stringify(seaConfig, null, 2)
+  JSON.stringify(seaConfig, null, 2) + '\n'
 )
 
 // Step 3: Generate the blob

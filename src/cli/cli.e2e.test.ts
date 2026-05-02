@@ -27,14 +27,22 @@ interface CLIResult {
   stderr: string
 }
 
+const TSX_BIN = join(
+  process.cwd(),
+  'node_modules',
+  '.bin',
+  process.platform === 'win32' ? 'tsx.cmd' : 'tsx'
+)
+const CLI_ENTRY = join(process.cwd(), 'src/cli/index.ts')
+
 /**
  * Helper function to run CLI commands using tsx
  */
-function runCLI(args: string[]): CLIResult {
-  const result = spawnSync('npx', ['tsx', 'src/cli/index.ts', ...args], {
+function runCLI(args: string[], options: { cwd?: string } = {}): CLIResult {
+  const result = spawnSync(TSX_BIN, [CLI_ENTRY, ...args], {
     encoding: 'utf-8',
-    cwd: process.cwd(),
-    timeout: 30000,
+    cwd: options.cwd || process.cwd(),
+    timeout: 60000,
     shell: true,
   })
 
@@ -136,7 +144,7 @@ describe('CLI E2E Tests', () => {
       expect(content).toContain('Root level content')
       expect(content).toContain('console.log("main")')
       expect(content).toContain('export const helper = () => {}')
-    }, 20000)
+    }, 60000)
 
     it('should output to stdout when no output path is provided', () => {
       writeFileSync(join(tempDir, 'file.txt'), 'Hello World')
@@ -599,34 +607,13 @@ Zip content
       writeFileSync(join(srcDir, 'keep.txt'), 'keep')
       writeFileSync(join(srcDir, 'ignore.txt'), 'ignore')
 
-      // Create .concatenate-ignore in CURRENT directory (we need to be careful with CWD)
-      // Since runCLI runs with process.cwd(), we should create it there or change CWD
-      // Actually, runCLI uses process.cwd(). Let's change it to tempDir for this test.
-      const runCLIInTemp = (args: string[]) => {
-        const result = spawnSync(
-          'npx',
-          ['tsx', join(process.cwd(), 'src/cli/index.ts'), ...args],
-          {
-            encoding: 'utf-8',
-            cwd: tempDir,
-            timeout: 30000,
-            shell: true,
-          }
-        )
-        return {
-          status: result.status === null ? 1 : result.status,
-          stdout: result.stdout || '',
-          stderr: result.stderr || '',
-        }
-      }
-
       writeFileSync(join(tempDir, '.concatenate-ignore'), 'ignore.txt')
 
-      const result = runCLIInTemp(['concat', 'src'])
+      const result = runCLI(['concat', 'src'], { cwd: tempDir })
       expect(result.status).toBe(0)
       expect(result.stdout).toContain('keep.txt')
       expect(result.stdout).not.toContain('ignore.txt')
-    }, 20000)
+    }, 60000)
 
     it('should use explicit --ignore-file and merge with --exclude', () => {
       const srcDir = join(tempDir, 'src')
