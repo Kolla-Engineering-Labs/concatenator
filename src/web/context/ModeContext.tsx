@@ -26,9 +26,13 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
     false
   )
   const isInitialMount = React.useRef(true)
-  const isInitialized = React.useRef(false)
+  const [isInitialized, setIsInitialized] = React.useState(false)
+  const isInitializedRef = React.useRef(false)
   const lastSyncedList = React.useRef<string[] | null>(null)
   const isSyncing = React.useRef(false)
+  const pendingSync = React.useRef(false)
+  const ignoreListRef = React.useRef(ignoreList)
+  ignoreListRef.current = ignoreList
 
   // Fetch initial ignore list from server and sync with local
   React.useEffect(() => {
@@ -37,10 +41,22 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
       try {
         const serverList = await ApiClient.getIgnoreList()
         if (mounted && Array.isArray(serverList)) {
-          const sorted = serverList.sort((a: string, b: string) =>
+          const sorted = [...serverList].sort((a: string, b: string) =>
             a.localeCompare(b)
           )
-          setIgnoreList(sorted)
+          setIgnoreList((prev) => {
+            // Merge server list with any items added locally during the fetch
+            // (items that are neither in the default list nor in the server list)
+            const localOnly = prev.filter(
+              (item) =>
+                !DEFAULT_IGNORE_LIST.includes(item) &&
+                !serverList.includes(item)
+            )
+            const merged = Array.from(
+              new Set([...serverList, ...localOnly])
+            ).sort((a: string, b: string) => a.localeCompare(b))
+            return merged
+          })
           lastSyncedList.current = sorted
         }
 
@@ -62,7 +78,29 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
         }
       } finally {
         if (mounted) {
-          isInitialized.current = true
+          isInitializedRef.current = true
+          setIsInitialized(true)
+          // If changes were made during initialization, the sync useEffect
+          // would have returned early but set pendingSync.current = true.
+          if (pendingSync.current) {
+            // Trigger a sync attempt now that we are initialized
+            const saveToServer = async () => {
+              if (isSyncing.current) return
+              isSyncing.current = true
+              pendingSync.current = false
+              const listToSync = [...ignoreListRef.current]
+              try {
+                await ApiClient.updateIgnoreList(listToSync)
+                lastSyncedList.current = listToSync
+              } catch {
+                console.error('Failed to sync ignore list to server')
+              } finally {
+                isSyncing.current = false
+                if (pendingSync.current) saveToServer()
+              }
+            }
+            saveToServer()
+          }
         }
       }
     }
@@ -87,7 +125,8 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     // CRITICAL: Skip if we haven't finished the initial fetch yet.
-    if (!isInitialized.current) {
+    if (!isInitializedRef.current) {
+      pendingSync.current = true
       return
     }
 
@@ -100,15 +139,25 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
     }
 
     const saveToServer = async () => {
-      if (isSyncing.current) return
+      if (isSyncing.current) {
+        pendingSync.current = true
+        return
+      }
       isSyncing.current = true
+      pendingSync.current = false
+
+      const listToSync = [...ignoreListRef.current]
       try {
-        await ApiClient.updateIgnoreList(ignoreList)
-        lastSyncedList.current = [...ignoreList]
+        await ApiClient.updateIgnoreList(listToSync)
+        lastSyncedList.current = listToSync
       } catch {
         console.error('Failed to sync ignore list to server')
       } finally {
         isSyncing.current = false
+        // If another sync was requested while we were busy, trigger it now
+        if (pendingSync.current) {
+          saveToServer()
+        }
       }
     }
     saveToServer()
@@ -197,6 +246,7 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
         setTokenBudget,
         setAutoSaveIgnore,
         resetWorkbench,
+        isInitialized,
       }}
     >
       {children}

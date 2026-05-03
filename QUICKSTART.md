@@ -4,7 +4,7 @@ Get up and running with Concatenator in **3 minutes**.
 
 ## 🛠️ Prerequisites
 
-- [Node.js](https://nodejs.org) (v18 or later)
+- [Node.js](https://nodejs.org) (v22 or later)
 - A modern browser (**Chrome/Edge recommended** for full File System Access API support)
 
 > [!NOTE]
@@ -25,6 +25,24 @@ npm run dev
 ```
 
 The app will open at `http://localhost:5173`.
+
+## 📦 Option C: Standalone Binary (Fastest)
+
+Don't want to install Node.js? Download the pre-built binary for your platform from the [Releases](https://github.com/Kolla-Engineering-Labs/concatenator/releases) page.
+
+```bash
+# Windows
+.\concatenator.exe ui
+
+# macOS / Linux (Recommended for macOS security checks)
+./concatenator start
+
+# Or specify a path
+./concatenator ui ./src
+```
+
+> [!IMPORTANT]
+> **macOS Security**: If you are using an ad-hoc signed binary, you may see a "Developer Cannot be Verified" warning. Use `./concatenator start` to automatically trigger security guidance, or see our [macOS Security Guide](./docs/MACOS_SECURITY.md). 🛡️
 
 > [!TIP]
 > **Setup**: Copy `.env.example` to `.env` and add a `CONCATENATOR_API_TOKEN`. This token secures your local file operations. See [API Security](./CONTRIBUTING.md#api-security) for help generating the token. 🔑

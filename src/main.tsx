@@ -22,6 +22,18 @@ posthog.init(import.meta.env.VITE_PUBLIC_POSTHOG_KEY, {
 
 import { ModeProvider } from './web/context/ModeContext.tsx'
 
+// 1. Handshake: Capture token from URL BEFORE anything else
+if (typeof window !== 'undefined') {
+  const params = new URLSearchParams(window.location.search)
+  const urlToken = params.get('t')
+  if (urlToken) {
+    sessionStorage.setItem('CONCATENATOR_TOKEN', urlToken)
+    // Clean URL to prevent token leaking in bookmarks/history
+    const newUrl = window.location.pathname + window.location.hash
+    window.history.replaceState({}, '', newUrl)
+  }
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ModeProvider>

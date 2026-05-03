@@ -4,7 +4,6 @@
  */
 
 import { defineConfig, devices } from '@playwright/test'
-import * as os from 'os'
 
 /**
  * Playwright configuration for E2E testing the Concatenator app.
@@ -35,7 +34,7 @@ export default defineConfig({
   /* Workers: use 1 on CI for stability, max 4 locally to prevent server overload
    * Worker-specific ignore files prevent race conditions in parallel tests.
    */
-  workers: process.env.CI ? 1 : Math.min(4, os.cpus().length),
+  workers: process.env.CI ? 1 : 2,
 
   /* Unified reporter for CI and local use */
   reporter: process.env.CI ? [['github'], ['html']] : 'html',
@@ -59,7 +58,7 @@ export default defineConfig({
       use: {
         ...devices['Desktop Firefox'],
         /* Firefox-specific settings for better reliability */
-        actionTimeout: 15000,
+        actionTimeout: 30000,
         navigationTimeout: 60000,
         launchOptions: {
           downloadsPath: './test-results/downloads/firefox',

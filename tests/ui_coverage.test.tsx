@@ -12,6 +12,8 @@ vi.mock('../src/web/hooks/useWorkbench', () => ({
   useWorkbench: () => ({
     addIgnorePattern: mockAddIgnorePattern,
     removeIgnorePattern: mockRemoveIgnorePattern,
+    isIgnored: (path: string) =>
+      path.includes('file2.js') || path.includes('test.js'), // Mock based on test data
   }),
 }))
 

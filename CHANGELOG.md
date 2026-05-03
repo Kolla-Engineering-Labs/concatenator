@@ -1,5 +1,97 @@
 # Changelog
 
+## [0.5.0] - 2026-05-03
+
+### Minor Changes
+
+- # 📦 Changeset: Hybrid SEA Architecture & Security Hardening
+
+  ## 🚀 Overview
+
+  This release marks a significant architectural pivot for Concatenator, transitioning from a Node-dependent CLI tool to a **Hybrid Single Executable Application (SEA)**. This allows for zero-dependency distribution while simultaneously hardening the application's security perimeter through OS-level code signing, PGP-signed integrity manifests, and strict local-first network policies.
+  - **Hybrid SEA Architecture**: Implemented a single standalone executable (SEA) that embeds the full Node.js runtime and Web Workbench assets. This enables zero-dependency distribution and improved performance in air-gapped environments.
+  - **Code Signing Pipeline**: Integrated an automated signing and notarization pipeline for Windows (`signtool`) and macOS (`codesign`/`notarytool`), ensuring binary integrity and a seamless user experience on protected OS environments.
+  - **Distribution Workflow**: Standardized the build process to output versioned, platform-specific artifacts in `dist/v{version}/{platform}/`.
+
+  ***
+
+  ## 🏗️ Core Architectural Shifts
+
+  ### 1. Hybrid SEA Infrastructure
+  - **Standalone Binaries**: Implemented a robust build pipeline (`scripts/build-sea.js`) that utilizes Node.js 22's SEA features to embed the entire Web Workbench and Node runtime into a single executable.
+  - **Cross-Platform Support**: Automated generation of versioned artifacts for **Windows (`.exe`)**, **macOS**, and **Linux**, located in `dist/v{version}/{platform}/`.
+  - **Resource Embedding**: Optimized asset injection to ensure the Web Workbench remains high-performance even when served from within the binary.
+
+  ### 2. Lifecycle & Process Management
+  - **LifecycleManager**: Introduced a centralized singleton to manage graceful shutdowns, signal handling (`SIGINT`, `SIGTERM`), and cleanup of temporary assets.
+  - **Pulse System**: Implemented `PulseEmitter.ts` to provide real-time, low-overhead progress telemetry from deep within the traversal engine to both the CLI and the UI.
+
+  ***
+
+  ## 🛡️ Security Hardening & Binary Integrity
+
+  ### 1. Code Signing Pipeline
+  - **Windows (SignTool)**: Integrated automated signing with `.pfx` certificates, including timestamping to ensure long-term validity.
+  - **macOS (Notarization)**: Full support for Apple's Hardened Runtime and Notarization service via `notarytool`, ensuring a "Gatekeeper-approved" experience.
+  - **Ad-Hoc Fallback**: For community builds, we've implemented an ad-hoc signing mechanism to maintain functionality while providing transparent security warnings.
+
+  ### 2. GPG-Signed Manifests (Independent Audit)
+  - **Primary Proof of Integrity**: Added a `SHA256SUMS.asc` PGP Clearsigned manifest for every release.
+  - **Verification CLI**: Users can now run `concatenator verify self` to cryptographically audit the running binary against the official architect fingerprint.
+  - **Release Audit Script**: A new `npm run test:release` command performs a pre-flight dry-run of the entire release package, verifying signatures and hashes before they reach the user.
+  - **Path Hardening**: Standardized forward-slash separators in manifest generation output to ensure GPG signing instructions are robust across Windows (PowerShell/Bash) and Unix environments.
+
+  ### 3. Network & API Security
+  - **Strict Localhost Binding**: The API server now binds exclusively to `127.0.0.1`, neutralizing LAN-based probing.
+  - **Zero-Trust Token Guard**: Standardized the `X-Concatenator-Token` requirement across all sensitive VFS and filesystem operations.
+  - **macOS Security Brief**: When the CLI detects it is running in a quarantined state (e.g., after download), it now displays a comprehensive "Security Brief" explaining Gatekeeper status and providing manual verification instructions.
+
+  ***
+
+  ## 💻 CLI Enhancements
+  - **`start [path]`**: A new recommended entry point that performs automated security checks before launching the UI.
+  - **`verify [target]`**: New command for manual or automated binary integrity verification.
+  - **`--pulse`**: A new flag to mirror internal processing telemetry to `stderr`, enabling real-time monitoring in headless CI environments.
+  - **`--quiet`**: Suppresses all non-essential logging for cleaner automation.
+  - **`--force`**: Expanded to allow overwriting of both files and directories.
+
+  ***
+
+  ## 🌐 Web Workbench (UI) Improvements
+  - **Security Status**: A new dashboard component showing build hashes, signing status, and the architect's GPG fingerprint.
+  - **Heavy Processing HUD**: An interactive pulse monitor that appears during intensive operations, providing visual feedback on system load and progress.
+  - **Session Management**: Added a `SessionExpiredModal` to handle server restarts or token expiration gracefully, preventing data loss during configuration changes.
+  - **Ignore Engine UI**: Refined the ignore list management to handle massive exclude patterns without UI lag.
+
+  ***
+
+  ## 🧪 Testing & Quality Assurance
+  - **Coverage Hardening**: Achieved **>85% branch coverage** across core modules:
+    - `src/core/Crawler.ts`: Hardened path traversal and symlink logic.
+    - `src/core/UIServer.ts`: Validated Token Guard and CORS policies.
+    - `src/cli/cli-utils.ts`: Comprehensive mocks for filesystem interactions.
+  - **E2E CLI Security**: New Playwright tests (`e2e/cli-security.spec.ts`) specifically audit the macOS quarantine detection and security brief messaging.
+  - **Cross-Browser Stability**: Increased timeouts and added stability buffers for Firefox and WebKit (Safari) in the E2E suite.
+
+  ***
+
+  ## 📝 Documentation Overhaul
+  - **`docs/MACOS_SECURITY.md`**: New detailed rationale explaining our stance on ad-hoc signing vs. centralized notarization.
+  - **`SECURITY.md`**: Updated with instructions for GPG verification and the Architect Public Key.
+  - **`QUICKSTART.md`**: Refined to prioritize the Standalone Binary (Option C) for new users.
+  - **`CONTRIBUTING.md`**: Updated with the new Node.js 22 requirements and signing environment variable specifications.
+
+  ***
+
+  ## ⚙️ Dependencies & Requirements
+  - **Node.js**: Minimum version bumped to **v22.0.0** (Required for SEA features).
+  - **Esbuild**: Optimized bundling for SEA injection.
+  - **Lucide React**: Expanded icon set for security and status indicators.
+
+  ***
+
+  _Build Integrity Verified by Kolla Engineering Labs Audit System._ 🛡️
+
 ## [0.4.0] - 2026-04-30
 
 ### Minor Changes

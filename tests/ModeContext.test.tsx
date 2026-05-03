@@ -95,7 +95,7 @@ describe('ModeContext (Workbench State)', () => {
 
     await waitFor(() => {
       expect(result.current.ignoreList).toContain('server-item')
-      expect(result.current.ignoreList).not.toContain('local-item')
+      expect(result.current.ignoreList).toContain('local-item')
     })
   })
 
@@ -350,7 +350,7 @@ describe('ModeContext (Workbench State)', () => {
       const finalPostCalls = fetchMock.mock.calls.filter(
         (c) => c[1]?.method === 'POST'
       )
-      expect(finalPostCalls.length).toBe(1)
+      expect(finalPostCalls.length).toBe(2)
     })
   })
 

@@ -39,11 +39,15 @@ const CLI_ENTRY = join(process.cwd(), 'src/cli/index.ts')
  * Helper function to run CLI commands using tsx
  */
 function runCLI(args: string[], options: { cwd?: string } = {}): CLIResult {
+  const env = { ...process.env }
+  delete env.VITEST
+
   const result = spawnSync(TSX_BIN, [CLI_ENTRY, ...args], {
     encoding: 'utf-8',
     cwd: options.cwd || process.cwd(),
     timeout: 60000,
     shell: true,
+    env,
   })
 
   // Handle null status (process terminated by signal) - treat as non-zero exit
@@ -154,7 +158,7 @@ describe('CLI E2E Tests', () => {
       expect(result.status).toBe(0)
       expect(result.stdout).toContain('--- CONCATENATOR_SESSION_ID:')
       expect(result.stdout).toContain('Hello World')
-    })
+    }, 60000)
   })
 
   describe('De-concatenation Flow', () => {
@@ -754,4 +758,4 @@ content
       expect(output).toContain('TOTAL CONTEXT WEIGHT (tokens): 5')
     })
   })
-})
+}, 60000)

@@ -78,6 +78,12 @@ graph LR
   - Automatic de-concatenation upon dropping a compatible `.txt` file.
   - Output format toggle (TEXT/PDF) with localStorage persistence.
 - **Hybrid SEA Architecture**: Run Concatenator as a high-performance, single standalone executable (SEA) that embeds the full Web UI. Perfect for air-gapped environments or simplified distribution.
+- **Security Hardening**:
+  - **Verification**: Built-in `verify` command to check binary integrity against GPG-signed manifests.
+  - **Security Center**: In-app transparency showing build hashes and architect fingerprints.
+  - **Zero-Trust Token Auth**: Local Workbench server is protected by a unique API token (`CONCATENATOR_API_TOKEN`) to prevent CSRF and unauthorized LAN access.
+  - **Code Signing**: All official binaries are signed for Windows (`signtool`) and macOS (`codesign`). For non-certified macOS builds, we provide [ad-hoc signing documentation](./docs/MACOS_SECURITY.md).
+- **Release Auditing**: Integrated `test:release` script to perform dry-run audits of release candidates, verifying PGP signatures and SHA256 integrity before distribution.
 - **Privacy-First Analytics**: Lightweight usage tracking via **PostHog** to help us improve the tool. All data is collected using privacy-preserving, anonymous profiles.
 - **Hardware Safety Guardrails**: Configurable **Max File Limit** (default: 10,000 files) to prevent browser memory exhaustion.
 - **Privacy-First File Access**: Uses the **File System Access API** with explicit user control — directory permissions are granted per-session through native browser picker dialogs. No persistent background access.
@@ -91,7 +97,7 @@ graph LR
 - **Frontend**: [React 19](https://react.dev/), [TypeScript](https://www.typescriptlang.org/), [Tailwind CSS 4](https://tailwindcss.com/)
 - **Animations**: [Framer Motion](https://www.framer.com/motion/) (`motion/react`)
 - **Icons**: [Lucide React](https://lucide.dev/)
-- **Backend**: [Express](https://expressjs.com/) (Node.js)
+- **Backend**: [Express](https://expressjs.com/) (Node.js 22+)
 - **Build Tool**: [Vite 6](https://vitejs.dev/)
 - **Utilities**: [JSZip](https://stuk.github.io/jszip/) for archive generation, [jsPDF](https://github.com/parallax/jsPDF) for PDF generation
 
@@ -147,6 +153,9 @@ npm test
 
 # E2E tests
 npm run test:e2e
+
+# Release Candidate Audit (GPG + SHA256)
+npm run test:release
 ```
 
 ## Installation & Setup
@@ -277,13 +286,27 @@ npm run dev:cli -- [command] [options]
 
 #### Standalone Executable
 
-You can compile Concatenator into a single standalone executable (SEA) that doesn't require Node.js to be installed on the target machine:
+You can compile Concatenator into a single standalone executable (SEA) for Windows, macOS, or Linux. This binary embeds the full Node.js runtime and the Web Workbench assets:
 
 ```bash
+# Build for your current platform
 npm run build:exe
 ```
 
-The generated executable will be available in the `dist/` directory.
+The generated executable will be available in the `dist/v0.4.0/{platform}/` directory.
+
+#### Distribution Structure
+
+Concatenator follows a versioned distribution pattern to ensure reliable deployments:
+
+```
+dist/
+└── v0.4.0/
+    ├── win32/
+    │   └── concatenator.exe  (Signed binary)
+    └── darwin/
+        └── concatenator      (Signed & Notarized, or [Ad-Hoc](./docs/MACOS_SECURITY.md))
+```
 
 #### Commands
 
@@ -304,6 +327,15 @@ Options:
 
 - `-m, --max-files <number>` - Preset the maximum file limit (overrides default 10,000)
 - `-i, --ignore-file <file>` - Specify a custom ignore file to use in the Workbench
+
+**`start [path]`** - Launch the Workbench UI with an automated macOS security check
+
+```bash
+# Recommended entry point for macOS users
+concatenator start ./src
+```
+
+Options: Same as `ui`.
 
 **`concat <paths...>`** - Bundle one or more directories/files into a single LLM-ready file
 
@@ -328,8 +360,10 @@ Options:
 - `-i, --ignore-file <path>` - Path to an ignore file (.concatignore, .gitignore, etc.)
 - `-v, --verbose` - Verbosity level (-v: dir-level tokens, -vv: file-level tokens)
 - `--max-tokens <number>` - Budget guard: warn if the estimated token count is exceeded
-- `-f, --force` - Overwrite existing files without prompting
+- `-f, --force` - Overwrite existing files or directories without prompting
 - `--follow-symlinks` - Follow symbolic links during traversal (CAUTION: may cause infinite loops)
+- `-q, --quiet` - Suppress all logging output
+- `--pulse` - Mirror pulse data to stderr for headless CI environments
 
 **`extract <file>`** - Reconstruct a project from a concatenated file
 
@@ -358,8 +392,9 @@ Options:
 - `-z, --zip` - Output as a .zip archive instead of writing to disk
 - `-d, --dry-run` - Validate integrity without extracting
 - `-v, --verbose` - Show detailed file processing logs
-- `-vv` - Very verbose (shows all foreign markers in dry-run mode)
-- `-f, --force` - Overwrite existing files without prompting
+- `-f, --force` - Overwrite existing files or directories without prompting
+- `-q, --quiet` - Suppress all logging output
+- `--pulse` - Mirror pulse data to stderr for headless CI environments
 
 **`validate <paths...>`** - Check file integrity or perform a pre-flight dry-run on directories
 
@@ -384,8 +419,28 @@ Options:
 - `-vv` - Very verbose (shows all foreign markers and detailed breakdown)
 - `-e, --exclude <patterns>` - Patterns to ignore during pre-flight check
 - `-i, --ignore-file <path>` - Ignore file to use during pre-flight check
+- `-q, --quiet` - Suppress all logging output
 
 Validates session ID consistency, marker balance, and file structure. Exits with code 0 on success, 1 on failure.
+
+**`verify [target]`** - Verify binary integrity against a GPG-signed manifest
+
+```bash
+# Verify the current running binary (default)
+concatenator verify
+
+# Verify a specific binary
+concatenator verify ./path/to/concatenator
+
+# Using a local manifest
+concatenator verify --manifest ./SHA256SUMS.asc
+```
+
+Options:
+
+- `-m, --manifest <path>` - Explicit path to the `SHA256SUMS.asc` manifest file
+
+Performs a hash-level comparison against the official manifest and checks for the architect's GPG public key in the local keychain.
 
 #### Global Options
 
@@ -419,7 +474,7 @@ We welcome contributions! Please see our [Contributing Guide](./CONTRIBUTING.md)
 
 - **Quick Start**: Get running in 3 minutes with our [Quickstart Guide](./QUICKSTART.md)
 - **Reporting Bugs**: Use GitHub Issues with our [bug report template](https://github.com/Kolla-Engineering-Labs/concatenator/issues/new?template=bug_report.md)
-- **Security Issues**: Report privately via [Security](./SECURITY.md) — never via public issues
+- **Security Issues**: Report privately via [Security](./SECURITY.md) — see our [macOS Security Rationale](./docs/MACOS_SECURITY.md)
 - **Submitting PRs**: Use branch naming like `feat/description` or `fix/description` following [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/#summary) format
 
 ---

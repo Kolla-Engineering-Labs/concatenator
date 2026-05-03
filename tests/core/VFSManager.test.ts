@@ -172,4 +172,73 @@ describe('VFSManager', () => {
     const socketNode = result.tree.children?.find((c) => c.name === 'socket')
     expect(socketNode).toBeUndefined()
   })
+
+  describe('VFSManager - Additional Coverage', () => {
+    it('should handle invalid regex and empty patterns in constructor', () => {
+      const vfs = new VFSManager(tmpDir, [' ', '/[invalid/'])
+      // Should not throw, should treat /[invalid/ as plain pattern
+      expect(vfs).toBeDefined()
+    })
+
+    it('should handle hard-ignored extensions', () => {
+      writeFileSync(join(tmpDir, 'photo.jpg'), 'data')
+      const vfs = new VFSManager(tmpDir)
+      const result = vfs.getTree()
+      const photo = result.tree.children?.find((c) => c.name === 'photo.jpg')
+      expect(photo?.isIgnored).toBe(true)
+    })
+
+    it('should handle empty relPath and root name fallback', () => {
+      const vfs = new VFSManager(tmpDir)
+      const result = vfs.getTree()
+      expect(result.tree.path).toBe('.')
+    })
+
+    it('should handle lstatSync failure', () => {
+      const mockFs: VFSFileSystem = {
+        ...fs,
+        lstatSync: () => {
+          throw new Error('fail')
+        },
+      } as any
+      const vfs = new VFSManager(tmpDir, [], 100, mockFs)
+      const result = vfs.getTree()
+      expect(result.tree.children).toEqual([])
+    })
+
+    it('should handle regex matches correctly', () => {
+      writeFileSync(join(tmpDir, 'test.js'), 'code')
+      const vfs = new VFSManager(tmpDir, ['/\\.js$/'])
+      const result = vfs.getTree()
+      const node = result.tree.children?.find((c) => c.name === 'test.js')
+      expect(node?.isIgnored).toBe(true)
+    })
+
+    it('should handle parent-path glob matches and skip children', () => {
+      mkdirSync(join(tmpDir, 'build'))
+      writeFileSync(join(tmpDir, 'build/app.js'), 'code')
+      const vfs = new VFSManager(tmpDir, ['build'])
+      const result = vfs.getTree()
+      const buildDir = result.tree.children?.find((c) => c.name === 'build')
+      expect(buildDir?.isIgnored).toBe(true)
+      // Children are skipped for ignored directories
+      expect(buildDir?.children).toEqual([])
+    })
+
+    it('should handle negation in non-ignored state', () => {
+      writeFileSync(join(tmpDir, 'special.ts'), 'code')
+      const vfs = new VFSManager(tmpDir, ['!special.ts'])
+      const result = vfs.getTree()
+      const node = result.tree.children?.find((c) => c.name === 'special.ts')
+      expect(node?.isNegated).toBe(true)
+    })
+
+    it('should handle immediate maxFiles limit', () => {
+      writeFileSync(join(tmpDir, 'file.txt'), 'content')
+      const vfs = new VFSManager(tmpDir, [], 0)
+      const result = vfs.getTree()
+      expect(result.partial).toBe(true)
+      expect(result.tree.children).toEqual([])
+    })
+  })
 })

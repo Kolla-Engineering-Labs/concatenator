@@ -8,6 +8,7 @@ import { logger } from './src/lib/logger.js'
 import { DEFAULT_IGNORE_LIST } from './src/core/constants.js'
 import { VFSManager } from './src/core/VFSManager.js'
 import { mergeIgnoreFileWithComments } from './src/lib/ignore-file.js'
+import { LifecycleManager } from './src/core/LifecycleManager.js'
 
 /**
  * Read an ignore list from `primaryPath`.
@@ -71,7 +72,7 @@ async function startServer() {
   if (API_TOKEN) {
     app.use((req, res, next) => {
       // Allow health checks and static assets through without a token
-      if (req.path === '/health' || !req.path.startsWith('/api')) {
+      if (req.path === '/api/health' || !req.path.startsWith('/api')) {
         return next()
       }
       const provided = req.headers['x-concatenator-token']
@@ -87,12 +88,29 @@ async function startServer() {
   }
 
   // Health check endpoint
-  app.get('/health', (req, res) => {
+  app.get('/api/health', (req, res) => {
     res.json({
-      status: 'ok',
+      status: 'ready',
       version,
+      pid: process.pid,
       uptime: Math.floor(process.uptime()),
     })
+  })
+
+  // Shutdown endpoint
+  app.post('/api/shutdown', async (req, res) => {
+    // Already protected by API Token Guard middleware
+    logger.info('Server: Shutdown signal received via API')
+    res.json({ success: true, message: 'Shutting down...' })
+
+    try {
+      const lifecycle = LifecycleManager.getInstance()
+      await lifecycle.prepareShutdown()
+      setTimeout(() => process.exit(0), 500)
+    } catch (error) {
+      logger.error('Server: Error during shutdown', error)
+      process.exit(1)
+    }
   })
 
   const ignoreListLimiter = rateLimit({

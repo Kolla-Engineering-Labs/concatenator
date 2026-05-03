@@ -17,7 +17,7 @@ Thank you for your interest in contributing to Concatenator! This document provi
 
 ### 🛠️ Prerequisites
 
-- **Node.js** (v18 or later recommended)
+- **Node.js** (v22 or later required for SEA)
 - **npm** (comes with Node.js)
 - **Git**
 
@@ -72,6 +72,35 @@ Thank you for your interest in contributing to Concatenator! This document provi
 | `npm run test:e2e:debug`  | Run E2E tests in debug mode                    |
 | `npm run test:e2e:headed` | Run E2E tests in headed mode (visible browser) |
 | `npm run build:exe`       | Build the single executable application (SEA)  |
+| `npm run build:manifest`  | Generate SHA256SUMS for built artifacts        |
+| `npm run test:release`    | Audit release candidate (GPG + SHA256)         |
+| `npm run pre-release`     | Pre-release hook for local verification        |
+| `npm run clean`           | Remove build artifacts (dist/, web-assets.ts)  |
+
+---
+
+## 🖋️ Code Signing & Notarization
+
+To ensure binary integrity and avoid "Unknown Publisher" warnings, Concatenator includes an integrated signing pipeline.
+
+### Prerequisites for Signing
+
+The `scripts/build-sea.js` script will attempt to sign the binary if the following environment variables are present:
+
+#### Windows (signtool.exe)
+
+- `SIGNING_CERT_DATA`: Base64 encoded `.pfx` certificate.
+- `SIGNING_CERT_PASSWORD`: Password for the certificate.
+
+#### macOS (codesign & notarytool)
+
+- `APPLE_CERT_DATA`: Base64 encoded developer certificate.
+- `APPLE_ID`: Your Apple Developer ID.
+- `APPLE_PASSWORD`: App-specific password for notarization.
+- `APPLE_TEAM_ID`: Your Apple Team ID.
+
+> [!NOTE]
+> If these variables are missing, the build will skip certified signing and fall back to **ad-hoc signing** on macOS. This produces a functional binary for local development, but users will encounter Gatekeeper prompts. See [macOS Security & Non-Certified Builds](./docs/MACOS_SECURITY.md) for details. CI builds for official releases MUST have these secrets configured for notarization.
 
 ---
 
@@ -267,6 +296,7 @@ We aim for high test coverage on core logic. Coverage reports are generated auto
    npm run lint        # TypeScript type checking
    npm test            # Unit tests
    npm run test:e2e    # E2E tests (required for UI flows; see below)
+   npm run test:release # Audit release integrity (required for releases)
    ```
 
    **What constitutes "UI Flows"?** E2E tests are required for changes touching:

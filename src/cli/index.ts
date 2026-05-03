@@ -5,33 +5,41 @@
  */
 
 import { Command } from 'commander'
-import {
-  readdirSync,
-  readFileSync,
-  statSync,
-  writeFileSync,
-  mkdirSync,
-  existsSync,
-  rmSync,
-} from 'fs'
-import { join, relative, dirname, resolve } from 'path'
-import { fileURLToPath } from 'url'
+import { readFileSync, writeFileSync, statSync, existsSync } from 'node:fs'
+import { join, resolve, dirname, relative, basename } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
   concatenate,
   deconcatenate,
   validateConcatenation,
-  type VirtualFile,
-  type ValidationResult,
 } from '../core/engine.js'
 import { prunePaths } from '../core/reconciler.js'
 import { isDirectoryTainted } from '../core/utils/fs-utils.js'
-import { UserError } from '../core/errors.js'
 import { createZipFromVirtualFiles } from '../drivers/zip-driver.js'
 import { logger } from '../lib/logger.js'
 import { IgnoreEngine } from '../core/ignore/IgnoreEngine.js'
 import { TokenService } from '../core/TokenService.js'
 import { formatFileSize } from '../lib/utils.js'
 import { UnifiedCrawler } from '../core/Crawler.js'
+import { PulseEmitter } from '../core/PulseEmitter.js'
+import {
+  launchUI,
+  handleError,
+  getIgnorePatterns,
+  collectFiles,
+  checkOutputPath,
+  reconstructFiles,
+  formatValidationReport,
+  startPulseMirror,
+  type FileWithMetadata,
+  UserError,
+} from './cli-utils.js'
+
+// Build-time flag injected by esbuild
+declare const PROCESS_IS_UNSIGNED: boolean
+const IS_UNSIGNED =
+  process.env.CONCATENATOR_FORCE_UNSIGNED === 'true' ||
+  (typeof PROCESS_IS_UNSIGNED !== 'undefined' ? PROCESS_IS_UNSIGNED : false)
 
 // Load version from package.json
 let cliVersion = '0.3.0'
@@ -53,377 +61,6 @@ try {
   // Fallback if not available
 }
 
-/**
- * File metadata with token and size info
- */
-interface FileWithMetadata {
-  path: string
-  content: string
-  tokens: number
-  size: number
-}
-
-/**
- * Recursively collect all files from a directory and calculate tokens
- */
-function collectFiles(
-  dir: string,
-  baseDir: string,
-  ignoreEngine: IgnoreEngine,
-  verbose: number = 0,
-  files: FileWithMetadata[] = []
-): { files: FileWithMetadata[]; totalTokens: number } {
-  const entries = readdirSync(dir, { withFileTypes: true })
-  let dirTokens = 0
-
-  for (const entry of entries) {
-    const fullPath = join(dir, entry.name)
-    const relativePath = relative(baseDir, fullPath)
-
-    // Check if path is ignored
-    if (ignoreEngine.isIgnored(relativePath)) {
-      continue
-    }
-
-    if (entry.isDirectory()) {
-      const subResult = collectFiles(
-        fullPath,
-        baseDir,
-        ignoreEngine,
-        verbose,
-        files
-      )
-      dirTokens += subResult.totalTokens
-    } else if (entry.isFile()) {
-      try {
-        const stats = statSync(fullPath)
-        const content = readFileSync(fullPath, 'utf-8')
-        const tokens = TokenService.getTokenEstimate(content)
-
-        files.push({
-          path: relativePath,
-          content,
-          tokens,
-          size: stats.size,
-        })
-
-        dirTokens += tokens
-
-        if (verbose >= 2) {
-          logger.info(
-            `  [${tokens.toLocaleString().padStart(8)} tokens] ${relativePath}`
-          )
-        }
-      } catch {
-        // Skip files that can't be read (binary, permissions, etc.)
-      }
-    }
-  }
-
-  if (verbose >= 1) {
-    const relDir = relative(baseDir, dir) || '.'
-    logger.info(`Dir: ${relDir} (~${dirTokens.toLocaleString()} tokens)`)
-  }
-
-  return { files, totalTokens: dirTokens }
-}
-
-/**
- * Resolve ignore patterns from explicit flags and auto-discovery
- * @returns Array of ignore patterns
- */
-function getIgnorePatterns(
-  options: {
-    exclude?: string
-    ignoreFile?: string
-  },
-  inputPaths: string[] = []
-): string[] {
-  let patterns: string[] = []
-
-  // 1. Parse explicit --exclude patterns (comma-separated)
-  if (options.exclude) {
-    patterns = patterns.concat(
-      options.exclude
-        .split(',')
-        .map((p) => p.trim())
-        .filter(Boolean)
-    )
-  }
-
-  // 2. Determine which ignore file to use
-  let ignoreFilePath = options.ignoreFile
-  const isExplicit = !!options.ignoreFile
-
-  if (!ignoreFilePath) {
-    // Auto-discovery in CWD: .concatenate-ignore then .gitignore
-    if (existsSync('.concatenate-ignore')) {
-      ignoreFilePath = '.concatenate-ignore'
-    } else if (existsSync('.gitignore')) {
-      ignoreFilePath = '.gitignore'
-    }
-  }
-
-  // 3. Load patterns from explicit or auto-discovered file
-  if (ignoreFilePath) {
-    if (existsSync(ignoreFilePath)) {
-      try {
-        const content = readFileSync(ignoreFilePath, 'utf-8')
-        const filePatterns = IgnoreEngine.parseIgnoreFile(content)
-        patterns = patterns.concat(filePatterns)
-      } catch (error) {
-        logger.warn(
-          `Could not read ignore file ${ignoreFilePath}: ${error instanceof Error ? error.message : String(error)}`
-        )
-      }
-    } else if (isExplicit) {
-      // Explicitly requested but missing
-      throw new Error(`Ignore file ${ignoreFilePath} does not exist.`)
-    }
-  }
-
-  // 4. If no explicit ignore file, also look for local ignore files in input paths
-  if (!isExplicit) {
-    for (const inputPath of inputPaths) {
-      try {
-        const stats = statSync(inputPath)
-        const baseDir = stats.isDirectory() ? inputPath : dirname(inputPath)
-
-        const candidates = ['.concatenate-ignore', '.gitignore']
-        for (const candidate of candidates) {
-          const localPath = join(baseDir, candidate)
-          if (existsSync(localPath) && localPath !== ignoreFilePath) {
-            const content = readFileSync(localPath, 'utf-8')
-            const localPatterns = IgnoreEngine.parseIgnoreFile(content)
-            patterns = patterns.concat(localPatterns)
-          }
-        }
-      } catch {
-        // Skip if path doesn't exist or other error
-      }
-    }
-  }
-
-  // Deduplicate patterns
-  return Array.from(new Set(patterns))
-}
-
-/**
- * Check if output path exists and handle collisions
- * Returns true if path is safe to write, false if handled by force
- * Throws user-friendly error if collision detected without force
- */
-function checkOutputPath(
-  outputPath: string,
-  force: boolean,
-  itemType: 'file' | 'directory'
-): boolean {
-  if (!existsSync(outputPath)) {
-    return true
-  }
-
-  const stats = statSync(outputPath)
-  const isDir = stats.isDirectory()
-
-  if (isDir && itemType === 'file') {
-    if (force) {
-      rmSync(outputPath, { recursive: true, force: true })
-      return true
-    }
-    throw new Error(
-      `Path ${outputPath} exists as a directory. Please provide a different filename or use --force to overwrite.`
-    )
-  }
-
-  if (!isDir && itemType === 'directory') {
-    if (force) {
-      rmSync(outputPath, { recursive: true, force: true })
-      return true
-    }
-    throw new Error(
-      `Path ${outputPath} exists as a file. Please provide a different directory name or use --force to overwrite.`
-    )
-  }
-
-  if (isDir && itemType === 'directory') {
-    if (force) {
-      rmSync(outputPath, { recursive: true, force: true })
-      return true
-    }
-    throw new Error(
-      `Directory ${outputPath} already exists. Please provide a different directory name or use --force to overwrite.`
-    )
-  }
-
-  // File exists and itemType is file
-  if (force) {
-    rmSync(outputPath, { recursive: true, force: true })
-    return true
-  }
-
-  throw new Error(
-    `File ${outputPath} already exists. Use --force to overwrite.`
-  )
-}
-
-/**
- * Reconstruct files from deconcatenated content (File Explosion mode)
- */
-function reconstructFiles(
-  files: VirtualFile[],
-  outputDir: string,
-  force = false
-): void {
-  // Check if output directory exists as a file
-  if (existsSync(outputDir) && !statSync(outputDir).isDirectory()) {
-    if (force) {
-      rmSync(outputDir, { recursive: true, force: true })
-    } else {
-      throw new Error(
-        `Path ${outputDir} exists as a file. Please provide a different directory name or use --force to overwrite.`
-      )
-    }
-  }
-
-  for (const file of files) {
-    const fullPath = join(outputDir, file.path)
-    const dir = dirname(fullPath)
-
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true })
-    }
-
-    if (existsSync(fullPath) && !force) {
-      throw new Error(
-        `File ${fullPath} already exists. Use --force to overwrite.`
-      )
-    }
-
-    writeFileSync(fullPath, file.content, 'utf-8')
-  }
-}
-
-/**
- * Format validation result for CLI output
- * Displays a professional summary with colors (if supported)
- */
-function formatValidationReport(
-  result: ValidationResult,
-  filePath: string,
-  verbose: boolean | number = false,
-  isDryRun = false
-): void {
-  const isVeryVerbose = typeof verbose === 'number' ? verbose > 1 : false
-  const prefix = isDryRun ? '[DRY RUN] ' : '[VALIDATION] '
-  logger.info(`${prefix}Validating: ${filePath}`)
-  logger.info('')
-
-  // Session ID
-  if (result.sessionId) {
-    logger.info(`✓ Valid session manifest found: ID ${result.sessionId}`)
-  } else {
-    logger.warn('⚠ No session manifest found (legacy format detected)')
-  }
-
-  logger.info('')
-
-  // Segmented file summary - all three classes should sum to total
-  // Only count missing end markers as file errors (session mismatches are foreign markers)
-  const errorCount = result.errors.filter((e) =>
-    e.includes('Missing end marker')
-  ).length
-  logger.info(`Marker Analysis:`)
-  logger.info(`  Total markers found: ${result.totalMarkersFound}`)
-  logger.info(
-    `    ├── Target files (will be extracted): ${result.targetFileCount}`
-  )
-  if (result.foreignFileCount > 0) {
-    logger.info(
-      `    ├── Foreign markers (will be ignored): ${result.foreignFileCount}`
-    )
-  }
-  if (errorCount > 0) {
-    logger.info(`    └── Files with errors (skipped): ${errorCount}`)
-  }
-
-  // Warnings
-  if (result.warnings.length > 0) {
-    logger.info('')
-    logger.warn(`Warnings (${result.warnings.length}):`)
-    for (const warning of result.warnings) {
-      logger.warn(`  ⚠ ${warning}`)
-    }
-  }
-
-  // Errors
-  if (result.errors.length > 0) {
-    logger.info('')
-    logger.error(`Errors (${result.errors.length}):`)
-    for (const error of result.errors) {
-      logger.error(`  ✗ ${error}`)
-    }
-  }
-
-  // File list - show target files that will be extracted
-  if (result.targetFiles.length > 0) {
-    logger.info('')
-    logger.info(`Files to be Extracted (${result.targetFiles.length}):`)
-    for (const filePath of result.targetFiles) {
-      logger.info(`  ✓ ${filePath}`)
-    }
-  }
-
-  // Show foreign files in verbose mode (all if very verbose, else first 20)
-  if (verbose && result.foreignFiles.length > 0) {
-    logger.info('')
-    logger.info(`Foreign Markers Ignored (${result.foreignFiles.length}):`)
-    const limit = isVeryVerbose ? result.foreignFiles.length : 20
-    for (const filePath of result.foreignFiles.slice(0, limit)) {
-      logger.info(`  • ${filePath}`)
-    }
-    if (!isVeryVerbose && result.foreignFiles.length > 20) {
-      logger.info(
-        `  ... and ${result.foreignFiles.length - 20} more (use -vv to see all)`
-      )
-    }
-  }
-
-  // Final summary
-  logger.info('')
-  if (result.isValid) {
-    if (result.foreignFileCount > 0) {
-      logger.info(
-        `✓ Validation passed: ${result.targetFileCount}/${result.targetFileCount + result.foreignFileCount} target file(s) ready for extraction (${result.foreignFileCount} foreign markers ignored)`
-      )
-    } else {
-      logger.info(
-        `✓ Validation passed: ${result.targetFileCount} file(s) ready for extraction`
-      )
-    }
-  } else {
-    logger.error(
-      `✗ Validation found ${result.errors.length} error(s) - ${result.targetFileCount} valid file(s) can still be extracted`
-    )
-  }
-}
-
-/**
- * Global error handler for CLI commands
- */
-function handleError(error: unknown): void {
-  if (error instanceof UserError) {
-    logger.error(`Error: ${error.message}`)
-  } else {
-    logger.error(
-      `Error: ${error instanceof Error ? error.message : String(error)}`
-    )
-    if (error instanceof Error && error.stack) {
-      logger.debug(error.stack)
-    }
-  }
-  process.exit(1)
-}
-
 // Initialize Commander program
 const program = new Command()
   .name('concatenator')
@@ -434,9 +71,8 @@ const program = new Command()
   .option('--ui', 'Launch the web-based Workbench UI')
   .configureOutput({
     writeErr: (str) => logger.error(str.trim()),
-    outputError: (str, write) => {
+    outputError: (str) => {
       logger.error(str.trim())
-      write(str.trim())
     },
   })
 
@@ -448,6 +84,163 @@ program
   .option('-i, --ignore-file <file>', 'Specify a custom ignore file')
   .action((path, options) => {
     launchUI(path, options)
+  })
+
+// Start command (alias for UI, with security check)
+program
+  .command('start [path]')
+  .description('Launch the Workbench UI (checked for macOS security)')
+  .option('-m, --max-files <number>', 'Preset the maximum file limit', parseInt)
+  .option('-i, --ignore-file <file>', 'Specify a custom ignore file')
+  .action(async (path, options) => {
+    if (IS_UNSIGNED) {
+      const { checkQuarantine } = await import('./cli-utils.js')
+      checkQuarantine()
+    }
+    await launchUI(path, options)
+  })
+
+// Verify command
+program
+  .command('verify')
+  .argument(
+    '[target]',
+    'Path to binary to verify, or "self" for the current executable',
+    'self'
+  )
+  .description('Verify the integrity of a binary against a GPG-signed manifest')
+  .option('-m, --manifest <path>', 'Explicit path to SHA256SUMS.asc')
+  .action(async (target, options) => {
+    const { calculateFileHash } = await import('./cli-utils.js')
+    const { OFFICIAL_MANIFEST_URL, ARCHITECT_PGP_FINGERPRINT } =
+      await import('../core/constants.js')
+    const { execSync } = await import('node:child_process')
+
+    const targetPath = target === 'self' ? process.execPath : resolve(target)
+    const manifestPath =
+      options.manifest || join(dirname(targetPath), 'SHA256SUMS.asc')
+
+    console.log('\n🛡️  Concatenator Integrity Verification')
+    console.log(''.padEnd(40, '─'))
+
+    try {
+      if (!existsSync(targetPath)) {
+        throw new Error(`Target binary not found: ${targetPath}`)
+      }
+
+      // 1. GPG Keychain Check
+      let hasKey = false
+      try {
+        execSync(
+          `gpg --list-keys "${ARCHITECT_PGP_FINGERPRINT.replace(/\s/g, '')}"`,
+          { stdio: 'ignore' }
+        )
+        hasKey = true
+      } catch {
+        console.warn(
+          '⚠️  Architect PGP Public Key not found in local keychain.'
+        )
+        console.log(`🖋️  Fingerprint: ${ARCHITECT_PGP_FINGERPRINT}`)
+        console.log(
+          `🌐 Download Key: ${OFFICIAL_MANIFEST_URL.replace('SHA256SUMS.asc', 'public.key')}`
+        )
+        console.log(
+          '💡 Run: gpg --import public.key && gpg --verify SHA256SUMS.asc\n'
+        )
+      }
+
+      // 2. Locate and Parse Manifest
+      if (!existsSync(manifestPath)) {
+        throw new Error(
+          `Manifest not found: ${manifestPath}\nEnsure SHA256SUMS.asc is present in the target directory.`
+        )
+      }
+
+      const manifestRaw = readFileSync(manifestPath, 'utf-8')
+      const currentHash = calculateFileHash(targetPath)
+
+      // Extract signed content if it's a clearsigned GPG message
+      let manifestBody = manifestRaw
+      if (manifestRaw.includes('-----BEGIN PGP SIGNED MESSAGE-----')) {
+        const parts = manifestRaw.split('-----BEGIN PGP SIGNATURE-----')
+        const bodyWithHeaders = parts[0].split(
+          '-----BEGIN PGP SIGNED MESSAGE-----'
+        )[1]
+        // Remove GPG headers (Hash: SHA256, etc.) and leading/trailing whitespace
+        manifestBody = bodyWithHeaders
+          .split('\n\n')
+          .slice(1)
+          .join('\n\n')
+          .trim()
+      }
+
+      const lines = manifestBody.split('\n')
+      const filename = basename(targetPath)
+
+      // Find matching entry (either by hash or by filename)
+      const hashMatch = lines.find((line) =>
+        line.trim().startsWith(currentHash)
+      )
+      const nameMatch = lines.find((line) => line.trim().endsWith(filename))
+
+      const manifestHash = hashMatch
+        ? currentHash
+        : nameMatch
+          ? nameMatch.split(/\s+/)[0]
+          : 'NOT FOUND'
+      const result = currentHash === manifestHash ? 'VERIFIED' : 'COMPROMISED'
+
+      // 3. High-Density Table Output
+      const colWidth = { file: 15, hash: 32, result: 12 }
+      const separator = `+${'─'.repeat(colWidth.file + 2)}+${'─'.repeat(colWidth.hash + 2)}+${'─'.repeat(colWidth.hash + 2)}+${'─'.repeat(colWidth.result + 2)}+`
+
+      console.log(separator)
+      console.log(
+        `| ${'File'.padEnd(colWidth.file)} | ${'Calculated Hash'.padEnd(colWidth.hash)} | ${'Manifest Hash'.padEnd(colWidth.hash)} | ${'Result'.padEnd(colWidth.result)} |`
+      )
+      console.log(separator)
+
+      const truncatedCalc = currentHash.substring(0, 29) + '...'
+      const truncatedManifest = manifestHash.substring(0, 29) + '...'
+      const resultColor = result === 'VERIFIED' ? '\x1b[32m' : '\x1b[31m'
+      const reset = '\x1b[0m'
+
+      console.log(
+        `| ${filename.padEnd(colWidth.file)} | ${truncatedCalc.padEnd(colWidth.hash)} | ${truncatedManifest.padEnd(colWidth.hash)} | ${resultColor}${result.padEnd(colWidth.result)}${reset} |`
+      )
+      console.log(separator)
+
+      if (result === 'VERIFIED') {
+        console.log(
+          '\n✅ Integrity check passed. This binary matches the official signed manifest.'
+        )
+        if (hasKey)
+          console.log(
+            '🛡️  Signature valid (manually verified via GPG keychain).'
+          )
+      } else {
+        console.error('\n❌ Integrity: COMPROMISED')
+        console.error(
+          '⚠️  The binary hash does not match the manifest. Do not execute this tool!'
+        )
+        process.exit(1)
+      }
+    } catch (error: unknown) {
+      console.error(
+        '\n❌ Verification failed:',
+        error instanceof Error ? error.message : String(error)
+      )
+      process.exit(1)
+    }
+  })
+
+// Hidden test command for E2E verification of the security brief
+program
+  .command('test-security-brief', { hidden: true })
+  .description('Triggers the security brief and exits (for testing)')
+  .action(async () => {
+    const { checkQuarantine } = await import('./cli-utils.js')
+    checkQuarantine()
   })
 
 // Concat command (default action)
@@ -485,6 +278,11 @@ program
     false
   )
   .option('-q, --quiet', 'Suppress all logging output', false)
+  .option(
+    '--pulse',
+    'Mirror pulse data to stderr for headless CI environments',
+    false
+  )
   .action(
     async (
       paths: string[],
@@ -497,11 +295,15 @@ program
         force: boolean
         followSymlinks: boolean
         quiet: boolean
+        pulse: boolean
       }
     ) => {
       try {
         if (options.quiet) {
           logger._setLevel('error')
+        }
+        if (options.pulse) {
+          startPulseMirror()
         }
         // Path Normalization & Pruning
         const absolutePaths = paths.map((p) => resolve(p))
@@ -545,7 +347,6 @@ program
           const entries = crawler.collect(inputPath)
 
           // ── Pass 1: read files and accumulate tokens per directory ──────────
-          // dirTokens maps each directory's relative path to its cumulative tokens.
           const dirTokens = new Map<string, number>()
 
           for (const entry of entries) {
@@ -572,7 +373,6 @@ program
                 // Roll tokens up to every ancestor directory
                 if (options.verbose >= 1) {
                   const parts = entry.path.split('/')
-                  // e.g. "sub/file.ts" → ancestors: "sub", "."
                   for (let depth = 1; depth < parts.length; depth++) {
                     const dirPath = parts.slice(0, depth).join('/')
                     dirTokens.set(
@@ -580,7 +380,6 @@ program
                       (dirTokens.get(dirPath) ?? 0) + tokens
                     )
                   }
-                  // root dir
                   dirTokens.set('.', (dirTokens.get('.') ?? 0) + tokens)
                 }
               } catch {
@@ -591,8 +390,6 @@ program
 
           // ── Pass 2: log directory summaries (verbose -v) ────────────────────
           if (options.verbose >= 1) {
-            // Log in the same order the original recursive walk did: deepest dirs first,
-            // then the root. Collect and sort by depth descending.
             const sortedDirs = [...dirTokens.entries()].sort((a, b) => {
               const depthA = a[0] === '.' ? 0 : a[0].split('/').length
               const depthB = b[0] === '.' ? 0 : b[0].split('/').length
@@ -619,7 +416,22 @@ program
           logger.warn('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
         }
 
-        const result = concatenate(allFiles)
+        const pulseEmitter = options.pulse
+          ? new PulseEmitter('Concatenation')
+          : null
+        if (pulseEmitter) pulseEmitter.start()
+
+        const result = concatenate(
+          allFiles,
+          undefined,
+          undefined,
+          (progress) => {
+            if (pulseEmitter) pulseEmitter.update(progress)
+          }
+        )
+
+        if (pulseEmitter) pulseEmitter.stop()
+
         const bundleSize = Buffer.byteLength(result, 'utf-8')
 
         if (options.output) {
@@ -675,6 +487,11 @@ program
     false
   )
   .option('-q, --quiet', 'Suppress all logging output', false)
+  .option(
+    '--pulse',
+    'Mirror pulse data to stderr for headless CI environments',
+    false
+  )
   .action(
     async (
       inputFile: string,
@@ -687,14 +504,26 @@ program
         verbose: number
         force: boolean
         quiet: boolean
+        pulse: boolean
       }
     ) => {
       try {
         if (options.quiet) {
           logger._setLevel('error')
         }
+        if (options.pulse) {
+          startPulseMirror()
+        }
         const content = readFileSync(inputFile, 'utf-8')
+
+        const pulseEmitter = options.pulse
+          ? new PulseEmitter('Deconcatenation')
+          : null
+        if (pulseEmitter) pulseEmitter.start()
+
         const result = deconcatenate(content)
+
+        if (pulseEmitter) pulseEmitter.stop()
 
         if (!result.foundAny) {
           throw new Error('No concatenated files found in input')
@@ -730,6 +559,19 @@ program
         if (options.dryRun) {
           // Dry run mode: validate and report only
           const validationResult = validateConcatenation(content)
+
+          // Check for overwrites if output directory is specified
+          const overwrites: string[] = []
+          if (options.output) {
+            for (const relPath of validationResult.targetFiles) {
+              const fullPath = join(options.output, relPath)
+              if (existsSync(fullPath)) {
+                overwrites.push(relPath)
+              }
+            }
+          }
+          validationResult.overwrites = overwrites
+
           formatValidationReport(
             validationResult,
             inputFile,
@@ -926,53 +768,12 @@ program.on('--help', () => {
   console.log('  $ concatenator validate --verbose bundle.txt')
 })
 
-export interface UIConfig {
-  maxFiles?: number
-  ignoreFile?: string
-}
-
-async function launchUI(path?: string, options: UIConfig = {}) {
-  try {
-    const { UIServer } = await import('../core/UIServer.js')
-    const { webAssets } = await import('./web-assets.js')
-    const server = new UIServer(0, webAssets, {
-      path,
-      maxFiles: options.maxFiles,
-      ignoreFile: options.ignoreFile,
-    })
-    const port = await server.start()
-
-    const url = `http://localhost:${port}`
-    logger.info(`\n🚀 Starting Concatenator Workbench UI at ${url}\n`)
-
-    // Launch browser
-    const { exec } = await import('child_process')
-    const startCmd =
-      process.platform === 'win32'
-        ? 'start ""'
-        : process.platform === 'darwin'
-          ? 'open'
-          : 'xdg-open'
-    exec(`${startCmd} "${url}"`, (err) => {
-      if (err) {
-        logger.warn(
-          `\nCould not automatically open browser. Please manually visit: ${url}`
-        )
-      }
-    })
-
-    // Keep process alive
-    process.stdin.resume()
-  } catch (e) {
-    logger.error('Failed to start UI:', e)
-    process.exit(1)
+// Parse CLI arguments if not launching UI and not in test environment
+if (!process.env.VITEST) {
+  if (process.argv.includes('--ui') && !process.argv.includes('ui')) {
+    // Backwards compatibility for --ui flag without arguments
+    launchUI()
+  } else {
+    program.parse()
   }
-}
-
-// Parse CLI arguments if not launching UI
-if (process.argv.includes('--ui') && !process.argv.includes('ui')) {
-  // Backwards compatibility for --ui flag without arguments
-  launchUI()
-} else {
-  program.parse()
 }

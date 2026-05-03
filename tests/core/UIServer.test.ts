@@ -34,16 +34,26 @@ describe('UIServer', () => {
   const makeRequest = (
     path: string,
     method = 'GET',
-    body?: string
+    body?: string,
+    overrideToken?: string
   ): Promise<{ status: number; data: string }> => {
+    const token =
+      overrideToken !== undefined ? overrideToken : server.getShutdownToken()
     return new Promise((resolve, reject) => {
+      const headers: Record<string, string> = {
+        'X-Concatenator-Token': token,
+      }
+      if (body) {
+        headers['Content-Length'] = Buffer.byteLength(body).toString()
+      }
+
       const req = request(
         {
           hostname: '127.0.0.1',
           port,
           path,
           method,
-          headers: body ? { 'Content-Length': Buffer.byteLength(body) } : {},
+          headers,
         },
         (res) => {
           let data = ''
@@ -58,9 +68,9 @@ describe('UIServer', () => {
   }
 
   it('should serve health check', async () => {
-    const res = await makeRequest('/health')
+    const res = await makeRequest('/api/health')
     expect(res.status).toBe(200)
-    expect(JSON.parse(res.data).status).toBe('ok')
+    expect(JSON.parse(res.data).status).toBe('ready')
   })
 
   it('should serve config', async () => {
@@ -173,6 +183,9 @@ describe('UIServer', () => {
                 hostname: '127.0.0.1',
                 port: errPort,
                 path: '/api/vfs/file?path=broken.txt',
+                headers: {
+                  'X-Concatenator-Token': errServer.getShutdownToken(),
+                },
               },
               (r) => {
                 let d = ''
@@ -214,6 +227,10 @@ describe('UIServer', () => {
                 port: errPort,
                 path: '/api/ignore-list',
                 method: 'POST',
+                headers: {
+                  'X-Concatenator-Token': errServer.getShutdownToken(),
+                  'Content-Length': Buffer.byteLength(JSON.stringify(['test'])),
+                },
               },
               (res) => {
                 let data = ''

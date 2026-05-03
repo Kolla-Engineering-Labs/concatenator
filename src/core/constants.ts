@@ -133,3 +133,8 @@ export const DEFAULT_IGNORE_LIST = [
   'vendor',
   'venv',
 ]
+
+export const ARCHITECT_PGP_FINGERPRINT =
+  '2D08 0B10 4329 E787 4DDB  7E19 0970 CC48 540A FF31'
+export const OFFICIAL_MANIFEST_URL =
+  'https://github.com/Kolla-Engineering-Labs/concatenator/releases/latest/download/SHA256SUMS.asc'

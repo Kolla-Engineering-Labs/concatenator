@@ -10,12 +10,16 @@ import {
   ServerResponse,
 } from 'node:http'
 import * as fsDefault from 'node:fs'
-import { join, resolve, dirname } from 'node:path'
+import { createReadStream } from 'node:fs'
+import { join, resolve, dirname, sep } from 'node:path'
 import { URL, fileURLToPath } from 'node:url'
 import { VFSManager } from './VFSManager.js'
 import { DEFAULT_IGNORE_LIST } from './constants.js'
 import { logger } from '../lib/logger.js'
 import { mergeIgnoreFileWithComments } from '../lib/ignore-file.js'
+import { LifecycleManager } from './LifecycleManager.js'
+import { randomBytes, createHash, timingSafeEqual } from 'node:crypto'
+import { ARCHITECT_PGP_FINGERPRINT } from './constants.js'
 
 export interface UIServerFileSystem {
   readFileSync: typeof fsDefault.readFileSync
@@ -43,6 +47,8 @@ export class UIServer {
   private assets: Record<string, WebAsset>
   private ignoreFilePath: string
   private uiConfig: UIConfig
+  private shutdownToken: Buffer
+  private buildHash: string = ''
 
   constructor(
     port: number,
@@ -56,18 +62,60 @@ export class UIServer {
     this.ignoreFilePath = uiConfig.ignoreFile
       ? resolve(process.cwd(), uiConfig.ignoreFile)
       : join(process.cwd(), '.concatenate-ignore')
+    this.shutdownToken = Buffer.from(
+      process.env.CONCATENATOR_TOKEN ||
+        process.env.CONCATENATOR_SHUTDOWN_TOKEN ||
+        randomBytes(32).toString('hex')
+    )
+
+    // Clear from env immediately after ingestion
+    delete process.env.CONCATENATOR_TOKEN
+    delete process.env.CONCATENATOR_SHUTDOWN_TOKEN
+
+    this.calculateBuildHash()
 
     this.server = createServer(async (req, res) => {
       try {
+        const lifecycle = LifecycleManager.getInstance()
+
         // API Routes
         const url = new URL(
           req.url || '/',
-          `http://${req.headers.host || 'localhost'}`
+          `http://${req.headers.host || '127.0.0.1'}`
         )
         const pathname = url.pathname
 
-        if (pathname === '/health' && req.method === 'GET') {
+        // 1. CORS Check (Early Exit)
+        if (!this.corsMiddleware(req, res)) return
+
+        // 2. Static Assets (Bypass Auth)
+        const isApi = pathname.startsWith('/api/')
+        const isHealth = pathname === '/api/health'
+
+        if (!isApi) {
+          this.handleStaticAssets(req, res)
+          return
+        }
+
+        // 3. Health check (Bypass Auth)
+        if (isHealth && req.method === 'GET') {
           this.handleGetHealth(req, res)
+          return
+        }
+
+        // 4. Activity Middleware: update timestamp for all authenticated requests
+        if (pathname !== '/api/heartbeat') {
+          lifecycle.updateActiveTimestamp()
+        }
+
+        // 5. Auth Middleware (Required for all other API routes)
+        if (!this.authMiddleware(req, res)) return
+
+        // 6. Route Handling
+        if (pathname === '/api/heartbeat' && req.method === 'POST') {
+          this.handlePostHeartbeat(req, res)
+        } else if (pathname === '/api/pulse' && req.method === 'GET') {
+          this.handleGetPulse(req, res)
         } else if (pathname === '/api/config' && req.method === 'GET') {
           this.handleGetConfig(req, res)
         } else if (pathname === '/api/ignore-list' && req.method === 'GET') {
@@ -80,9 +128,13 @@ export class UIServer {
           this.handleGetVfs(req, res)
         } else if (pathname === '/api/vfs/file' && req.method === 'GET') {
           this.handleGetVfsFile(req, res, url.searchParams)
+        } else if (pathname === '/api/security/info' && req.method === 'GET') {
+          this.handleGetSecurityInfo(req, res)
+        } else if (pathname === '/api/shutdown' && req.method === 'POST') {
+          await this.handlePostShutdown(req, res)
         } else {
-          // Static Assets
-          this.handleStaticAssets(req, res)
+          res.writeHead(404, { 'Content-Type': 'application/json' })
+          res.end(JSON.stringify({ error: 'Not Found' }))
         }
       } catch (error) {
         logger.error(`Error handling request ${req.url}:`, error)
@@ -92,20 +144,84 @@ export class UIServer {
     })
   }
 
+  private authMiddleware(req: IncomingMessage, res: ServerResponse): boolean {
+    const providedToken = req.headers['x-concatenator-token'] as string
+    if (!this.isValidToken(providedToken)) {
+      logger.warn(
+        `Unauthorized access attempt to ${req.url} from ${req.socket.remoteAddress}`
+      )
+      res.writeHead(403, { 'Content-Type': 'application/json' })
+      res.end(
+        JSON.stringify({
+          error: 'Forbidden: Invalid or Missing Security Token',
+        })
+      )
+      return false
+    }
+    return true
+  }
+
+  private corsMiddleware(req: IncomingMessage, res: ServerResponse): boolean {
+    const origin = req.headers['origin']
+    if (!origin) return true // Allow non-browser clients (CLI, etc.)
+
+    // Strict local-only origin check
+    const isLocal =
+      origin === 'http://127.0.0.1' ||
+      origin.startsWith('http://127.0.0.1:') ||
+      origin === 'http://localhost' ||
+      origin.startsWith('http://localhost:')
+
+    if (!isLocal) {
+      logger.error(
+        `CORS Blocked: Illegal origin ${origin} attempted to access API`
+      )
+      res.writeHead(403, { 'Content-Type': 'application/json' })
+      res.end(
+        JSON.stringify({ error: 'Forbidden: Cross-Origin Request Blocked' })
+      )
+      return false
+    }
+    return true
+  }
+
   public async start(): Promise<number> {
+    const lifecycle = LifecycleManager.getInstance()
+    lifecycle.startIdleMonitor()
+
     return new Promise((resolve, reject) => {
       this.server.on('error', reject)
       this.server.listen(this.port, '127.0.0.1', () => {
         const address = this.server.address()
         const actualPort =
           typeof address === 'object' && address ? address.port : this.port
+        logger.debug(`UIServer: Listening on http://localhost:${actualPort}`)
         resolve(actualPort)
       })
     })
   }
 
+  public getShutdownToken(): string {
+    return this.shutdownToken.toString()
+  }
+
   public stop(): void {
+    this.purgeToken()
     this.server.close()
+  }
+
+  private isValidToken(provided: string | undefined): boolean {
+    if (!provided) return false
+    const providedBuf = Buffer.from(provided)
+    if (providedBuf.length !== this.shutdownToken.length) return false
+    return timingSafeEqual(providedBuf, this.shutdownToken)
+  }
+
+  private purgeToken(): void {
+    this.shutdownToken.fill(0)
+    delete process.env.CONCATENATOR_TOKEN
+    delete process.env.CONCATENATOR_SHUTDOWN_TOKEN
+    logger.debug('UIServer: Token purged from memory')
   }
 
   /**
@@ -114,8 +230,11 @@ export class UIServer {
    */
   private resolveIgnoreListSync(primaryPath: string): string[] {
     const tryRead = (filePath: string): string[] | null => {
-      if (!this.fs.existsSync(filePath)) return null
+      // Security: ensure we aren't reading something outside the intended scope
+      // Although primaryPath is now sanitized via workerId, we still want to be safe
+      // especially for the fallback logic.
       try {
+        if (!this.fs.existsSync(filePath)) return null
         return this.fs
           .readFileSync(filePath, 'utf-8')
           .split('\n')
@@ -129,11 +248,31 @@ export class UIServer {
     const primary = tryRead(primaryPath)
     if (primary !== null) return primary
 
-    // Fallback: .gitignore in cwd
-    const gitignore = tryRead(join(dirname(primaryPath), '.gitignore'))
+    // Fallback: .gitignore in same directory as primaryPath
+    // Ensure we don't escape to parent directories accidentally
+    const gitignorePath = join(dirname(primaryPath), '.gitignore')
+    const gitignore = tryRead(gitignorePath)
     if (gitignore !== null) return gitignore
 
     return [...DEFAULT_IGNORE_LIST]
+  }
+
+  /**
+   * Sanitize workerId to prevent path injection attacks.
+   * Only numeric digits are allowed (workerIndex from Playwright).
+   */
+  private sanitizeWorkerId(workerId: string | undefined): string | null {
+    if (!workerId || typeof workerId !== 'string') return null
+    if (!/^\d+$/.test(workerId)) return null
+    return workerId
+  }
+
+  private getIgnoreFilePath(req: IncomingMessage): string {
+    const workerId = this.sanitizeWorkerId(req.headers['x-worker-id'] as string)
+    if (workerId) {
+      return `${this.ignoreFilePath}.${workerId}`
+    }
+    return this.ignoreFilePath
   }
 
   private handleGetHealth(req: IncomingMessage, res: ServerResponse): void {
@@ -150,20 +289,85 @@ export class UIServer {
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(
       JSON.stringify({
-        status: 'ok',
+        status: 'ready',
         version,
+        pid: process.pid,
         uptime: Math.floor(process.uptime()),
       })
     )
   }
 
+  private handlePostHeartbeat(req: IncomingMessage, res: ServerResponse): void {
+    const providedToken = req.headers['x-concatenator-token'] as string
+    if (!this.isValidToken(providedToken)) {
+      res.writeHead(403, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Forbidden: Invalid Token' }))
+      return
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ status: 'alive', ts: Date.now() }))
+  }
+
+  private handleGetPulse(req: IncomingMessage, res: ServerResponse): void {
+    const pulsePath = join(process.cwd(), '.concatenator', 'pulse.json')
+    if (!fsDefault.existsSync(pulsePath)) {
+      res.writeHead(404, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Pulse not found' }))
+      return
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    createReadStream(pulsePath).pipe(res)
+  }
+
+  private async handlePostShutdown(
+    req: IncomingMessage,
+    res: ServerResponse
+  ): Promise<void> {
+    const providedToken = req.headers['x-concatenator-token'] as string
+    if (!this.isValidToken(providedToken)) {
+      res.writeHead(403, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Forbidden: Invalid Shutdown Token' }))
+      return
+    }
+
+    logger.info('UIServer: Shutdown signal received via API')
+
+    // Respond immediately to acknowledge the request
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ success: true, message: 'Shutting down...' }))
+
+    // Trigger cleanup and exit
+    try {
+      const lifecycle = LifecycleManager.getInstance()
+      await lifecycle.prepareShutdown()
+
+      // Purge token before exit
+      this.purgeToken()
+
+      // Small delay to allow response to be sent and connections to close
+      setTimeout(() => {
+        process.exit(0)
+      }, 500)
+    } catch (error) {
+      logger.error('UIServer: Error during shutdown', error)
+      this.purgeToken()
+      process.exit(1)
+    }
+  }
+
   private handleGetConfig(req: IncomingMessage, res: ServerResponse): void {
     res.writeHead(200, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify(this.uiConfig))
+    res.end(
+      JSON.stringify({
+        ...this.uiConfig,
+        token: this.shutdownToken.toString(),
+      })
+    )
   }
 
   private handleGetIgnoreList(req: IncomingMessage, res: ServerResponse): void {
-    const ignoreList = this.resolveIgnoreListSync(this.ignoreFilePath)
+    const path = this.getIgnoreFilePath(req)
+    const ignoreList = this.resolveIgnoreListSync(path)
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify(ignoreList))
   }
@@ -186,16 +390,17 @@ export class UIServer {
         return
       }
       // Read existing file to preserve comments, then merge
+      const path = this.getIgnoreFilePath(req)
       let existingContent = ''
-      if (this.fs.existsSync(this.ignoreFilePath)) {
+      if (this.fs.existsSync(path)) {
         try {
-          existingContent = this.fs.readFileSync(this.ignoreFilePath, 'utf-8')
+          existingContent = this.fs.readFileSync(path, 'utf-8')
         } catch {
           /* unreadable — treat as empty */
         }
       }
       const mergedContent = mergeIgnoreFileWithComments(existingContent, list)
-      this.fs.writeFileSync(this.ignoreFilePath, mergedContent, 'utf-8')
+      this.fs.writeFileSync(path, mergedContent, 'utf-8')
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ success: true }))
     } catch {
@@ -225,7 +430,8 @@ export class UIServer {
       return
     }
 
-    const ignoreList = this.resolveIgnoreListSync(this.ignoreFilePath)
+    const path = this.getIgnoreFilePath(req)
+    const ignoreList = this.resolveIgnoreListSync(path)
 
     const vfsRoot = resolve(process.cwd(), this.uiConfig.path)
     const vfs = new VFSManager(
@@ -259,10 +465,14 @@ export class UIServer {
     const vfsRoot = this.uiConfig.path
       ? resolve(process.cwd(), this.uiConfig.path)
       : process.cwd()
-    const fullPath = join(vfsRoot, filePath)
+
+    // Normalize both paths to resolve any '..' segments
+    const fullPath = resolve(vfsRoot, filePath)
 
     // Security check to prevent path traversal
-    if (!fullPath.startsWith(vfsRoot)) {
+    // Ensure the resolved path starts with the root path and isn't a partial match of a sister directory
+    const normalizedRoot = vfsRoot.endsWith(sep) ? vfsRoot : vfsRoot + sep
+    if (!fullPath.startsWith(normalizedRoot) && fullPath !== vfsRoot) {
       res.writeHead(403, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ error: 'Access denied' }))
       return
@@ -300,5 +510,41 @@ export class UIServer {
       res.writeHead(404, { 'Content-Type': 'text/plain' })
       res.end('Not Found')
     }
+  }
+
+  private calculateBuildHash(): void {
+    try {
+      const exePath = process.execPath
+      const buffer = fsDefault.readFileSync(exePath)
+      this.buildHash = createHash('sha256').update(buffer).digest('hex')
+    } catch (err) {
+      logger.warn(`Failed to calculate build hash: ${err}`)
+      this.buildHash = 'unknown'
+    }
+  }
+
+  private handleGetSecurityInfo(
+    req: IncomingMessage,
+    res: ServerResponse
+  ): void {
+    let version = '0.0.0'
+    try {
+      const pkgPath = resolve(
+        dirname(fileURLToPath(import.meta.url)),
+        '../../package.json'
+      )
+      version = JSON.parse(fsDefault.readFileSync(pkgPath, 'utf-8')).version
+    } catch {
+      /* ignore */
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json' })
+    res.end(
+      JSON.stringify({
+        version,
+        buildHash: this.buildHash,
+        fingerprint: ARCHITECT_PGP_FINGERPRINT,
+      })
+    )
   }
 }

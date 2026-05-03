@@ -1,0 +1,94 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Binary (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: concatenator-linux-x64
+            asset_name: concatenator-linux-x64.tar.gz
+            exe_name: concatenator
+          - os: windows-latest
+            artifact_name: concatenator-windows-x64
+            asset_name: concatenator-windows-x64.zip
+            exe_name: concatenator.exe
+          - os: macos-latest
+            artifact_name: concatenator-macos-x64
+            asset_name: concatenator-macos-x64.tar.gz
+            exe_name: concatenator
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Project
+        run: npm run build
+
+      - name: Build SEA Executable
+        run: npm run build:exe
+
+      - name: Package Binary (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/concatenator.exe -DestinationPath ${{ matrix.asset_name }}
+
+      - name: Package Binary (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          tar -cvzf ${{ matrix.asset_name }} -C dist ${{ matrix.exe_name }}
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.asset_name }}
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: artifacts/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Deploy to Vercel
+        # Only run this on the Ubuntu runner to avoid triple-deploying from Windows/Mac
+        if: matrix.os == 'ubuntu-latest'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          npm install --global vercel@latest
+          vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+          vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }}

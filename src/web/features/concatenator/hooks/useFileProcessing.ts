@@ -58,17 +58,6 @@ export const useFileProcessing = ({
   const setIsProcessing = useCallback((processing: boolean) => {
     isProcessingRef.current = processing
     setIsProcessingState(processing)
-
-    // Force a state update if we're setting processing to false but it's been true for too long
-    if (!processing) {
-      // Use a timeout to ensure the state update propagates
-      setTimeout(() => {
-        if (isProcessingRef.current !== processing) {
-          setIsProcessingState(processing)
-          isProcessingRef.current = processing
-        }
-      }, 100)
-    }
   }, [])
 
   const cancelProcessing = useCallback(() => {
@@ -331,8 +320,7 @@ export const useFileProcessing = ({
               await new Promise((resolve) => setTimeout(resolve, 100))
               return // Exit early to avoid the final setIsProcessing(false) call
             } catch (err) {
-              console.error('[useFileProcessing] Error in parseBundle:', err)
-              logger.error('Failed to parse concatenated file:', err)
+              logger.error(`[useFileProcessing] Error in parseBundle: ${err}`)
               setImportError('Failed to parse concatenated file.')
               setIsProcessing(false)
               return // Exit early to avoid the final setIsProcessing(false) call
@@ -374,11 +362,9 @@ export const useFileProcessing = ({
         cancelImportRef.current = false
         activeReaderRef.current = null
       } catch (error) {
-        console.error(
-          '[useFileProcessing] Error in processUploadedFiles:',
-          error
+        logger.error(
+          `[useFileProcessing] Error in processUploadedFiles: ${error}`
         )
-        logger.error('Error in processUploadedFiles:', error)
         setImportError('An unexpected error occurred during file processing.')
         setIsProcessing(false)
       }

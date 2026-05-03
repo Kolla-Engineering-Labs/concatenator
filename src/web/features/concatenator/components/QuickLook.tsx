@@ -15,6 +15,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react'
 import { FileItem } from '../../../../core/types'
 import { isImageFile, isPdfFile, cn } from '../../../../lib/utils'
+import { logger } from '../../../../lib/logger'
 
 interface QuickLookProps {
   file: FileItem | null
@@ -122,7 +123,8 @@ export const QuickLook: React.FC<QuickLookProps> = ({ file, onClose }) => {
                             PDF Preview Unavailable
                           </p>
                           <p className="text-[10px] text-slate-400 mt-1 max-w-[200px]">
-                            Please re-upload this PDF to enable visualization.
+                            PDF visualization is not available for files
+                            reconstructed from text bundles.
                           </p>
                         </div>
                       </div>
@@ -196,7 +198,7 @@ export const QuickLook: React.FC<QuickLookProps> = ({ file, onClose }) => {
                               )
                             }
                           } catch (err) {
-                            console.error('SVG decoding failed:', err)
+                            logger.error(`SVG decoding failed: ${err}`)
                             // Fallback to standard img tag if decoding fails
                           }
                         }
@@ -218,7 +220,7 @@ export const QuickLook: React.FC<QuickLookProps> = ({ file, onClose }) => {
                             <p className="text-[10px] text-slate-400 mt-1 max-w-[200px]">
                               {isSvg
                                 ? 'This SVG content appears to be invalid or incomplete.'
-                                : 'Please re-upload this file to enable image visualization.'}
+                                : 'This image was reconstructed from a text bundle. Full visualization is not available for text-only de-concatenations.'}
                             </p>
                           </div>
                         </div>

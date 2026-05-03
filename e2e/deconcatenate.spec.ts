@@ -73,7 +73,7 @@ test.describe('De-concatenate Mode', () => {
     await deconcatButton.waitFor({ state: 'visible', timeout: 10000 })
 
     // Use evaluate for more reliable clicking in Firefox
-    await deconcatButton.evaluate((el: HTMLElement) => el.click())
+    await jsClick(deconcatButton)
 
     // Wait for the mode switch to complete by checking button state
     await expect(deconcatButton).toHaveClass(/bg-brand-600/, {
@@ -120,7 +120,7 @@ test.describe('De-concatenate Mode', () => {
           name: 'Concatenate',
           exact: true,
         })
-        await concatButton.evaluate((el: HTMLElement) => el.click())
+        await jsClick(concatButton)
 
         await uploadHelper.uploadSingleFile('concatenated.txt', mockContent)
 
@@ -130,7 +130,7 @@ test.describe('De-concatenate Mode', () => {
           name: 'De-concatenate',
           exact: true,
         })
-        await deconcatButton.evaluate((el: HTMLElement) => el.click())
+        await jsClick(deconcatButton)
 
         // Wait for mode switch and verify we're in de-concatenate mode
         await expect(deconcatButton).toHaveClass(/bg-brand-600/, {

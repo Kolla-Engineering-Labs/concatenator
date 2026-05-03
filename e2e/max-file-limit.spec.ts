@@ -5,7 +5,7 @@
 
 import { test, expect, resetIgnoreList } from './fixtures'
 import { FileUploadHelper } from './helpers/file-upload'
-import { ensureSidebarOpen } from './helpers/sidebar'
+import { ensureSidebarOpen, ensureSidebarClosed } from './helpers/sidebar'
 import type { Locator } from '@playwright/test'
 
 /**
@@ -216,7 +216,8 @@ test.describe('Max File Limit Feature', () => {
         // Set limit to 500
         const maxFileLimitSelect = page.locator('select#max-file-limit')
         await maxFileLimitSelect.selectOption('500')
-        await page.waitForTimeout(300)
+        await expect(maxFileLimitSelect).toHaveValue('500')
+        await page.waitForTimeout(500)
 
         // Create 501 files (over the limit)
         const files = Array.from({ length: 501 }, (_, i) => ({
@@ -235,16 +236,23 @@ test.describe('Max File Limit Feature', () => {
           timeout: 15000,
         })
 
+        // Wait for processing to fully finish before clicking concatenate
+        await expect(page.getByText(/Processing/i)).not.toBeVisible({
+          timeout: 15000,
+        })
+        await page.waitForTimeout(500)
+
         // Try to concatenate
         const concatenateButton = page.getByRole('button', {
           name: /Concatenate & Download/,
         })
+        await expect(concatenateButton).toBeEnabled({ timeout: 15000 })
+        await ensureSidebarClosed(page)
         await jsClick(concatenateButton)
 
         // Check for error message with correct limit
-        const errorMessage = page.getByText(
-          /Warning: You are attempting to concatenate over 500 files/i
-        )
+        const errorMessage = page.getByTestId('concatenation-error').first()
+        await errorMessage.waitFor({ state: 'visible', timeout: 15000 })
         await errorMessage.scrollIntoViewIfNeeded()
         await expect(errorMessage).toBeVisible({ timeout: 10000 })
       } finally {
@@ -262,7 +270,8 @@ test.describe('Max File Limit Feature', () => {
         // Set limit to 1000
         const maxFileLimitSelect = page.locator('select#max-file-limit')
         await maxFileLimitSelect.selectOption('1000')
-        await page.waitForTimeout(300)
+        await expect(maxFileLimitSelect).toHaveValue('1000')
+        await page.waitForTimeout(500)
 
         // Create 500 files (under the limit)
         const files = Array.from({ length: 500 }, (_, i) => ({
@@ -280,6 +289,12 @@ test.describe('Max File Limit Feature', () => {
         ).toBeVisible({
           timeout: 15000,
         })
+
+        // Wait for processing to fully finish before clicking concatenate
+        await expect(page.getByText(/Processing/i)).not.toBeVisible({
+          timeout: 15000,
+        })
+        await page.waitForTimeout(500)
 
         // Try to concatenate
         const concatenateButton = page.getByRole('button', {
@@ -328,20 +343,29 @@ test.describe('Max File Limit Feature', () => {
           timeout: 30000,
         })
 
+        // Wait for processing to fully finish before clicking concatenate
+        await expect(page.getByText(/Processing/i)).not.toBeVisible({
+          timeout: 15000,
+        })
+        await page.waitForTimeout(500)
+
         // With default limit (10000), concatenation should work
         const concatenateButton = page.getByRole('button', {
           name: /Concatenate & Download/,
         })
+        await expect(concatenateButton).toBeEnabled({ timeout: 15000 })
+        await ensureSidebarClosed(page)
         await jsClick(concatenateButton)
         await page.waitForTimeout(500)
 
         // No error should be shown
-        const errorMessage = page.getByText(
-          /Warning: You are attempting to concatenate/i
-        )
+        const errorMessage = page
+          .getByText(/Warning: You are attempting to concatenate/i)
+          .first()
         await expect(errorMessage).not.toBeVisible({ timeout: 5000 })
 
         // Clear the files by switching modes — wait for the transition to confirm
+        await ensureSidebarOpen(page)
         const deconcatenateButton = page.getByRole('button', {
           name: 'De-concatenate',
           exact: true,
@@ -351,6 +375,13 @@ test.describe('Max File Limit Feature', () => {
           timeout: 5000,
         })
 
+        // Wait for processing to fully finish before clicking concatenate
+        await expect(page.getByText(/Processing/i)).not.toBeVisible({
+          timeout: 15000,
+        })
+        await page.waitForTimeout(500)
+
+        await ensureSidebarOpen(page)
         const concatenateModeButton = page.getByRole('button', {
           name: 'Concatenate',
           exact: true,
@@ -361,9 +392,11 @@ test.describe('Max File Limit Feature', () => {
         })
 
         // Change limit to 500
+        await ensureSidebarOpen(page)
         const maxFileLimitSelect = page.locator('select#max-file-limit')
         await maxFileLimitSelect.selectOption('500')
-        await page.waitForTimeout(300)
+        await expect(maxFileLimitSelect).toHaveValue('500')
+        await page.waitForTimeout(500)
 
         // Re-upload the same 600 files (or verify they are still there)
         await uploadHelper.setFilesOnInput(files)
@@ -373,13 +406,20 @@ test.describe('Max File Limit Feature', () => {
           timeout: 30000,
         })
 
+        // Wait for processing to fully finish before clicking concatenate
+        await expect(page.getByText(/Processing/i)).not.toBeVisible({
+          timeout: 15000,
+        })
+        await page.waitForTimeout(500)
+
         // Try to concatenate - should now fail with 500 limit
+        await expect(concatenateButton).toBeEnabled({ timeout: 15000 })
+        await ensureSidebarClosed(page)
         await jsClick(concatenateButton)
 
-        const newErrorMessage = page.getByText(
-          /Warning: You are attempting to concatenate over 500 files/i
-        )
+        const newErrorMessage = page.getByTestId('concatenation-error').first()
         await expect(newErrorMessage).toBeVisible({ timeout: 15000 })
+        await expect(newErrorMessage).toHaveText(/over 500 files/i)
       } finally {
         uploadHelper.cleanup()
       }

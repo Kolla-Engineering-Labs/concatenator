@@ -27,6 +27,8 @@ vi.mock('../src/web/hooks/useWorkbench', () => ({
   useWorkbench: () => ({
     addIgnorePattern: mockAddIgnorePattern,
     removeIgnorePattern: mockRemoveIgnorePattern,
+    isIgnored: (path: string) =>
+      path.includes('ignored') || path === 'src/b.txt', // Match test data
   }),
 }))
 
@@ -170,7 +172,7 @@ describe('FileTable', () => {
     )
     const ignoreButton = screen.getByTitle(/Ignore/)
     fireEvent.click(ignoreButton)
-    expect(mockAddIgnorePattern).toHaveBeenCalledWith('src/**')
+    expect(mockAddIgnorePattern).toHaveBeenCalledWith('src')
   })
 
   it('calls onRemoveFile when remove button is clicked', () => {

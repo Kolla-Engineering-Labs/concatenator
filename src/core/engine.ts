@@ -211,10 +211,11 @@ export function deconcatenate(content: string): DeconcatenateResult {
   }
 
   let foundAny = false
+  const totalMatches = matches.length
 
-  for (let i = 0; i < matches.length; i++) {
+  for (let i = 0; i < totalMatches; i++) {
     const { path, contentStart } = matches[i]
-    const nextMatchStart = i < matches.length - 1 ? matches[i + 1].index : null
+    const nextMatchStart = i < totalMatches - 1 ? matches[i + 1].index : null
 
     // Find the end delimiter for this file
     const fileEndIndex = content.indexOf(fileEndDelimiter, contentStart)
@@ -454,7 +455,8 @@ function buildFileStartMarker(path: string, sessionId: string): string {
 export function concatenate(
   files: ConcatenateInputFile[],
   timestamp?: string,
-  sessionId?: string
+  sessionId?: string,
+  onProgress?: (progress: number) => void
 ): string {
   const ts = timestamp || new Date().toLocaleString()
   const sid = sessionId || generateCollisionFreeSessionId(files)
@@ -470,10 +472,16 @@ export function concatenate(
   let result = `${MANIFEST_PREFIX}${sid}${MANIFEST_SUFFIX}\n`
   result += `Concatenated on: ${ts}\n\n`
 
-  for (const file of files) {
+  const totalFiles = files.length
+  for (let i = 0; i < totalFiles; i++) {
+    const file = files[i]
     result += `${buildFileStartMarker(file.path, sid)}\n`
     result += file.content
     result += `\n${FILE_END_DELIMITER}\n\n`
+
+    if (onProgress) {
+      onProgress(Math.round(((i + 1) / totalFiles) * 100))
+    }
   }
 
   return result

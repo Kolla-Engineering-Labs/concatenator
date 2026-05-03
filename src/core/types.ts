@@ -50,4 +50,5 @@ export interface ValidationResult {
   totalMarkersFound: number
   targetFiles: string[]
   foreignFiles: string[]
+  overwrites?: string[]
 }
