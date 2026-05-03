@@ -190,7 +190,7 @@ describe('UIServer Coverage Extensions', () => {
       const data = JSON.parse(res.data)
       expect(data.version).toBeDefined()
       expect(data.buildHash).toBeDefined()
-      expect(data.fingerprint).toContain('4A21')
+      expect(data.fingerprint).toContain('FF31')
     })
   })
 

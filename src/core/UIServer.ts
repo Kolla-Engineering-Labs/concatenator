@@ -11,7 +11,7 @@ import {
 } from 'node:http'
 import * as fsDefault from 'node:fs'
 import { createReadStream } from 'node:fs'
-import { join, resolve, dirname } from 'node:path'
+import { join, resolve, dirname, sep } from 'node:path'
 import { URL, fileURLToPath } from 'node:url'
 import { VFSManager } from './VFSManager.js'
 import { DEFAULT_IGNORE_LIST } from './constants.js'
@@ -230,8 +230,11 @@ export class UIServer {
    */
   private resolveIgnoreListSync(primaryPath: string): string[] {
     const tryRead = (filePath: string): string[] | null => {
-      if (!this.fs.existsSync(filePath)) return null
+      // Security: ensure we aren't reading something outside the intended scope
+      // Although primaryPath is now sanitized via workerId, we still want to be safe
+      // especially for the fallback logic.
       try {
+        if (!this.fs.existsSync(filePath)) return null
         return this.fs
           .readFileSync(filePath, 'utf-8')
           .split('\n')
@@ -245,16 +248,28 @@ export class UIServer {
     const primary = tryRead(primaryPath)
     if (primary !== null) return primary
 
-    // Fallback: .gitignore in cwd
-    const gitignore = tryRead(join(dirname(primaryPath), '.gitignore'))
+    // Fallback: .gitignore in same directory as primaryPath
+    // Ensure we don't escape to parent directories accidentally
+    const gitignorePath = join(dirname(primaryPath), '.gitignore')
+    const gitignore = tryRead(gitignorePath)
     if (gitignore !== null) return gitignore
 
     return [...DEFAULT_IGNORE_LIST]
   }
 
+  /**
+   * Sanitize workerId to prevent path injection attacks.
+   * Only numeric digits are allowed (workerIndex from Playwright).
+   */
+  private sanitizeWorkerId(workerId: string | undefined): string | null {
+    if (!workerId || typeof workerId !== 'string') return null
+    if (!/^\d+$/.test(workerId)) return null
+    return workerId
+  }
+
   private getIgnoreFilePath(req: IncomingMessage): string {
-    const workerId = req.headers['x-worker-id']
-    if (workerId && typeof workerId === 'string') {
+    const workerId = this.sanitizeWorkerId(req.headers['x-worker-id'] as string)
+    if (workerId) {
       return `${this.ignoreFilePath}.${workerId}`
     }
     return this.ignoreFilePath
@@ -450,10 +465,14 @@ export class UIServer {
     const vfsRoot = this.uiConfig.path
       ? resolve(process.cwd(), this.uiConfig.path)
       : process.cwd()
-    const fullPath = join(vfsRoot, filePath)
+
+    // Normalize both paths to resolve any '..' segments
+    const fullPath = resolve(vfsRoot, filePath)
 
     // Security check to prevent path traversal
-    if (!fullPath.startsWith(vfsRoot)) {
+    // Ensure the resolved path starts with the root path and isn't a partial match of a sister directory
+    const normalizedRoot = vfsRoot.endsWith(sep) ? vfsRoot : vfsRoot + sep
+    if (!fullPath.startsWith(normalizedRoot) && fullPath !== vfsRoot) {
       res.writeHead(403, { 'Content-Type': 'application/json' })
       res.end(JSON.stringify({ error: 'Access denied' }))
       return

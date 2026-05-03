@@ -35,10 +35,13 @@ async function verifyRelease() {
   let gpgOutput = ''
   try {
     // gpg --verify often writes to stderr
-    gpgOutput = execSync(`gpg --verify "${manifestPath.replace(/\\/g, '/')}" 2>&1`, {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      encoding: 'utf-8',
-    }).toString()
+    gpgOutput = execSync(
+      `gpg --verify "${manifestPath.replace(/\\/g, '/')}" 2>&1`,
+      {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        encoding: 'utf-8',
+      }
+    ).toString()
   } catch (error: unknown) {
     if (error instanceof Error) {
       const execError = error as { stderr?: Buffer | string }

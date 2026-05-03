@@ -70,6 +70,8 @@ console.log(`\n📄 Manifest generated: ${manifestPath}`)
 console.log('\n🔐 NEXT STEPS (Architect Only):')
 console.log('-------------------------------')
 console.log('1. Run the following command to sign the manifest:')
-console.log(`   gpg --clearsign ${relative(rootDir, manifestPath).replace(/\\/g, '/')}`)
+console.log(
+  `   gpg --clearsign ${relative(rootDir, manifestPath).replace(/\\/g, '/')}`
+)
 console.log('\n2. This will create dist/SHA256SUMS.asc.')
 console.log('3. Upload SHA256SUMS.asc along with the release.')
