@@ -687,11 +687,12 @@ test.describe('Concatenate Mode', () => {
           jsClick(ignoreButton),
         ])
 
-        // Wait for the ignored file text to disappear from the file list
-        // Use a more specific locator to target only the file list (not the ignore list)
-        const fileListContainer = page.locator('table').first()
+        const ignoreFileRow = page.locator(`tr[data-path="${ignoreFileName}"]`)
+        await expect(ignoreFileRow).toHaveAttribute('data-ignored', 'true', {
+          timeout: 10000,
+        })
         await expect(
-          fileListContainer.getByText(ignoreFileName, { exact: true }).first()
+          ignoreFileRow.getByText(ignoreFileName, { exact: true }).first()
         ).toHaveClass(/line-through/, { timeout: 10000 })
 
         // Verify keep file is still visible (as a file row with buttons)

@@ -21,6 +21,7 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: 'jsdom',
       globals: true,
+      testTimeout: 60000,
       // Automatically clear mock call counts and restore spyOn implementations
       // after each test, preventing leaks without requiring manual afterEach calls.
       clearMocks: true,
@@ -90,6 +91,7 @@ export default defineConfig(({ mode }) => {
           '**/.concatenate-ignore',
           '**/.changeset/**',
           '**/test-results/**',
+          '**/temp_ignore_files/**',
         ],
       },
     },

@@ -4,6 +4,7 @@ import { cn } from '../../lib/utils'
 import { Header } from '../features/concatenator/components/Header'
 import { Footer } from '../features/concatenator/components/Footer'
 import { ModeSwitch } from './ModeSwitch'
+import { SecurityStatus } from '../features/security/components/SecurityStatus'
 import { useWorkbench } from '../hooks/useWorkbench'
 import { AppMode } from '../types/workbench'
 
@@ -192,6 +193,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }}
             />
           </Suspense>
+        </div>
+
+        <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+          <SecurityStatus />
         </div>
       </nav>
 

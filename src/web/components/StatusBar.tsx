@@ -54,7 +54,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
     isEditingCustom || !BUDGET_PRESETS.some((p) => p.value === tokenBudget)
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 h-10 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 z-40 text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+    <div className="h-10 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 z-40 text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider shrink-0">
       {/* Left Side: Stats */}
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-2">

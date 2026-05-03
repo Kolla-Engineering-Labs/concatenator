@@ -37,10 +37,42 @@ We use GitHub's native **Private Vulnerability Reporting** feature to ensure sec
 Concatenator implements a multi-layered defense to protect your local machine from unauthorized access when running the API server:
 
 - **Localhost Binding**: The API server binds strictly to `127.0.0.1`. This ensures that external machines on your local network (LAN) cannot probe or access the server.
-- **Readiness Probe (`/health`)**: A lightweight endpoint providing server status, version, and uptime. It is explicitly excluded from the API Token Guard to allow the CLI to verify server readiness before launching the browser. No sensitive data or file access is exposed via this probe.
+- **Readiness Probe (`/api/health`)**: A lightweight endpoint providing server status, version, and uptime. It is explicitly excluded from the API Token Guard to allow the CLI to verify server readiness before launching the browser. No sensitive data or file access is exposed via this probe.
 - **API Token Guard**: All sensitive API endpoints (VFS, file read, config) are protected by a mandatory `X-Concatenator-Token` header.
   - **How it works**: The server reads a token from the `CONCATENATOR_API_TOKEN` environment variable.
   - **Protection**: This prevents malicious websites or local bots from triggering filesystem operations on your machine via CSRF or simple automated probing. See the [API Security guide](./CONTRIBUTING.md#api-security) for instructions on generating and setting this token.
+
+### 🖋️ Binary Integrity (Code Signing)
+
+Concatenator binaries for Windows and macOS are cryptographically signed to ensure that the code has not been tampered with after being built.
+
+- **Windows**: Signed using `signtool.exe` with a valid developer certificate.
+- **macOS**: Signed using `codesign` and notarized by Apple for official releases. Community or development builds may use **ad-hoc signing** to preserve user privacy and autonomy. See [macOS Security & Non-Certified Builds](./docs/MACOS_SECURITY.md) for more information.
+
+Always verify the publisher in your OS security prompts before running the executable.
+
+### 🔐 GPG-Signed Manifests (Independent Verification)
+
+Beyond OS-level signing, we provide a **GPG-signed manifest** for every official release. This allows you to verify binary integrity even if OS certificate chains are compromised or unavailable (e.g., in air-gapped systems).
+
+- **Manifest File**: `SHA256SUMS.asc` (Standard SHA-256 hashes inside a PGP Clearsigned Message).
+- **Architect PGP Fingerprint**: `4A21 4627 3B7B 0A35 4C41  4753 5B22 4C5F 51E6 10EF`
+- **Verification via CLI**:
+
+  ```bash
+  concatenator verify self
+  ```
+
+  This command hashes the current binary and compares it against the local `SHA256SUMS.asc` (found in the same directory). If the architect's public key is in your keychain, it also performs a cryptographic signature check.
+
+- **Pre-Release Audit**: Our build pipeline includes a `npm run test:release` audit that orchestrates GPG signature verification and SHA256 integrity checks on release candidates before they are finalized.
+
+- **Manual Verification**:
+  ```bash
+  gpg --import public.key
+  gpg --verify SHA256SUMS.asc
+  shasum -a 256 -c SHA256SUMS.asc
+  ```
 
 ## Security-Related Configuration
 

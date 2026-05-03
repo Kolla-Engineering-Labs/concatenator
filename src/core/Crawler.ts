@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { lstatSync, readdirSync, realpathSync, statSync, Stats } from 'fs'
-import { join, resolve, relative } from 'path'
+import { lstatSync, readdirSync, realpathSync, statSync, Stats } from 'node:fs'
+import { join, resolve, relative } from 'node:path'
 import { IgnoreEngine } from './ignore/IgnoreEngine.js'
 import { SecurityViolation } from './errors.js'
 
@@ -61,6 +61,7 @@ export class UnifiedCrawler {
     currentDir: string = this.logicalRoot,
     onEntry?: (entry: CrawlerEntry) => void
   ): CrawlerEntry[] {
+    this.assertPathWithinRoot(currentDir)
     const results: CrawlerEntry[] = []
 
     const walk = (dir: string) => {

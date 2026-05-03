@@ -61,6 +61,7 @@ vi.mock('jspdf', () => {
 
 describe('useFileProcessing', () => {
   let originalClick: any
+  let originalFileReader: any
 
   beforeEach(() => {
     vi.resetAllMocks()
@@ -71,10 +72,13 @@ describe('useFileProcessing', () => {
 
     originalClick = HTMLAnchorElement.prototype.click
     HTMLAnchorElement.prototype.click = vi.fn()
+
+    originalFileReader = global.FileReader
   })
 
   afterEach(() => {
     HTMLAnchorElement.prototype.click = originalClick
+    global.FileReader = originalFileReader
   })
 
   describe('Concatenation Logic Edge Cases', () => {
@@ -1751,10 +1755,12 @@ describe('useFileProcessing', () => {
 
       const originalFileReader = global.FileReader
       global.FileReader = class {
-        readAsText = vi.fn().mockImplementation(function (this: any, f: File) {
+        readAsText = vi.fn().mockImplementation(function (this: any, f: Blob) {
           setTimeout(() => {
-            this.result = f.name.includes('1') ? 'content1' : 'content2'
-            this.onload()
+            if (!f) return
+            const name = (f as any).name || ''
+            this.result = name.includes('1') ? 'content1' : 'content2'
+            if (this.onload) this.onload()
           }, 10)
         })
       } as any

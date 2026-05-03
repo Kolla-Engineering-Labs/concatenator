@@ -6,6 +6,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { Analytics } from '@vercel/analytics/react'
 import { SpeedInsights } from '@vercel/speed-insights/react'
+import { logger } from './lib/logger'
 import { Sun, Moon } from 'lucide-react'
 import { Sidebar } from './web/components/Sidebar'
 import { StatusBar } from './web/components/StatusBar'
@@ -20,8 +21,15 @@ import { useLocalStorage } from './web/hooks/useLocalStorage'
 import { useTokenAggregation } from './web/hooks/useTokenAggregation'
 import { AppMode, ViewPreference } from './web/types/workbench'
 import { FileItem, TreeItem, OutputFormat } from './core/types'
+import { useHeartbeat } from './web/hooks/useHeartbeat'
+import { usePulseMonitor } from './web/hooks/usePulseMonitor'
+import { SessionExpiredModal } from './web/components/SessionExpiredModal'
 
 export default function App() {
+  const { isExpired } = useHeartbeat()
+  const { isHeavyProcessing, progress: pulseProgress } =
+    usePulseMonitor(isExpired)
+
   const [isDarkMode, setIsDarkMode] = useLocalStorage<boolean>(
     'concatenate-dark-mode',
     typeof window !== 'undefined'
@@ -53,6 +61,7 @@ export default function App() {
     virtualFileSystem,
     setVirtualFileSystem,
     tokenBudget,
+    isInitialized,
   } = useWorkbench()
 
   const {
@@ -74,7 +83,7 @@ export default function App() {
     appMode,
     isIgnored,
     maxFileLimit,
-    isIgnoreListLoading: false,
+    isIgnoreListLoading: !isInitialized,
     setVirtualFileSystem,
   })
 
@@ -218,13 +227,13 @@ export default function App() {
           flatten(tree)
 
           if (partial) {
-            console.warn('VFS scan hit the file limit, tree is partial.')
+            logger.warn('VFS scan hit the file limit, tree is partial.')
           }
 
           loadVfsFiles(flatFiles)
         }
       } catch (err) {
-        console.warn('Failed to fetch VFS tree:', err)
+        logger.warn(`Failed to fetch VFS tree: ${err}`)
       }
     }
     initWorkspace()
@@ -420,6 +429,43 @@ export default function App() {
         tokensSaved={tokensSaved}
         isPrecise={isPrecise}
       />
+
+      {isExpired && !isHeavyProcessing && <SessionExpiredModal />}
+
+      {isHeavyProcessing && (
+        <div className="fixed bottom-16 right-6 z-50 flex items-center gap-4 rounded-2xl bg-zinc-900 border border-zinc-800 p-4 shadow-2xl animate-in slide-in-from-bottom-10">
+          <div className="relative h-10 w-10">
+            <svg className="h-full w-full -rotate-90" viewBox="0 0 36 36">
+              <circle
+                className="stroke-zinc-800 fill-none"
+                strokeWidth="3"
+                cx="18"
+                cy="18"
+                r="16"
+              />
+              <circle
+                className="stroke-white fill-none transition-all duration-500 ease-out"
+                strokeWidth="3"
+                strokeDasharray="100"
+                strokeDashoffset={100 - pulseProgress}
+                strokeLinecap="round"
+                cx="18"
+                cy="18"
+                r="16"
+              />
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white">
+              {pulseProgress}%
+            </div>
+          </div>
+          <div>
+            <div className="text-xs font-bold text-white">Heavy Processing</div>
+            <div className="text-[10px] text-zinc-500">
+              System under load...
+            </div>
+          </div>
+        </div>
+      )}
 
       <Analytics />
       <SpeedInsights />

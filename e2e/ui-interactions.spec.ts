@@ -166,6 +166,7 @@ test.describe('UI Interactions and Edge Cases', () => {
           ),
           ignoreInput.press('Enter'),
         ])
+        await page.waitForTimeout(500) // Small stability buffer for Firefox
 
         // Additional delay for WebKit browsers (Mobile Safari) for rendering stability
         if (browserName === 'webkit') {

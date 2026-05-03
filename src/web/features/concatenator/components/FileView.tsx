@@ -28,6 +28,7 @@ import { TreeNode } from './TreeNode'
 import { OutputFormatToggle } from './OutputFormatToggle'
 import { FileTable } from './FileTable'
 import { QuickLook } from './QuickLook'
+import { logger } from '../../../../lib/logger'
 
 interface FileViewProps {
   files: FileItem[]
@@ -92,24 +93,22 @@ export const FileView: React.FC<FileViewProps> = ({
 
     const isDisabled = hasNoFiles || effectiveIsProcessing || hasNoHandler
     // Debug logging to diagnose button state issues - ALWAYS log in deconcatenate mode
-    if (typeof window !== 'undefined') {
-      console.debug('[FileView] Download button state:', {
-        isDisabled,
-        hasNoFiles,
-        isProcessing,
-        effectiveIsProcessing,
-        shouldBypassProcessing,
-        hasNoHandler,
-        nonIgnoredCount,
-        filteredFilesLength: filteredFiles.length,
-        allFiles: filteredFiles.map((f) => ({
-          path: f.path,
-          isIgnored: f.isIgnored,
-          kind: f.kind,
-        })),
-        mode,
-      })
-    }
+    logger.debug('[FileView] Download button state:', {
+      isDisabled,
+      hasNoFiles,
+      isProcessing,
+      effectiveIsProcessing,
+      shouldBypassProcessing,
+      hasNoHandler,
+      nonIgnoredCount,
+      filteredFilesLength: filteredFiles.length,
+      allFiles: filteredFiles.map((f) => ({
+        path: f.path,
+        isIgnored: f.isIgnored,
+        kind: f.kind,
+      })),
+      mode,
+    })
     return isDisabled
   }, [filteredFiles, isProcessing, onDownloadAsZip, mode])
 
@@ -145,6 +144,7 @@ export const FileView: React.FC<FileViewProps> = ({
         <div className="flex items-center gap-3">
           {files.length > 0 && (
             <button
+              type="button"
               onClick={onClearAll}
               disabled={isProcessing}
               className="px-2 py-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-all disabled:opacity-50"
@@ -157,6 +157,7 @@ export const FileView: React.FC<FileViewProps> = ({
 
           <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg border border-slate-200 dark:border-slate-800 shadow-inner">
             <button
+              type="button"
               onClick={() => setViewMode(ViewPreference.LIST)}
               aria-label="List view"
               className={cn(
@@ -169,6 +170,7 @@ export const FileView: React.FC<FileViewProps> = ({
               <Rows3 className="w-4 h-4" />
             </button>
             <button
+              type="button"
               onClick={() => setViewMode(ViewPreference.TREE)}
               aria-label="Tree view"
               className={cn(
@@ -253,6 +255,7 @@ export const FileView: React.FC<FileViewProps> = ({
 
               {/* Right: Clear All */}
               <button
+                type="button"
                 onClick={onClearAll}
                 disabled={files.length === 0 || isProcessing}
                 className="p-2.5 flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
@@ -265,9 +268,21 @@ export const FileView: React.FC<FileViewProps> = ({
               </button>
             </div>
 
+            {/* Import Error Warning (for concatenate mode limits etc) */}
+            {importError && (
+              <div
+                data-testid="concatenation-error"
+                className="flex flex-wrap items-center gap-3 px-4 py-3 rounded-xl border text-xs font-medium bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800/50 text-amber-700 dark:text-amber-400"
+              >
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span className="font-medium">{importError}</span>
+              </div>
+            )}
+
             {/* Bottom Center: Concatenate Button */}
             <div className="flex justify-center pb-2">
               <button
+                type="button"
                 onClick={onConcatenate}
                 disabled={
                   filteredFiles.filter((f) => !f.isIgnored).length === 0 ||
@@ -287,7 +302,7 @@ export const FileView: React.FC<FileViewProps> = ({
         ) : (
           <div className="space-y-6">
             {/* Import Error Warning (for de-concatenate mode skipped files) */}
-            {importError && mode === WorkbenchMode.DECONCATENATE && (
+            {importError && (
               <div className="flex flex-wrap items-center gap-3 px-4 py-3 rounded-xl border text-xs font-medium bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800/50 text-amber-700 dark:text-amber-400">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
                 <span className="font-medium">{importError}</span>
@@ -406,6 +421,7 @@ export const FileView: React.FC<FileViewProps> = ({
 
               {/* Right: Clear All */}
               <button
+                type="button"
                 onClick={onClearAll}
                 disabled={files.length === 0 || isProcessing}
                 className="p-2.5 flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-all"
@@ -421,6 +437,7 @@ export const FileView: React.FC<FileViewProps> = ({
             {/* Bottom Center: Download Button */}
             <div className="flex justify-center pb-2">
               <button
+                type="button"
                 onClick={onDownloadAsZip}
                 disabled={downloadButtonDisabled}
                 data-debug={JSON.stringify({

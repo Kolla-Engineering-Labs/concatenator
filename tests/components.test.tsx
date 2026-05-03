@@ -124,6 +124,7 @@ describe('ModeSwitch Component', () => {
       removeIgnorePattern: vi.fn(),
       autoSaveIgnore: false,
       setAutoSaveIgnore: vi.fn(),
+      isInitialized: true,
     })
   })
 
@@ -167,6 +168,7 @@ describe('ModeSwitch Component', () => {
       removeIgnorePattern: vi.fn(),
       autoSaveIgnore: false,
       setAutoSaveIgnore: vi.fn(),
+      isInitialized: true,
     })
 
     render(<ModeSwitch />)
@@ -201,6 +203,7 @@ describe('ModeSwitch Component', () => {
       removeIgnorePattern: vi.fn(),
       autoSaveIgnore: false,
       setAutoSaveIgnore: vi.fn(),
+      isInitialized: true,
     })
 
     render(<ModeSwitch />)
@@ -233,6 +236,7 @@ describe('ModeSwitch Component', () => {
       removeIgnorePattern: vi.fn(),
       autoSaveIgnore: false,
       setAutoSaveIgnore: vi.fn(),
+      isInitialized: true,
     })
 
     render(<ModeSwitch />)

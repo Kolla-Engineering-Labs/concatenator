@@ -15,7 +15,7 @@ describe('ApiClient', () => {
       } as Response)
 
       const result = await ApiClient.getIgnoreList()
-      expect(fetch).toHaveBeenCalledWith('/api/ignore-list')
+      expect(fetch).toHaveBeenCalledWith('/api/ignore-list', { headers: {} })
       expect(result).toEqual(mockList)
     })
 
@@ -69,7 +69,7 @@ describe('ApiClient', () => {
       } as Response)
 
       const result = await ApiClient.getVfsState()
-      expect(fetch).toHaveBeenCalledWith('/api/vfs')
+      expect(fetch).toHaveBeenCalledWith('/api/vfs', { headers: {} })
       expect(result).toEqual(mockState)
     })
 
@@ -93,7 +93,7 @@ describe('ApiClient', () => {
       } as Response)
 
       const result = await ApiClient.getConfig()
-      expect(fetch).toHaveBeenCalledWith('/api/config')
+      expect(fetch).toHaveBeenCalledWith('/api/config', { headers: {} })
       expect(result).toEqual(mockConfig)
     })
 
@@ -117,7 +117,9 @@ describe('ApiClient', () => {
       } as Response)
 
       const result = await ApiClient.getFileBlob('src/main.ts')
-      expect(fetch).toHaveBeenCalledWith('/api/vfs/file?path=src%2Fmain.ts')
+      expect(fetch).toHaveBeenCalledWith('/api/vfs/file?path=src%2Fmain.ts', {
+        headers: {},
+      })
       expect(result).toBe(mockBlob)
     })
 
@@ -129,6 +131,59 @@ describe('ApiClient', () => {
       await expect(ApiClient.getFileBlob('missing.ts')).rejects.toThrow(
         'Failed to fetch file: missing.ts'
       )
+    })
+  })
+
+  describe('sendHeartbeat', () => {
+    it('sends POST request with token header', async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+      } as Response)
+
+      await ApiClient.sendHeartbeat('secret-token')
+
+      expect(fetch).toHaveBeenCalledWith('/api/heartbeat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Concatenator-Token': 'secret-token',
+        },
+        body: '{}',
+      })
+    })
+
+    it('throws error when heartbeat fails', async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: false,
+      } as Response)
+
+      await expect(ApiClient.sendHeartbeat('token')).rejects.toThrow(
+        'Heartbeat failed'
+      )
+    })
+  })
+
+  describe('getPulse', () => {
+    it('fetches pulse data successfully', async () => {
+      const mockPulse = { ts: 123, op: 'Test', progress: 50, active: true }
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: async () => mockPulse,
+      } as Response)
+
+      const result = await ApiClient.getPulse()
+      expect(fetch).toHaveBeenCalledWith('/api/pulse', { headers: {} })
+      expect(result).toEqual(mockPulse)
+    })
+
+    it('returns null if pulse not found', async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: false,
+        status: 404,
+      } as Response)
+
+      const result = await ApiClient.getPulse()
+      expect(result).toBeNull()
     })
   })
 })

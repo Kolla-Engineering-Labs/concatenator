@@ -17,12 +17,12 @@ describe('Health Endpoint Integration', () => {
       server.stop()
     })
 
-    it('should return 200 OK for /health', async () => {
-      const response = await fetch(`http://127.0.0.1:${port}/health`)
+    it('should return 200 OK for /api/health', async () => {
+      const response = await fetch(`http://127.0.0.1:${port}/api/health`)
       expect(response.status).toBe(200)
       const data = await response.json()
       expect(data).toMatchObject({
-        status: 'ok',
+        status: 'ready',
         version: expect.any(String),
         uptime: expect.any(Number),
       })
@@ -84,12 +84,12 @@ describe('Health Endpoint Integration', () => {
       }
     })
 
-    it('should return 200 OK for /health without token', async () => {
-      const response = await fetch(`http://127.0.0.1:${port}/health`)
+    it('should return 200 OK for /api/health without token', async () => {
+      const response = await fetch(`http://127.0.0.1:${port}/api/health`)
       expect(response.status).toBe(200)
       const data = await response.json()
       expect(data).toMatchObject({
-        status: 'ok',
+        status: 'ready',
         version: expect.any(String),
         uptime: expect.any(Number),
       })

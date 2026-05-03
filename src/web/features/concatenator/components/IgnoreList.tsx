@@ -119,6 +119,7 @@ export const IgnoreList: React.FC<IgnoreListProps> = ({
                   className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 focus:border-brand-500 dark:focus:border-brand-500 focus:ring-1 focus:ring-brand-500 rounded-lg text-sm py-1.5 pl-3 pr-9 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 transition-all"
                 />
                 <button
+                  type="button"
                   onClick={addIgnoreItem}
                   disabled={!newIgnoreItem}
                   className="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 text-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 disabled:text-slate-300 dark:disabled:text-slate-600 rounded-md transition-colors"
@@ -164,9 +165,9 @@ export const IgnoreList: React.FC<IgnoreListProps> = ({
             >
               <div className="flex flex-wrap gap-2">
                 <AnimatePresence mode="popLayout">
-                  {displayedItems.map((item, index) => (
+                  {displayedItems.map((item) => (
                     <motion.div
-                      key={`${item}-${index}`}
+                      key={item}
                       layout
                       initial={{ opacity: 0, scale: 0.8 }}
                       animate={{ opacity: 1, scale: 1 }}

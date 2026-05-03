@@ -31,7 +31,7 @@ export const FileTable: React.FC<FileTableProps> = ({
   onRemoveFile,
   onQuickLook,
 }) => {
-  const { addIgnorePattern, removeIgnorePattern } = useWorkbench()
+  const { addIgnorePattern, removeIgnorePattern, isIgnored } = useWorkbench()
   const [sortField, setSortField] = useState<SortField>('path')
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc')
 
@@ -107,6 +107,9 @@ export const FileTable: React.FC<FileTableProps> = ({
         {sortedFiles.map((file, idx) => (
           <tr
             key={`${file.path}-${idx}`}
+            data-testid="file-row"
+            data-path={file.path}
+            data-ignored={file.isIgnored}
             className={cn(
               'group hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors',
               file.isIgnored && 'opacity-30 grayscale italic'
@@ -162,9 +165,8 @@ export const FileTable: React.FC<FileTableProps> = ({
                 </button>
                 <button
                   onClick={() => {
-                    const pattern =
-                      file.kind === 'directory' ? `${file.path}/**` : file.path
-                    if (file.isIgnored) {
+                    const pattern = file.path
+                    if (isIgnored(file.path)) {
                       removeIgnorePattern(pattern)
                     } else {
                       addIgnorePattern(pattern)
