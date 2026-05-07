@@ -6,6 +6,8 @@ interface StatusBarProps {
   totalTokens: number
   tokensSaved: number
   isPrecise: boolean
+  isConnected?: boolean | null
+  wasEverConnected?: boolean
 }
 
 const BUDGET_PRESETS = [
@@ -18,6 +20,8 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   totalTokens,
   tokensSaved,
   isPrecise,
+  isConnected,
+  wasEverConnected = false,
 }) => {
   const { tokenBudget, setTokenBudget } = useWorkbench()
 
@@ -54,9 +58,57 @@ export const StatusBar: React.FC<StatusBarProps> = ({
     isEditingCustom || !BUDGET_PRESETS.some((p) => p.value === tokenBudget)
 
   return (
-    <div className="h-10 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between px-4 z-40 text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider shrink-0">
+    <div className="min-h-10 py-2 sm:py-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between px-4 z-[60] text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider shrink-0 gap-3 sm:gap-6 lg:pl-[19rem]">
       {/* Left Side: Stats */}
-      <div className="flex items-center gap-6">
+      <div className="flex items-center gap-4 sm:gap-6 w-full sm:w-auto justify-center sm:justify-start">
+        {/* Heartbeat indicator — always rendered so it's visible in dev mode too */}
+        <div
+          className="flex items-center gap-1.5 shrink-0"
+          data-testid="heartbeat-indicator"
+          title={
+            isConnected === null
+              ? 'Checking server…'
+              : isConnected
+                ? 'Server connected'
+                : wasEverConnected
+                  ? 'Server connection lost'
+                  : 'No CLI server'
+          }
+          aria-label={
+            isConnected === null
+              ? 'Checking server'
+              : isConnected
+                ? 'Server connected'
+                : wasEverConnected
+                  ? 'Server connection lost'
+                  : 'No CLI server'
+          }
+        >
+          {isConnected === null && (
+            <span className="block h-2 w-2 rounded-full bg-slate-400 animate-pulse" />
+          )}
+          {isConnected === true && (
+            <span className="block h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+          )}
+          {isConnected === false && (
+            <span
+              className="block h-2 w-2 rounded-full bg-amber-500"
+              data-testid="heartbeat-dot-amber"
+            />
+          )}
+          <span
+            className="opacity-60 leading-none"
+            data-testid="heartbeat-status"
+          >
+            {isConnected === null
+              ? 'Checking…'
+              : isConnected
+                ? 'Connected'
+                : wasEverConnected
+                  ? 'Reconnecting…'
+                  : 'No server'}
+          </span>
+        </div>
         <div className="flex items-center gap-2">
           <span className="opacity-60">Total Tokens:</span>
           <span className="text-slate-900 dark:text-slate-100 font-bold tabular-nums">
@@ -75,7 +127,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
       </div>
 
       {/* Center: Progress Bar */}
-      <div className="flex-1 max-w-md px-8 flex items-center gap-4">
+      <div className="flex-1 w-full max-w-md px-4 sm:px-8 flex items-center gap-3 sm:gap-4">
         <div className="flex-1 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden relative">
           <div
             className={`absolute top-0 left-0 h-full transition-all duration-500 ease-out ${colorClass}`}
@@ -83,14 +135,14 @@ export const StatusBar: React.FC<StatusBarProps> = ({
           />
         </div>
         <div
-          className={`w-12 text-right font-bold tabular-nums ${textColorClass}`}
+          className={`w-10 sm:w-12 text-right font-bold tabular-nums ${textColorClass}`}
         >
           {Math.round(saturation)}%
         </div>
       </div>
 
       {/* Right Side: Budget Selector */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 w-full sm:w-auto justify-center sm:justify-end">
         <div className="flex items-center gap-2">
           <Zap className="w-3 h-3 text-amber-500" />
           <span className="opacity-60">Budget:</span>

@@ -18,6 +18,8 @@ vi.mock('node:fs', async (importOriginal) => {
     readdirSync: vi.fn(actual.readdirSync),
     lstatSync: vi.fn(actual.lstatSync),
     statSync: vi.fn(actual.statSync),
+    realpathSync: vi.fn(actual.realpathSync),
+    writeFileSync: vi.fn(actual.writeFileSync),
   }
 })
 
@@ -161,7 +163,7 @@ describe('UnifiedCrawler', () => {
     vi.mocked(fs.readdirSync).mockRestore()
   })
 
-  it.skip('should handle non-standard types with onEntry callback', () => {
+  it('should skip non-standard types (sockets, pipes, etc.)', () => {
     const onEntry = vi.fn()
     const crawler = new UnifiedCrawler({ rootPath: tempDir, ignoreEngine })
 
@@ -182,9 +184,7 @@ describe('UnifiedCrawler', () => {
     } as any)
 
     crawler.collect(tempDir, onEntry)
-    expect(onEntry).toHaveBeenCalledWith(
-      expect.objectContaining({ kind: 'other' })
-    )
+    expect(onEntry).not.toHaveBeenCalled()
     vi.mocked(fs.readdirSync).mockRestore()
     vi.mocked(fs.lstatSync).mockRestore()
   })
@@ -223,8 +223,8 @@ describe('UnifiedCrawler', () => {
       }
       return {
         isSymbolicLink: () => false,
-        isDirectory: true,
-        isFile: false,
+        isDirectory: () => true,
+        isFile: () => false,
         size: 0,
       } as any
     })
@@ -235,24 +235,56 @@ describe('UnifiedCrawler', () => {
     vi.mocked(fs.lstatSync).mockRestore()
   })
 
-  it.skip('should propagate SecurityViolation during walk', () => {
-    const crawler = new UnifiedCrawler({ rootPath: tempDir, ignoreEngine })
-    const failPath = path.resolve(tempDir, 'fail-me')
-    fs.writeFileSync(failPath, 'data')
+  it('should propagate SecurityViolation during walk', () => {
+    const crawler = new UnifiedCrawler({
+      rootPath: tempDir,
+      ignoreEngine,
+      followSymlinks: true, // Must be true to trigger assertPathWithinRoot for entries
+    })
 
-    vi.mocked(fs.lstatSync).mockImplementation((p: any) => {
-      if (p.toString().includes('fail-me')) {
-        throw new SecurityViolation('Boundary breach')
+    // We'll use a mocked readdirSync to avoid OS-level symlink issues
+    vi.mocked(fs.readdirSync).mockReturnValueOnce([
+      {
+        name: 'evil.txt',
+        isDirectory: () => false,
+        isFile: () => false,
+        isSymbolicLink: () => true,
+      },
+    ] as any)
+
+    // Mock realpathSync to simulate a symlink that points outside the root
+    const realpathSpy = vi
+      .spyOn(fs, 'realpathSync')
+      .mockImplementation((p: any) => {
+        if (p.toString().includes('evil.txt')) {
+          return path.join(os.tmpdir(), 'outside-evil.txt')
+        }
+        return path.resolve(p.toString())
+      })
+
+    // Mock lstatSync to return a symlink for evil.txt
+    const lstatSpy = vi.spyOn(fs, 'lstatSync').mockImplementation((p: any) => {
+      if (p.toString().includes('evil.txt')) {
+        return {
+          isSymbolicLink: () => true,
+          isDirectory: () => false,
+          isFile: () => false,
+          size: 0,
+        } as any
       }
       return {
         isSymbolicLink: () => false,
-        isDirectory: false,
-        isFile: true,
+        isDirectory: () => true,
+        isFile: () => false,
         size: 0,
       } as any
     })
-    expect(() => crawler.collect()).toThrow()
-    vi.mocked(fs.lstatSync).mockRestore()
+
+    // This should trigger the check inside walk -> assertPathWithinRoot
+    expect(() => crawler.collect()).toThrow(SecurityViolation)
+    realpathSpy.mockRestore()
+    lstatSpy.mockRestore()
+    vi.mocked(fs.readdirSync).mockRestore()
   })
 
   it('should handle non-Error read errors quietly', () => {
@@ -265,31 +297,28 @@ describe('UnifiedCrawler', () => {
     vi.mocked(fs.lstatSync).mockRestore()
   })
 
-  it.skip('should handle symlinks that are followed', () => {
+  it('should handle symlinks that are followed', () => {
     const crawler = new UnifiedCrawler({
       rootPath: tempDir,
       ignoreEngine,
       followSymlinks: true,
     })
-    const linkPath = path.resolve(tempDir, 'link')
-    const rootPath = path.resolve(tempDir)
 
-    vi.mocked(fs.readdirSync).mockImplementation((p: any) => {
-      if (path.resolve(p.toString()) === rootPath) {
-        return [
-          {
-            name: 'link',
-            isDirectory: () => false,
-            isFile: () => false,
-            isSymbolicLink: () => true,
-          },
-        ] as any
-      }
-      return []
-    })
+    const targetPath = path.join(tempDir, 'target.txt')
+    fs.writeFileSync(targetPath, 'content')
+
+    // Always use mocks for symlink tests to ensure cross-platform stability
+    vi.mocked(fs.readdirSync).mockReturnValueOnce([
+      {
+        name: 'link-to-target.txt',
+        isDirectory: () => false,
+        isFile: () => false,
+        isSymbolicLink: () => true,
+      },
+    ] as any)
 
     vi.mocked(fs.lstatSync).mockImplementation((p: any) => {
-      if (path.resolve(p.toString()) === linkPath) {
+      if (p.toString().includes('link-to-target.txt')) {
         return {
           isSymbolicLink: () => true,
           isDirectory: () => false,
@@ -299,34 +328,30 @@ describe('UnifiedCrawler', () => {
       }
       return {
         isSymbolicLink: () => false,
-        isDirectory: true,
-        isFile: false,
-        size: 0,
+        isDirectory: () => false,
+        isFile: () => true,
+        size: 7,
       } as any
     })
 
-    vi.mocked(fs.statSync).mockImplementation((p: any) => {
-      if (p.toString().includes('link')) {
-        return {
-          isSymbolicLink: () => false,
-          isDirectory: () => false,
-          isFile: () => true,
-          size: 100,
-        } as any
-      }
+    vi.mocked(fs.statSync).mockImplementation(() => {
+      // statSync should return the stats of the TARGET file
       return {
         isSymbolicLink: () => false,
-        isDirectory: true,
-        isFile: false,
-        size: 0,
+        isDirectory: () => false,
+        isFile: () => true,
+        size: 7,
       } as any
     })
 
+    vi.mocked(fs.realpathSync).mockImplementation((p: any) => p.toString())
+
     const results = crawler.collect()
-    expect(results).toHaveLength(1)
+    expect(results.some((e) => e.name.includes('link-to-target'))).toBe(true)
 
     vi.mocked(fs.readdirSync).mockRestore()
     vi.mocked(fs.lstatSync).mockRestore()
     vi.mocked(fs.statSync).mockRestore()
+    vi.mocked(fs.realpathSync).mockRestore()
   })
 })

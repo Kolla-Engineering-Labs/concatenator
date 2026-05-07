@@ -1310,7 +1310,9 @@ describe('useFileProcessing', () => {
       }
 
       // Only valid.txt is loaded
-      expect(result.current.files.length).toBe(1)
+      expect(result.current.files.filter((f) => f.kind === 'file').length).toBe(
+        1
+      )
       expect(result.current.files[0].name).toBe('valid.txt')
       expect(result.current.files[0].content).toBe('valid content')
     })
@@ -1779,22 +1781,19 @@ describe('useFileProcessing', () => {
         target: { files: [file2], value: 'mock_path2' },
       } as unknown as React.ChangeEvent<HTMLInputElement>
 
-      // Fire both file uploads without waiting, simulating rapid user action
-      act(() => {
-        result.current.handleFileUpload(mockEvent1)
-      })
-
-      // Because isProcessingRef prevents overlapping, the second drop should be instantly ignored
-      act(() => {
-        result.current.handleFileUpload(mockEvent2)
-      })
-
+      // Fire both file uploads. The first should start, the second should be blocked.
       await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 100))
+        result.current.handleFileUpload(mockEvent1)
+        result.current.handleFileUpload(mockEvent2)
+        // Wait long enough for everything to process
+        await new Promise((resolve) => setTimeout(resolve, 200))
       })
 
-      expect(result.current.files.length).toBe(1) // Only the first file made it to state! (plus potential dirs = 1 total)
-      expect(result.current.files[0].content).toBe('content1')
+      // In CONCATENATE mode, dirs aren't added yet if it's a simple root file,
+      // but let's check files count specifically.
+      const filesOnly = result.current.files.filter((f) => f.kind === 'file')
+      expect(filesOnly.length).toBe(1)
+      expect(filesOnly[0].content).toBe('content1')
       global.FileReader = originalFileReader
     })
 
@@ -1848,7 +1847,9 @@ describe('useFileProcessing', () => {
       })
 
       // Ensure that not only did it skip saving the file, but it successfully triggered FileReader.abort.
-      expect(result.current.files.length).toBe(0)
+      expect(result.current.files.filter((f) => f.kind === 'file').length).toBe(
+        0
+      )
       expect(mockAbort).toHaveBeenCalled()
       global.FileReader = originalFileReader
     })

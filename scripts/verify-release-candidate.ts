@@ -36,7 +36,7 @@ async function verifyRelease() {
   try {
     // gpg --verify often writes to stderr
     gpgOutput = execSync(
-      `gpg --verify "${manifestPath.replace(/\\/g, '/')}" 2>&1`,
+      `gpg --verify --with-fingerprint "${manifestPath.replace(/\\/g, '/')}" 2>&1`,
       {
         stdio: ['pipe', 'pipe', 'pipe'],
         encoding: 'utf-8',
@@ -55,9 +55,12 @@ async function verifyRelease() {
   const hasGoodSignature = gpgOutput.includes(
     'Good signature from "Christopher Vrooman'
   )
+
+  // Clean output of all whitespace for robust matching
+  const cleanOutput = gpgOutput.replace(/\s/g, '')
   const hasCorrectKey =
-    gpgOutput.includes(cleanFingerprint) ||
-    gpgOutput.includes(cleanFingerprint.slice(-16)) // Check full or long ID
+    cleanOutput.includes(cleanFingerprint) ||
+    cleanOutput.includes(cleanFingerprint.slice(-16)) // Check full or long ID
 
   if (!hasGoodSignature) {
     console.error(

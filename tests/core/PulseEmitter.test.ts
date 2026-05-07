@@ -108,4 +108,22 @@ describe('PulseEmitter', () => {
     emitter.update(0.8)
     expect(fs.writeFileSync).toHaveBeenCalled()
   })
+
+  it('should not start multiple intervals if start is called twice', () => {
+    emitter.start()
+    const firstCallCount = vi.mocked(fs.writeFileSync).mock.calls.length
+    emitter.start()
+    expect(vi.mocked(fs.writeFileSync).mock.calls.length).toBe(firstCallCount)
+  })
+
+  it('should handle stop being called before start', () => {
+    // Should not throw and should still write final inactive pulse
+    emitter.stop()
+    expect(fs.writeFileSync).toHaveBeenCalledWith(
+      expect.stringContaining('pulse.json'),
+      expect.stringContaining('"active":false'),
+      'utf-8'
+    )
+    expect(lifecycleMock.setProcessing).toHaveBeenCalledWith(false)
+  })
 })

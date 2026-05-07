@@ -35,7 +35,10 @@ test.describe('Workbench Features', () => {
 
       // Wait for file to appear in the table
       await expect(
-        page.getByText('test.js', { exact: true }).first()
+        page
+          .getByText('test.js', { exact: true })
+          .filter({ visible: true })
+          .first()
       ).toBeVisible({
         timeout: 10000,
       })
@@ -94,12 +97,19 @@ test.describe('Workbench Features', () => {
       await uploadHelper.setFilesOnInput(files)
 
       // Wait for file to appear
-      const fileRow = page.locator('table tbody tr').first()
+      const fileRow = page
+        .getByTestId('file-row')
+        .filter({ visible: true })
+        .first()
       await expect(fileRow).toBeVisible({ timeout: 10000 })
 
-      // Hover to show actions and click Quick Look
-      await fileRow.hover()
-      const quickLookButton = page.locator('button[title="Quick Look"]')
+      // Hover only on desktop where actions are hidden by default
+      if (page.viewportSize() && page.viewportSize()!.width >= 640) {
+        await fileRow.hover()
+      }
+      const quickLookButton = fileRow.locator(
+        '[data-testid="quick-look-button"]'
+      )
       await jsClick(quickLookButton)
 
       // Verify modal is open
@@ -136,9 +146,16 @@ test.describe('Workbench Features', () => {
       ]
       await uploadHelper.setFilesOnInput(files)
 
-      // Open Quick Look
-      await page.locator('table tbody tr').first().hover()
-      await jsClick(page.locator('button[title="Quick Look"]'))
+      // Open Quick Look - scope button to the visible row to avoid strict mode violations
+      const visibleRow = page
+        .getByTestId('file-row')
+        .filter({ visible: true })
+        .first()
+      // Hover only on desktop where actions are hidden by default
+      if (page.viewportSize() && page.viewportSize()!.width >= 640) {
+        await visibleRow.hover()
+      }
+      await jsClick(visibleRow.locator('[data-testid="quick-look-button"]'))
 
       // Verify SVG is rendered (the one in the content area, not the icons)
       const modal = page.locator('.fixed.inset-0.z-\\[100\\]')

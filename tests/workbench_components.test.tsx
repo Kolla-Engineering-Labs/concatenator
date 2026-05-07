@@ -52,10 +52,18 @@ describe('FileTable Component', () => {
       />
     )
 
-    expect(screen.getByText('Name')).toBeInTheDocument()
-    expect(screen.getByText('Path')).toBeInTheDocument()
-    expect(screen.getByText('Size')).toBeInTheDocument()
-    expect(screen.getByText('Tokens')).toBeInTheDocument()
+    expect(
+      screen.getByRole('columnheader', { name: /name/i })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('columnheader', { name: /path/i })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('columnheader', { name: /size/i })
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('columnheader', { name: /tokens/i })
+    ).toBeInTheDocument()
   })
 
   it('renders file rows with correct data', () => {
@@ -67,12 +75,12 @@ describe('FileTable Component', () => {
       />
     )
 
-    expect(screen.getByText('file1.ts')).toBeInTheDocument()
-    expect(screen.getByText('src/file1.ts')).toBeInTheDocument()
-    expect(screen.getByText(/25/)).toBeInTheDocument() // Tokens
+    expect(screen.getAllByText('file1.ts')[0]).toBeInTheDocument()
+    expect(screen.getAllByText('src/file1.ts')[0]).toBeInTheDocument()
+    expect(screen.getAllByText(/25/)[0]).toBeInTheDocument() // Tokens
 
-    expect(screen.getByText('file2.js')).toBeInTheDocument()
-    expect(screen.getByText(/50/)).toBeInTheDocument() // Tokens
+    expect(screen.getAllByText('file2.js')[0]).toBeInTheDocument()
+    expect(screen.getAllByText(/50/)[0]).toBeInTheDocument() // Tokens
   })
 
   it('calls onQuickLook when preview icon clicked', () => {

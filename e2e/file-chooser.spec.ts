@@ -126,9 +126,12 @@ test.describe('File Upload via File Chooser', () => {
       // Verify files appear
 
       // Verify file appears in the list
-      const fileList = page.locator('table').first()
+      const fileList = page.getByTestId('file-table')
       await expect(
-        fileList.getByText('hello.js', { exact: true }).first()
+        fileList
+          .getByText('hello.js', { exact: true })
+          .filter({ visible: true })
+          .first()
       ).toBeVisible()
       await expect(page.getByText(/Selected Files.*\d/)).toBeVisible()
     } finally {
@@ -150,10 +153,13 @@ test.describe('File Upload via File Chooser', () => {
       // Verify files appear
 
       // Verify all files appear
-      const fileList = page.locator('table').first()
+      const fileList = page.getByTestId('file-table')
       for (const { name } of fileContents) {
         await expect(
-          fileList.getByText(name, { exact: true }).first()
+          fileList
+            .getByText(name, { exact: true })
+            .filter({ visible: true })
+            .first()
         ).toBeVisible()
       }
       await expect(page.getByText(/Selected Files.*\d/)).toBeVisible()
@@ -188,15 +194,24 @@ test.describe('File Upload via File Chooser', () => {
       // Verify files appear
 
       // Verify files appear
-      const fileList = page.locator('table').first()
+      const fileList = page.getByTestId('file-table')
       await expect(
-        fileList.getByText('index.js', { exact: true }).first()
+        fileList
+          .getByText('index.js', { exact: true })
+          .filter({ visible: true })
+          .first()
       ).toBeVisible()
       await expect(
-        fileList.getByText('helpers.js', { exact: true }).first()
+        fileList
+          .getByText('helpers.js', { exact: true })
+          .filter({ visible: true })
+          .first()
       ).toBeVisible()
       await expect(
-        fileList.getByText('index.test.js', { exact: true }).first()
+        fileList
+          .getByText('index.test.js', { exact: true })
+          .filter({ visible: true })
+          .first()
       ).toBeVisible()
     } finally {
       cleanup()
@@ -302,10 +317,13 @@ test.describe.serial('File Upload with Test Fixtures', () => {
       // Verify files appear
 
       // Verify all fixture files are present
-      const fileList = page.locator('table').first()
+      const fileList = page.getByTestId('file-table')
       for (const file of SIMPLE_PROJECT) {
         await expect(
-          fileList.getByText(file.name, { exact: true }).first()
+          fileList
+            .getByText(file.name, { exact: true })
+            .filter({ visible: true })
+            .first()
         ).toBeVisible()
       }
     } finally {
@@ -327,15 +345,24 @@ test.describe.serial('File Upload with Test Fixtures', () => {
       // Verify files appear
 
       // Verify React project files
-      const fileList = page.locator('table').first()
+      const fileList = page.getByTestId('file-table')
       await expect(
-        fileList.getByText('App.tsx', { exact: true }).first()
+        fileList
+          .getByText('App.tsx', { exact: true })
+          .filter({ visible: true })
+          .first()
       ).toBeVisible()
       await expect(
-        fileList.getByText('Button.tsx', { exact: true }).first()
+        fileList
+          .getByText('Button.tsx', { exact: true })
+          .filter({ visible: true })
+          .first()
       ).toBeVisible()
       await expect(
-        fileList.getByText('package.json', { exact: true }).first()
+        fileList
+          .getByText('package.json', { exact: true })
+          .filter({ visible: true })
+          .first()
       ).toBeVisible()
     } finally {
       cleanup()

@@ -236,9 +236,9 @@ test.describe('Max File Limit Feature', () => {
           timeout: 15000,
         })
 
-        // Wait for processing to fully finish before clicking concatenate
-        await expect(page.getByText(/Processing/i)).not.toBeVisible({
-          timeout: 15000,
+        // Wait for files to be processed
+        await expect(page.getByTestId('processing-status')).not.toBeVisible({
+          timeout: 20000,
         })
         await page.waitForTimeout(500)
 
@@ -252,9 +252,10 @@ test.describe('Max File Limit Feature', () => {
 
         // Check for error message with correct limit
         const errorMessage = page.getByTestId('concatenation-error').first()
-        await errorMessage.waitFor({ state: 'visible', timeout: 15000 })
-        await errorMessage.scrollIntoViewIfNeeded()
-        await expect(errorMessage).toBeVisible({ timeout: 10000 })
+        await expect(errorMessage).toBeVisible({ timeout: 15000 })
+        await expect(errorMessage).toHaveText(
+          /Warning: You are attempting to concatenate over 500 files/i
+        )
       } finally {
         uploadHelper.cleanup()
       }
@@ -290,16 +291,11 @@ test.describe('Max File Limit Feature', () => {
           timeout: 15000,
         })
 
-        // Wait for processing to fully finish before clicking concatenate
-        await expect(page.getByText(/Processing/i)).not.toBeVisible({
-          timeout: 15000,
-        })
-        await page.waitForTimeout(500)
-
         // Try to concatenate
         const concatenateButton = page.getByRole('button', {
           name: /Concatenate & Download/,
         })
+        await expect(concatenateButton).not.toBeDisabled({ timeout: 15000 })
         await jsClick(concatenateButton)
 
         // Wait a bit for download to start
@@ -343,9 +339,9 @@ test.describe('Max File Limit Feature', () => {
           timeout: 30000,
         })
 
-        // Wait for processing to fully finish before clicking concatenate
-        await expect(page.getByText(/Processing/i)).not.toBeVisible({
-          timeout: 15000,
+        // Wait for files to be processed
+        await expect(page.getByTestId('processing-status')).not.toBeVisible({
+          timeout: 20000,
         })
         await page.waitForTimeout(500)
 
@@ -375,9 +371,9 @@ test.describe('Max File Limit Feature', () => {
           timeout: 5000,
         })
 
-        // Wait for processing to fully finish before clicking concatenate
-        await expect(page.getByText(/Processing/i)).not.toBeVisible({
-          timeout: 15000,
+        // Wait for files to be processed
+        await expect(page.getByTestId('processing-status')).not.toBeVisible({
+          timeout: 20000,
         })
         await page.waitForTimeout(500)
 
@@ -406,9 +402,9 @@ test.describe('Max File Limit Feature', () => {
           timeout: 30000,
         })
 
-        // Wait for processing to fully finish before clicking concatenate
-        await expect(page.getByText(/Processing/i)).not.toBeVisible({
-          timeout: 15000,
+        // Wait for files to be processed
+        await expect(page.getByTestId('processing-status')).not.toBeVisible({
+          timeout: 20000,
         })
         await page.waitForTimeout(500)
 

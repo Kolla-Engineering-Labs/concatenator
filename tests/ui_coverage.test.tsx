@@ -63,20 +63,20 @@ describe('UI Components Coverage', () => {
         />
       )
 
-      expect(screen.getByText('file1.ts')).toBeDefined()
-      expect(screen.getByText('src/file2.js')).toBeDefined()
-      expect(screen.getByText('Negated')).toBeDefined()
+      expect(screen.getAllByText('file1.ts')[0]).toBeDefined()
+      expect(screen.getAllByText('src/file2.js')[0]).toBeDefined()
+      expect(screen.getAllByText('Negated')[0]).toBeDefined()
 
       // Sort by size
-      fireEvent.click(screen.getByText(/Size/))
+      fireEvent.click(screen.getByRole('columnheader', { name: /size/i }))
       // Second click for desc
-      fireEvent.click(screen.getByText(/Size/))
+      fireEvent.click(screen.getByRole('columnheader', { name: /size/i }))
 
       // Sort by tokens
-      fireEvent.click(screen.getByText(/Tokens/))
+      fireEvent.click(screen.getByRole('columnheader', { name: /tokens/i }))
 
       // Sort by path
-      fireEvent.click(screen.getByText(/Path/))
+      fireEvent.click(screen.getByRole('columnheader', { name: /path/i }))
 
       // Remove file
       const removeButtons = screen.getAllByTitle(/Remove/)

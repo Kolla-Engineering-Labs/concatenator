@@ -52,6 +52,28 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       tailwindcss(),
+      // Dev-only: stub API routes that have no backend in Vite dev mode.
+      // The proxy forwards /api/* to port 3000 (CLI server). When the CLI
+      // isn't running, the connection is refused at the network layer —
+      // before JavaScript can handle it — so the browser logs a red error.
+      // Intercepting here returns 200 with null, keeping the console clean.
+      {
+        name: 'dev-api-stub',
+        apply: 'serve',
+        configureServer(server) {
+          const stubs = ['/api/security/info']
+          server.middlewares.use((req, res, next) => {
+            if (req.method !== 'GET') return next()
+            if (stubs.some((path) => req.url?.startsWith(path))) {
+              res.setHeader('Content-Type', 'application/json')
+              res.statusCode = 200
+              res.end(JSON.stringify(null))
+              return
+            }
+            next()
+          })
+        },
+      },
       codecovVitePlugin({
         enableBundleAnalysis: process.env.CI !== undefined,
         bundleName: 'concatenator-bundle',

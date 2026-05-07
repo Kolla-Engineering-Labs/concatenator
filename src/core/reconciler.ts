@@ -23,37 +23,66 @@ export function reconcileFiles(
 ): { files: FileItem[]; absorptions: Absorption[] } {
   const absorptions: Absorption[] = []
   const filesMap = new Map<string, FileItem>()
-  const existingPathsSet = new Set<string>()
 
-  // Add existing files to map and tracker
   for (const file of existingFiles) {
     filesMap.set(file.path, file)
-    existingPathsSet.add(file.path)
   }
 
-  // Process new files
+  // Phase 1: Suffix absorption — O(n + m×depth)
+  // Build a map of every suffix of every new path → its parent prefix.
+  // E.g. new path "src/drivers/zip-driver.ts" contributes:
+  //   "drivers/zip-driver.ts" → "src"
+  //   "zip-driver.ts"         → "src/drivers"
+  // Then each existing path is looked up in O(1).
+  const suffixToParent = new Map<string, string>()
   for (const newFile of newFiles) {
-    const newPath = newFile.path
-
-    // Rule 1: New entry is a parent of an existing root entry
-    // Check all existing entries to see if they should be swallowed
-    for (const existingPath of existingPathsSet) {
-      if (
-        filesMap.has(existingPath) &&
-        existingPath.startsWith(newPath + '/') &&
-        newPath !== ''
-      ) {
-        absorptions.push({ child: existingPath, parent: newPath })
-        filesMap.delete(existingPath)
-        // No need to delete from existingPathsSet, we check filesMap.has
+    const parts = newFile.path.split('/')
+    for (let i = 1; i < parts.length; i++) {
+      const suffix = parts.slice(i).join('/')
+      if (suffix && !suffixToParent.has(suffix)) {
+        suffixToParent.set(suffix, parts.slice(0, i).join('/'))
       }
     }
+  }
 
-    // Rule 2: New entry is a child of an existing root entry
-    // Naturally handled by merging into the flat Map.
-    // The tree view calculates the Minimum Common Root dynamically.
+  for (const existingPath of [...filesMap.keys()]) {
+    const parentPrefix = suffixToParent.get(existingPath)
+    if (parentPrefix !== undefined) {
+      absorptions.push({ child: existingPath, parent: parentPrefix })
+      filesMap.delete(existingPath)
+    }
+  }
 
-    filesMap.set(newPath, newFile)
+  // Phase 2: Parent absorption — O(n + m×depth)
+  // Build a set of every new directory prefix so we can check in O(1)
+  // whether a new file is a parent directory of an existing entry.
+  // We must only check against the *original* existing paths (snapshot
+  // before any new files are added) so directory entries from the current
+  // drop cannot absorb their own sibling files.
+  const originalExistingPaths = new Set(filesMap.keys())
+
+  // Build a prefix set from new paths for fast parent-of-existing checks.
+  const newPrefixSet = new Set<string>()
+  for (const newFile of newFiles) {
+    newPrefixSet.add(newFile.path)
+  }
+
+  for (const existingPath of originalExistingPaths) {
+    if (!filesMap.has(existingPath)) continue // already absorbed in Phase 1
+    // Walk up the existing path to see if any ancestor is in the new drop
+    const parts = existingPath.split('/')
+    for (let i = 1; i < parts.length; i++) {
+      const ancestor = parts.slice(0, i).join('/')
+      if (ancestor && newPrefixSet.has(ancestor)) {
+        absorptions.push({ child: existingPath, parent: ancestor })
+        filesMap.delete(existingPath)
+        break
+      }
+    }
+  }
+
+  for (const newFile of newFiles) {
+    filesMap.set(newFile.path, newFile)
   }
 
   return {

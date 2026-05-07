@@ -186,4 +186,44 @@ describe('ApiClient', () => {
       expect(result).toBeNull()
     })
   })
+
+  describe('getSecurityInfo', () => {
+    it('returns security info successfully', async () => {
+      const mockInfo = {
+        version: '1.0.0',
+        buildHash: 'abc123',
+        fingerprint: 'DEAD BEEF',
+      }
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => mockInfo,
+      } as Response)
+
+      const result = await ApiClient.getSecurityInfo()
+      expect(fetch).toHaveBeenCalledWith('/api/security/info', { headers: {} })
+      expect(result).toEqual(mockInfo)
+    })
+
+    it('returns null silently on 404 (dev mode / no CLI server)', async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: false,
+        status: 404,
+      } as Response)
+
+      const result = await ApiClient.getSecurityInfo()
+      expect(result).toBeNull()
+    })
+
+    it('throws on non-404 errors', async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: false,
+        status: 500,
+      } as Response)
+
+      await expect(ApiClient.getSecurityInfo()).rejects.toThrow(
+        'Failed to fetch security info'
+      )
+    })
+  })
 })

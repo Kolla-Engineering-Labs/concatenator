@@ -68,4 +68,110 @@ describe('StatusBar', () => {
     fireEvent.keyDown(input, { key: '.', charCode: 46, keyCode: 46 })
     // Just hitting the line for coverage
   })
+
+  describe('heartbeat indicator', () => {
+    it('shows "Checking…" label when isConnected is null', () => {
+      render(
+        <StatusBar
+          totalTokens={0}
+          tokensSaved={0}
+          isPrecise={true}
+          isConnected={null}
+        />
+      )
+      expect(screen.getByText('Checking…')).toBeDefined()
+      expect(
+        document.querySelector('.bg-slate-400.animate-pulse')
+      ).toBeDefined()
+    })
+
+    it('shows "Connected" label and green dot when isConnected is true', () => {
+      render(
+        <StatusBar
+          totalTokens={0}
+          tokensSaved={0}
+          isPrecise={true}
+          isConnected={true}
+        />
+      )
+      expect(screen.getByText('Connected')).toBeDefined()
+      expect(
+        document.querySelector('.bg-emerald-500.animate-pulse')
+      ).toBeDefined()
+    })
+
+    it('shows "No server" when isConnected is false and was never connected', () => {
+      render(
+        <StatusBar
+          totalTokens={0}
+          tokensSaved={0}
+          isPrecise={true}
+          isConnected={false}
+          wasEverConnected={false}
+        />
+      )
+      expect(screen.getByText('No server')).toBeDefined()
+      expect(document.querySelector('.bg-amber-500')).toBeDefined()
+    })
+
+    it('shows "Reconnecting…" when isConnected is false but was previously connected', () => {
+      render(
+        <StatusBar
+          totalTokens={0}
+          tokensSaved={0}
+          isPrecise={true}
+          isConnected={false}
+          wasEverConnected={true}
+        />
+      )
+      expect(screen.getByText('Reconnecting…')).toBeDefined()
+      expect(document.querySelector('.bg-amber-500')).toBeDefined()
+    })
+
+    it('sets correct tooltip on each state', () => {
+      const { rerender } = render(
+        <StatusBar
+          totalTokens={0}
+          tokensSaved={0}
+          isPrecise={true}
+          isConnected={null}
+        />
+      )
+      expect(document.querySelector('[title="Checking server…"]')).toBeDefined()
+
+      rerender(
+        <StatusBar
+          totalTokens={0}
+          tokensSaved={0}
+          isPrecise={true}
+          isConnected={true}
+        />
+      )
+      expect(document.querySelector('[title="Server connected"]')).toBeDefined()
+
+      rerender(
+        <StatusBar
+          totalTokens={0}
+          tokensSaved={0}
+          isPrecise={true}
+          isConnected={false}
+          wasEverConnected={false}
+        />
+      )
+      expect(document.querySelector('[title="No CLI server"]')).toBeDefined()
+
+      rerender(
+        <StatusBar
+          totalTokens={0}
+          tokensSaved={0}
+          isPrecise={true}
+          isConnected={false}
+          wasEverConnected={true}
+        />
+      )
+      expect(
+        document.querySelector('[title="Server connection lost"]')
+      ).toBeDefined()
+    })
+  })
 })

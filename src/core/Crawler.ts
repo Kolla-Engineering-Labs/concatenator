@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { lstatSync, readdirSync, realpathSync, statSync, Stats } from 'node:fs'
+import * as fs from 'node:fs'
 import { join, resolve, relative } from 'node:path'
 import { IgnoreEngine } from './ignore/IgnoreEngine.js'
 import { SecurityViolation } from './errors.js'
@@ -35,7 +35,7 @@ export class UnifiedCrawler {
 
   constructor(options: CrawlerOptions) {
     this.logicalRoot = resolve(options.rootPath)
-    this.resolvedRoot = realpathSync(this.logicalRoot)
+    this.resolvedRoot = fs.realpathSync(this.logicalRoot)
     this.followSymlinks = options.followSymlinks ?? false
     this.ignoreEngine = options.ignoreEngine
   }
@@ -45,7 +45,7 @@ export class UnifiedCrawler {
    * Prevents directory traversal attacks via ".." or malicious symlinks.
    */
   private assertPathWithinRoot(targetPath: string): string {
-    const resolvedTarget = realpathSync(resolve(targetPath))
+    const resolvedTarget = fs.realpathSync(resolve(targetPath))
     if (!resolvedTarget.startsWith(this.resolvedRoot)) {
       throw new SecurityViolation(
         `Security Violation: Attempted to access path outside root: ${resolvedTarget}`
@@ -65,7 +65,7 @@ export class UnifiedCrawler {
     const results: CrawlerEntry[] = []
 
     const walk = (dir: string) => {
-      const entries = readdirSync(dir, { withFileTypes: true })
+      const entries = fs.readdirSync(dir, { withFileTypes: true })
 
       for (const entry of entries) {
         const fullPath = join(dir, entry.name)
@@ -82,11 +82,11 @@ export class UnifiedCrawler {
         }
 
         let kind: 'file' | 'directory'
-        let stats: Stats
+        let stats: fs.Stats
 
         try {
           // Use lstat to check for symlink without resolving
-          const lstats = lstatSync(fullPath)
+          const lstats = fs.lstatSync(fullPath)
 
           if (lstats.isSymbolicLink()) {
             if (!this.followSymlinks) {
@@ -94,7 +94,7 @@ export class UnifiedCrawler {
             }
             // Resolve symlink, security-check it, then stat the real target
             const resolvedPath = this.assertPathWithinRoot(fullPath)
-            stats = statSync(resolvedPath)
+            stats = fs.statSync(resolvedPath)
           } else {
             stats = lstats
           }
@@ -124,8 +124,11 @@ export class UnifiedCrawler {
           if (kind === 'directory') {
             walk(fullPath)
           }
-        } catch (error) {
-          if (error instanceof SecurityViolation) {
+        } catch (error: unknown) {
+          if (
+            error instanceof SecurityViolation ||
+            (error instanceof Error && error.name === 'SecurityViolation')
+          ) {
             throw error
           }
           // Skip entries that can't be read

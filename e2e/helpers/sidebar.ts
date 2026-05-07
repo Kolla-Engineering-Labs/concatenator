@@ -24,19 +24,34 @@ export async function ensureSidebarOpen(page: Page): Promise<void> {
   const openButton = page.getByTitle('Open menu')
 
   try {
+    // Increase timeout to 15s for slow WebKit hydration
     await Promise.race([
-      aside.waitFor({ state: 'visible', timeout: 5000 }),
-      openButton.waitFor({ state: 'visible', timeout: 5000 }),
+      aside.waitFor({ state: 'visible', timeout: 15000 }),
+      openButton.waitFor({ state: 'visible', timeout: 15000 }),
     ])
   } catch {
     // If neither appears, we'll check visibility below and decide what to do
   }
 
+  // Check if we need to click the open button (mobile view)
   if (await openButton.isVisible()) {
     await jsClick(openButton)
+
     // Wait for sidebar to be visible and animation to finish
-    await aside.waitFor({ state: 'visible', timeout: 10000 })
+    // On mobile, we use the class check because translate-x-full elements might still be "visible" to Playwright
+    await page.waitForFunction(
+      () => {
+        const aside = document.querySelector('aside')
+        const isMobile = window.innerWidth < 1024
+        if (!isMobile) return true
+        return aside && !aside.classList.contains('-translate-x-full')
+      },
+      { timeout: 10000 }
+    )
     await page.waitForTimeout(500)
+  } else {
+    // On desktop, just ensure aside is visible
+    await aside.waitFor({ state: 'visible', timeout: 10000 })
   }
 }
 

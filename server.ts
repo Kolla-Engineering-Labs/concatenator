@@ -72,7 +72,11 @@ async function startServer() {
   if (API_TOKEN) {
     app.use((req, res, next) => {
       // Allow health checks and static assets through without a token
-      if (req.path === '/api/health' || !req.path.startsWith('/api')) {
+      if (
+        req.path === '/api/health' ||
+        req.path === '/health' ||
+        !req.path.startsWith('/api')
+      ) {
         return next()
       }
       const provided = req.headers['x-concatenator-token']
@@ -87,8 +91,8 @@ async function startServer() {
     )
   }
 
-  // Health check endpoint
-  app.get('/api/health', (req, res) => {
+  // Health check endpoint (supports both /api/health and shorter /health)
+  app.get(['/api/health', '/health'], (req, res) => {
     res.json({
       status: 'ready',
       version,
