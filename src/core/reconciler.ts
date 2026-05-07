@@ -17,6 +17,19 @@ export interface Absorption {
  * 1. If a new file/folder is a parent of an existing entry, the existing entry is "absorbed".
  * 2. If a new file/folder is a child of an existing entry, it's merged into the existing structure.
  */
+class PathTrieNode {
+  children = new Map<string, PathTrieNode>()
+  isTerminal = false
+  path?: string
+}
+
+/**
+ * Reconciles new files with existing ones, pruning redundant roots.
+ *
+ * Root Pruning Rules:
+ * 1. If a new file/folder is a parent of an existing entry, the existing entry is "absorbed".
+ * 2. If a new file/folder is a child of an existing entry, it's merged into the existing structure.
+ */
 export function reconcileFiles(
   existingFiles: FileItem[],
   newFiles: FileItem[]
@@ -28,53 +41,72 @@ export function reconcileFiles(
     filesMap.set(file.path, file)
   }
 
-  // Phase 1: Suffix absorption — O(n + m×depth)
-  // Build a map of every suffix of every new path → its parent prefix.
-  // E.g. new path "src/drivers/zip-driver.ts" contributes:
-  //   "drivers/zip-driver.ts" → "src"
-  //   "zip-driver.ts"         → "src/drivers"
-  // Then each existing path is looked up in O(1).
-  const suffixToParent = new Map<string, string>()
+  // Phase 1: Suffix absorption — O((n + m) × depth)
+  // Build a reversed Trie of existing paths for fast suffix matching.
+  const existingTrie = new PathTrieNode()
+  for (const existingPath of filesMap.keys()) {
+    let current = existingTrie
+    const parts = existingPath.split('/')
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const part = parts[i]
+      if (!current.children.has(part)) {
+        current.children.set(part, new PathTrieNode())
+      }
+      current = current.children.get(part)!
+    }
+    current.isTerminal = true
+    current.path = existingPath
+  }
+
+  // For each new file, walk the Trie with its reversed segments to find suffix matches.
   for (const newFile of newFiles) {
     const parts = newFile.path.split('/')
-    for (let i = 1; i < parts.length; i++) {
-      const suffix = parts.slice(i).join('/')
-      if (suffix && !suffixToParent.has(suffix)) {
-        suffixToParent.set(suffix, parts.slice(0, i).join('/'))
+    let current = existingTrie
+    // Check suffixes of newFile.path. Stop before the last segment to avoid
+    // absorbing the identical path (handled by final map merge).
+    for (let i = parts.length - 1; i > 0; i--) {
+      const part = parts[i]
+      current = current.children.get(part)!
+      if (!current) break
+
+      if (current.isTerminal && current.path) {
+        const existingPath = current.path
+        if (filesMap.has(existingPath)) {
+          const parentPrefix = parts.slice(0, i).join('/')
+          absorptions.push({ child: existingPath, parent: parentPrefix })
+          filesMap.delete(existingPath)
+        }
       }
     }
   }
 
-  for (const existingPath of [...filesMap.keys()]) {
-    const parentPrefix = suffixToParent.get(existingPath)
-    if (parentPrefix !== undefined) {
-      absorptions.push({ child: existingPath, parent: parentPrefix })
-      filesMap.delete(existingPath)
-    }
-  }
-
-  // Phase 2: Parent absorption — O(n + m×depth)
-  // Build a set of every new directory prefix so we can check in O(1)
-  // whether a new file is a parent directory of an existing entry.
-  // We must only check against the *original* existing paths (snapshot
-  // before any new files are added) so directory entries from the current
-  // drop cannot absorb their own sibling files.
-  const originalExistingPaths = new Set(filesMap.keys())
-
-  // Build a prefix set from new paths for fast parent-of-existing checks.
-  const newPrefixSet = new Set<string>()
+  // Phase 2: Parent absorption — O((n + m) × depth)
+  // Build a Trie of all new paths for fast prefix matching.
+  const newTrie = new PathTrieNode()
   for (const newFile of newFiles) {
-    newPrefixSet.add(newFile.path)
+    let current = newTrie
+    const parts = newFile.path.split('/')
+    for (const part of parts) {
+      if (!current.children.has(part)) {
+        current.children.set(part, new PathTrieNode())
+      }
+      current = current.children.get(part)!
+    }
+    current.isTerminal = true
+    current.path = newFile.path
   }
 
-  for (const existingPath of originalExistingPaths) {
-    if (!filesMap.has(existingPath)) continue // already absorbed in Phase 1
-    // Walk up the existing path to see if any ancestor is in the new drop
+  // For each remaining existing path, walk the newTrie to see if any prefix is a new file.
+  for (const existingPath of [...filesMap.keys()]) {
     const parts = existingPath.split('/')
-    for (let i = 1; i < parts.length; i++) {
-      const ancestor = parts.slice(0, i).join('/')
-      if (ancestor && newPrefixSet.has(ancestor)) {
-        absorptions.push({ child: existingPath, parent: ancestor })
+    let current = newTrie
+    for (let i = 0; i < parts.length - 1; i++) {
+      const part = parts[i]
+      current = current.children.get(part)!
+      if (!current) break
+
+      if (current.isTerminal && current.path) {
+        absorptions.push({ child: existingPath, parent: current.path })
         filesMap.delete(existingPath)
         break
       }
@@ -105,26 +137,45 @@ export function prunePaths(paths: string[]): {
   const remaining: string[] = []
   const pruned: string[] = []
 
-  for (const path of sorted) {
-    // Check if current path is a child of any already accepted parent path
-    const isSubPath = remaining.some((parent) => {
-      if (path === parent) return true
-      // Ensure we match directory boundaries to avoid partial matches (e.g., /src-old vs /src)
-      const parentWithSlash =
-        parent.endsWith('/') || parent.endsWith('\\') ? parent : parent + '/' // We'll handle both slashes just in case, though they should be normalized
+  const root = new PathTrieNode()
 
-      // On Windows, paths might have backslashes.
-      // It's safer to use a normalized check or platform-specific separator.
-      return (
-        path.startsWith(parentWithSlash) ||
-        path.startsWith(parent.replace(/\//g, '\\') + '\\')
-      )
-    })
+  for (const path of sorted) {
+    // Normalize and split by both / and \ to handle cross-platform absolute paths
+    const parts = path.split(/[/\\]/)
+    // Remove trailing empty segments (e.g. from trailing slashes) to ensure consistent Trie matching
+    while (parts.length > 1 && parts[parts.length - 1] === '') {
+      parts.pop()
+    }
+    let current = root
+    let isSubPath = false
+
+    // Walk the Trie to see if any ancestor of the current path is already accepted
+    for (const part of parts) {
+      if (current.isTerminal) {
+        isSubPath = true
+        break
+      }
+      const next = current.children.get(part)
+      if (!next) break
+      current = next
+    }
+
+    // Exact match also counts as sub-path (pruning duplicates)
+    if (current.isTerminal) isSubPath = true
 
     if (isSubPath) {
       pruned.push(path)
     } else {
       remaining.push(path)
+      // Add the newly accepted parent path to the Trie
+      let currentAdd = root
+      for (const part of parts) {
+        if (!currentAdd.children.has(part)) {
+          currentAdd.children.set(part, new PathTrieNode())
+        }
+        currentAdd = currentAdd.children.get(part)!
+      }
+      currentAdd.isTerminal = true
     }
   }
 
