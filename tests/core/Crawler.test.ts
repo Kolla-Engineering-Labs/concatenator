@@ -28,7 +28,8 @@ describe('UnifiedCrawler', () => {
   let ignoreEngine: IgnoreEngine
 
   beforeEach(() => {
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crawler-test-'))
+    const rawTempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'crawler-test-'))
+    tempDir = fs.realpathSync(rawTempDir)
     ignoreEngine = new IgnoreEngine([])
   })
 
