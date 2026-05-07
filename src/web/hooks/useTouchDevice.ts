@@ -13,16 +13,29 @@ export const useTouchDevice = () => {
   const [isTouchDevice, setIsTouchDevice] = useState(false)
 
   useEffect(() => {
-    const mediaQuery = window.matchMedia('(pointer: coarse)')
+    const pointerCoarse = window.matchMedia('(pointer: coarse)')
+    const anyPointerCoarse = window.matchMedia('(any-pointer: coarse)')
+
+    const updateStatus = () => {
+      const hasHardwareTouch =
+        typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0
+
+      setIsTouchDevice(
+        pointerCoarse.matches || anyPointerCoarse.matches || hasHardwareTouch
+      )
+    }
 
     // Set initial value
-    setIsTouchDevice(mediaQuery.matches)
+    updateStatus()
 
     // Listen for changes
-    const handler = (e: MediaQueryListEvent) => setIsTouchDevice(e.matches)
-    mediaQuery.addEventListener('change', handler)
+    pointerCoarse.addEventListener('change', updateStatus)
+    anyPointerCoarse.addEventListener('change', updateStatus)
 
-    return () => mediaQuery.removeEventListener('change', handler)
+    return () => {
+      pointerCoarse.removeEventListener('change', updateStatus)
+      anyPointerCoarse.removeEventListener('change', updateStatus)
+    }
   }, [])
 
   return isTouchDevice
