@@ -43,10 +43,13 @@ export function reconcileFiles(
 
   // Phase 1: Suffix absorption — O((n + m) × depth)
   // Build a reversed Trie of existing paths for fast suffix matching.
+  // This handles cases where a file was added via a shallow path (e.g., "main.ts")
+  // and is now being added via a deeper path (e.g., "src/main.ts").
   const existingTrie = new PathTrieNode()
   for (const existingPath of filesMap.keys()) {
     let current = existingTrie
-    const parts = existingPath.split('/')
+    // Normalize and split to handle cross-platform paths reliably
+    const parts = existingPath.split(/[/\\]/).filter(Boolean)
     for (let i = parts.length - 1; i >= 0; i--) {
       const part = parts[i]
       if (!current.children.has(part)) {
@@ -60,10 +63,12 @@ export function reconcileFiles(
 
   // For each new file, walk the Trie with its reversed segments to find suffix matches.
   for (const newFile of newFiles) {
-    const parts = newFile.path.split('/')
+    const parts = newFile.path.split(/[/\\]/).filter(Boolean)
     let current = existingTrie
     // Check suffixes of newFile.path. Stop before the last segment to avoid
     // absorbing the identical path (handled by final map merge).
+    // This logic correctly distinguishes between "dir1/file.txt" and "dir2/file.txt"
+    // because the Trie branches at the directory level.
     for (let i = parts.length - 1; i > 0; i--) {
       const part = parts[i]
       current = current.children.get(part)!
@@ -82,10 +87,12 @@ export function reconcileFiles(
 
   // Phase 2: Parent absorption — O((n + m) × depth)
   // Build a Trie of all new paths for fast prefix matching.
+  // This handles cases where a new folder (e.g., "src") is added,
+  // absorbing all existing files within it (e.g., "src/App.tsx").
   const newTrie = new PathTrieNode()
   for (const newFile of newFiles) {
     let current = newTrie
-    const parts = newFile.path.split('/')
+    const parts = newFile.path.split(/[/\\]/).filter(Boolean)
     for (const part of parts) {
       if (!current.children.has(part)) {
         current.children.set(part, new PathTrieNode())
@@ -98,7 +105,7 @@ export function reconcileFiles(
 
   // For each remaining existing path, walk the newTrie to see if any prefix is a new file.
   for (const existingPath of [...filesMap.keys()]) {
-    const parts = existingPath.split('/')
+    const parts = existingPath.split(/[/\\]/).filter(Boolean)
     let current = newTrie
     for (let i = 0; i < parts.length - 1; i++) {
       const part = parts[i]

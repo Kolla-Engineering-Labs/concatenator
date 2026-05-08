@@ -92,7 +92,8 @@ export const useFileProcessing = ({
   // Absorptions from root-pruning reconciliation — consumed by UI Toast
   const [pendingAbsorptions, setPendingAbsorptions] = useState<Absorption[]>([])
   const cancelImportRef = useRef(false)
-  const activeReaderRef = useRef<FileReader | null>(null)
+  // Track all active readers to allow comprehensive cancellation
+  const activeReadersRef = useRef<Set<FileReader>>(new Set())
   const setIsProcessing = useCallback((processing: boolean) => {
     isProcessingRef.current = processing
     setIsProcessingState(processing)
@@ -100,39 +101,72 @@ export const useFileProcessing = ({
 
   const cancelProcessing = useCallback(() => {
     cancelImportRef.current = true
-    if (activeReaderRef.current) {
-      activeReaderRef.current.abort()
-    }
+    activeReadersRef.current.forEach((reader) => {
+      try {
+        reader.abort()
+      } catch {
+        // Ignore errors during abort
+      }
+    })
+    activeReadersRef.current.clear()
   }, [])
+
+  // Throttling semaphore for high-latency I/O environments (prevents browser hang)
+  const ioSemaphore = useRef<{ active: number; queue: (() => void)[] }>({
+    active: 0,
+    queue: [],
+  })
+  const MAX_CONCURRENT_READS = 10
 
   const readFileContent = useCallback(
     async (file: File): Promise<string | ArrayBuffer | null> => {
-      return new Promise((resolve) => {
-        const reader = new FileReader()
-        activeReaderRef.current = reader
+      // Acquire semaphore slot
+      if (ioSemaphore.current.active >= MAX_CONCURRENT_READS) {
+        await new Promise<void>((resolve) =>
+          ioSemaphore.current.queue.push(resolve)
+        )
+      }
+      ioSemaphore.current.active++
 
-        reader.onload = () => {
-          activeReaderRef.current = null
-          resolve(reader.result)
-        }
+      try {
+        if (cancelImportRef.current) return null
 
-        reader.onerror = (err) => {
-          activeReaderRef.current = null
-          logger.error(`Failed to read file ${file.name}:`, err)
-          resolve(null)
-        }
+        return await new Promise((resolve) => {
+          const reader = new FileReader()
+          activeReadersRef.current.add(reader)
 
-        reader.onabort = () => {
-          activeReaderRef.current = null
-          resolve(null)
-        }
+          const cleanup = () => {
+            activeReadersRef.current.delete(reader)
+          }
 
-        if (isImageFile(file.name) || isPdfFile(file.name)) {
-          reader.readAsArrayBuffer(file)
-        } else {
-          reader.readAsText(file)
-        }
-      })
+          reader.onload = () => {
+            cleanup()
+            resolve(reader.result)
+          }
+
+          reader.onerror = (err) => {
+            cleanup()
+            logger.error(`Failed to read file ${file.name}:`, err)
+            resolve(null)
+          }
+
+          reader.onabort = () => {
+            cleanup()
+            resolve(null)
+          }
+
+          if (isImageFile(file.name) || isPdfFile(file.name)) {
+            reader.readAsArrayBuffer(file)
+          } else {
+            reader.readAsText(file)
+          }
+        })
+      } finally {
+        // Release semaphore slot
+        ioSemaphore.current.active--
+        const next = ioSemaphore.current.queue.shift()
+        if (next) next()
+      }
     },
     []
   )
@@ -157,9 +191,10 @@ export const useFileProcessing = ({
         }
 
         for (const fileItem of targetFiles) {
-          if (fileItem.kind !== 'file' || !fileItem.content) continue
+          if (fileItem.kind !== 'file' || typeof fileItem.content !== 'string')
+            continue
 
-          const content = fileItem.content as string
+          const content = fileItem.content
 
           // Use the core engine to parse concatenated content
           const result = deconcatenate(content)
@@ -233,7 +268,7 @@ export const useFileProcessing = ({
         setIsProcessing(true)
         setImportError(null)
         cancelImportRef.current = false
-        activeReaderRef.current = null
+        activeReadersRef.current.clear()
         setImportProgress({ current: 0, total: uploadedFiles.length })
 
         await new Promise((resolve) => setTimeout(resolve, 50))
@@ -259,7 +294,6 @@ export const useFileProcessing = ({
               file.name
 
             const content = await readFileContent(file)
-            activeReaderRef.current = null
 
             if (content === null || cancelImportRef.current) {
               const now = Date.now()
@@ -283,7 +317,7 @@ export const useFileProcessing = ({
           newFiles.push(fileItem)
 
           const path = fileItem.path
-          const parts = path.split('/')
+          const parts = path.split(/[/\\]/).filter(Boolean)
           for (let j = 1; j < parts.length; j++) {
             const dirPath = parts.slice(0, j).join('/')
             if (!newDirPaths.has(dirPath)) {
@@ -350,7 +384,7 @@ export const useFileProcessing = ({
               // Convert fileMap to FileItem[] for consistent state
               const vfsFiles: FileItem[] = Object.entries(fileMap).map(
                 ([path, content]) => ({
-                  name: path.split('/').pop() || '',
+                  name: path.split(/[/\\]/).pop() || '',
                   path,
                   kind: 'file',
                   content,
@@ -410,7 +444,7 @@ export const useFileProcessing = ({
         setIsProcessing(false)
         setImportProgress({ current: 0, total: 0 })
         cancelImportRef.current = false
-        activeReaderRef.current = null
+        activeReadersRef.current.clear()
       } catch (error) {
         logger.error(
           `[useFileProcessing] Error in processUploadedFiles: ${error}`
@@ -438,7 +472,7 @@ export const useFileProcessing = ({
       setIsProcessing(true)
       setImportError(null)
       cancelImportRef.current = false
-      activeReaderRef.current = null
+      activeReadersRef.current.clear()
 
       const filesToProcess = vfsFiles.filter(
         (f) => f.kind === 'file' && !f.isIgnored
@@ -467,11 +501,22 @@ export const useFileProcessing = ({
           const content = await new Promise<string | ArrayBuffer | null>(
             (resolve, reject) => {
               const reader = new FileReader()
-              activeReaderRef.current = reader
-              reader.onload = () => resolve(reader.result as string)
-              reader.onerror = () =>
+              activeReadersRef.current.add(reader)
+              const cleanup = () => {
+                activeReadersRef.current.delete(reader)
+              }
+              reader.onload = () => {
+                cleanup()
+                resolve(reader.result as string)
+              }
+              reader.onerror = () => {
+                cleanup()
                 reject(new Error(`Failed to read file: ${file.path}`))
-              reader.onabort = () => resolve(null)
+              }
+              reader.onabort = () => {
+                cleanup()
+                resolve(null)
+              }
 
               if (isImageFile(file.name) || isPdfFile(file.name)) {
                 reader.readAsDataURL(blob)
@@ -480,9 +525,6 @@ export const useFileProcessing = ({
               }
             }
           )
-
-          activeReaderRef.current = null
-
           if (content !== null && !cancelImportRef.current) {
             newFiles.push({
               ...file,
@@ -521,7 +563,7 @@ export const useFileProcessing = ({
       setIsProcessing(false)
       setImportProgress({ current: 0, total: 0 })
       cancelImportRef.current = false
-      activeReaderRef.current = null
+      activeReadersRef.current.clear()
     },
     [setIsProcessing, setImportProgress, setFiles, setImportError]
   )
@@ -650,7 +692,7 @@ export const useFileProcessing = ({
 
               // Read content immediately to avoid InvalidStateError (stale handle)
               const content = await readFileContent(file)
-              if (content === null) return
+              if (content === null || cancelImportRef.current) return
 
               droppedFiles.push({
                 name: file.name,
@@ -879,7 +921,10 @@ export const useFileProcessing = ({
       } else {
         // Generate text file (default) using the core engine
         const result = concatenate(
-          fileList.map((f) => ({ path: f.path, content: f.content as string })),
+          fileList.map((f) => ({
+            path: f.path,
+            content: typeof f.content === 'string' ? f.content : '',
+          })),
           timestamp
         )
 
