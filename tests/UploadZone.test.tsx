@@ -165,4 +165,36 @@ describe('UploadZone Component', () => {
     expect(dragOverEvent.preventDefault).toHaveBeenCalled()
     expect(dragOverEvent.stopPropagation).toHaveBeenCalled()
   })
+
+  it('handles dragOver event even when isTouchDevice is true (Regression Test)', () => {
+    vi.mocked(useTouchDevice).mockReturnValue(true)
+    render(<UploadZone {...defaultProps} />)
+
+    const dropZone = screen.getByTestId('upload-zone-container')
+
+    const dragOverEvent = new CustomEvent('dragover', { bubbles: true }) as any
+    dragOverEvent.preventDefault = vi.fn()
+    dragOverEvent.stopPropagation = vi.fn()
+
+    fireEvent(dropZone, dragOverEvent)
+
+    expect(dragOverEvent.preventDefault).toHaveBeenCalled()
+    expect(dragOverEvent.stopPropagation).toHaveBeenCalled()
+  })
+
+  it('handles drop event even when isTouchDevice is true (Regression Test)', () => {
+    vi.mocked(useTouchDevice).mockReturnValue(true)
+    render(<UploadZone {...defaultProps} />)
+
+    const dropZone = screen.getByTestId('upload-zone-container')
+
+    const dropEvent = new CustomEvent('drop', { bubbles: true }) as any
+    dropEvent.preventDefault = vi.fn()
+    dropEvent.stopPropagation = vi.fn()
+
+    fireEvent(dropZone, dropEvent)
+
+    // handleDrop from props should be called
+    expect(defaultProps.handleDrop).toHaveBeenCalled()
+  })
 })

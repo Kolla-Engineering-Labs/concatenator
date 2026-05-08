@@ -39,4 +39,24 @@ test.describe('Responsive UI - Sidebar', () => {
     // Verify sidebar is hidden again
     await expect(sidebar).toHaveClass(/-translate-x-full/)
   })
+
+  test('should still intercept drag events even in touch/mobile view (Regression)', async ({
+    page,
+  }) => {
+    // Wait for the upload zone to be ready
+    const dropZone = page.getByTestId('upload-zone-container')
+    await expect(dropZone).toBeVisible()
+
+    // Dispatch a dragover event and check if it was prevented
+    const isPrevented = await dropZone.evaluate((el) => {
+      const event = new DragEvent('dragover', {
+        bubbles: true,
+        cancelable: true,
+      })
+      el.dispatchEvent(event)
+      return event.defaultPrevented
+    })
+
+    expect(isPrevented).toBe(true)
+  })
 })

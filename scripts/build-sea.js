@@ -12,8 +12,10 @@ import {
   copyFileSync,
   readFileSync,
   renameSync,
+  readdirSync,
+  statSync,
 } from 'fs'
-import { join, dirname } from 'path'
+import { join, dirname, relative } from 'path'
 import { fileURLToPath } from 'url'
 import { signBinary, verifyBinary, isSigningEnabled } from './sign-utils.ts'
 
@@ -120,25 +122,85 @@ try {
 }
 
 // Step 2: Generate SEA configuration
-console.log('\n⚙️  Generating SEA config...')
+console.log('\n⚙️  Generating SEA config (Deterministic VFS)...')
+
+/**
+ * Normalizes an object by sorting its keys alphabetically.
+ * Ensures deterministic JSON stringification for reproducible builds.
+ */
+function sortObjectKeys(obj) {
+  return Object.keys(obj)
+    .sort()
+    .reduce((acc, key) => {
+      acc[key] = obj[key]
+      return acc
+    }, {})
+}
+
+// Check for SOURCE_DATE_EPOCH for reproducible timestamps
+const sourceDateEpoch = process.env.SOURCE_DATE_EPOCH
+if (sourceDateEpoch) {
+  console.log(
+    `📅 Normalizing build time to SOURCE_DATE_EPOCH: ${sourceDateEpoch}`
+  )
+}
+
+// In v0.6.0+, we move towards native SEA VFS for web assets
+// Here we ensure any assets mapped into the blob are sorted alphabetically
+const assets = {}
+const distAssetsDir = join(rootDir, 'dist')
+if (existsSync(distAssetsDir)) {
+  const walk = (dir) => {
+    const files = readdirSync(dir).sort()
+    for (const file of files) {
+      const fullPath = join(dir, file)
+      const stats = statSync(fullPath)
+      if (stats.isDirectory()) {
+        // Skip SEA and versioned output dirs to avoid recursion
+        if (file !== 'sea' && !file.startsWith('v')) {
+          walk(fullPath)
+        }
+      } else {
+        // Skip non-deterministic or unnecessary artifacts
+        if (file.endsWith('.map') || file === 'concatenator-bundle-stats.html')
+          continue
+
+        const relPath = relative(distAssetsDir, fullPath).replace(/\\/g, '/')
+        // Use relative path from rootDir for the source file to ensure determinism
+        assets[relPath] = relative(rootDir, fullPath).replace(/\\/g, '/')
+      }
+    }
+  }
+  walk(distAssetsDir)
+}
+
 const seaConfig = {
   main: 'dist/sea/concatenator.js',
   output: 'dist/sea/concatenator.blob',
   disableExperimentalSEAWarning: true,
   useSnapshot: false,
-  useCodeCache: true,
+  useCodeCache: false, // Disabled for bit-for-bit determinism
+  assets: sortObjectKeys(assets), // Deterministic VFS sorting
 }
+
+// Sort the top-level config keys as well
+const sortedSeaConfig = sortObjectKeys(seaConfig)
+
 writeFileSync(
   join(rootDir, 'sea-config.json'),
-  JSON.stringify(seaConfig, null, 2) + '\n'
+  JSON.stringify(sortedSeaConfig, null, 2) + '\n'
 )
 
 // Step 3: Generate the blob
 console.log('\n🗜️  Generating SEA blob...')
 try {
+  const env = { ...process.env }
+  if (sourceDateEpoch) env.SOURCE_DATE_EPOCH = sourceDateEpoch
+
   execSync(`"${nodePath}" --experimental-sea-config sea-config.json`, {
     cwd: rootDir,
     stdio: 'inherit',
+    env,
   })
 } catch (error) {
   console.error('❌ Failed to generate SEA blob:', error.message)

@@ -13,6 +13,7 @@
 #   8. Symlink security (symlink outside root must be skipped, not followed)
 #   9. GPG Integrity Engine (verify command)
 #   10. Security Brief Messaging (Primary Proof of Integrity)
+#   11. Deterministic Build Verification (Bit-for-bit Reproducibility)
 
 set -e # Exit immediately on non-zero exit
 
@@ -29,7 +30,7 @@ echo "════════════════════════�
 echo ""
 
 # ── 1. Setup Sandbox ─────────────────────────────────────────────────────────
-echo "[1/10] Setting up sandbox..."
+echo "[1/11] Setting up sandbox..."
 rm -rf tests/smoke-sandbox
 mkdir -p tests/smoke-sandbox/original/sub
 echo "console.log('hello world');" > tests/smoke-sandbox/original/test.js
@@ -39,7 +40,7 @@ echo "ignore-me.bin" > tests/smoke-sandbox/original/.concatenate-ignore
 echo -e "$PASS  Sandbox ready."
 
 # ── 2. Concatenation ──────────────────────────────────────────────────────────
-echo "[2/10] Running concatenation..."
+echo "[2/11] Running concatenation..."
 npm run dev:cli -- concat tests/smoke-sandbox/original -o tests/smoke-sandbox/bundle.txt --force --quiet 2>/dev/null || \
   npm run dev:cli -- concat tests/smoke-sandbox/original -o tests/smoke-sandbox/bundle.txt --force
 
@@ -58,12 +59,12 @@ fi
 echo -e "$PASS  Bundle created and ignore list respected."
 
 # ── 3. Validation (Clean) ─────────────────────────────────────────────────────
-echo "[3/10] Validating clean bundle..."
+echo "[3/11] Validating clean bundle..."
 npm run dev:cli -- validate tests/smoke-sandbox/bundle.txt > /dev/null 2>&1
 echo -e "$PASS  Clean bundle validated."
 
 # ── 4. Corruption Check ───────────────────────────────────────────────────────
-echo "[4/10] Simulating corruption and re-validating..."
+echo "[4/11] Simulating corruption and re-validating..."
 cp tests/smoke-sandbox/bundle.txt tests/smoke-sandbox/bundle-clean.txt
 echo "CORRUPT_DATA_INJECTED" >> tests/smoke-sandbox/bundle.txt
 
@@ -77,7 +78,7 @@ echo -e "$PASS  Corruption detected as expected."
 cp tests/smoke-sandbox/bundle-clean.txt tests/smoke-sandbox/bundle.txt
 
 # ── 5. Reconstruction ─────────────────────────────────────────────────────────
-echo "[5/10] Reconstructing project from bundle..."
+echo "[5/11] Reconstructing project from bundle..."
 mkdir -p tests/smoke-sandbox/restored
 npm run dev:cli -- extract tests/smoke-sandbox/bundle.txt -o tests/smoke-sandbox/restored --force > /dev/null 2>&1
 
@@ -88,7 +89,7 @@ fi
 echo -e "$PASS  Files extracted successfully."
 
 # ── 6. Round-trip Integrity ───────────────────────────────────────────────────
-echo "[6/10] Verifying round-trip file integrity..."
+echo "[6/11] Verifying round-trip file integrity..."
 ORIGINAL_CONTENT=$(cat tests/smoke-sandbox/original/test.js)
 RESTORED_CONTENT=$(cat tests/smoke-sandbox/restored/test.js)
 
@@ -102,7 +103,7 @@ else
 fi
 
 # ── 7. Path-Traversal Jailbreak ───────────────────────────────────────────────
-echo "[7/10] Testing path-traversal jailbreak (../ must be rejected)..."
+echo "[7/11] Testing path-traversal jailbreak (../ must be rejected)..."
 # Attempt to concat the parent directory — should fail with a non-zero exit
 if npm run dev:cli -- concat tests/smoke-sandbox/original/../../../ -o tests/smoke-sandbox/jailbreak.txt > /dev/null 2>&1; then
   # If it succeeds, check that the output doesn't contain system files
@@ -114,7 +115,7 @@ else
 fi
 
 # ── 8. Symlink Security ───────────────────────────────────────────────────────
-echo "[8/10] Testing symlink security (symlink outside root must be skipped)..."
+echo "[8/11] Testing symlink security (symlink outside root must be skipped)..."
 
 SYMLINK_CREATED=false
 if ln -s "$(pwd)/src" tests/smoke-sandbox/original/evil-link 2>/dev/null; then
@@ -138,7 +139,7 @@ else
 fi
 
 # ── 9. GPG Integrity Engine (verify command) ───────────────────────────────────
-echo "[9/10] Testing GPG Integrity Engine (verify command)..."
+echo "[9/11] Testing GPG Integrity Engine (verify command)..."
 
 # Create a mock binary and manifest in the sandbox
 echo "binary content" > tests/smoke-sandbox/mock-bin
@@ -168,7 +169,7 @@ fi
 echo -e "$PASS  GPG Integrity Engine correctly identifies binary state."
 
 # ── 10. Security Brief Messaging ─────────────────────────────────────────────
-echo "[10/10] Testing Security Brief Messaging..."
+echo "[10/11] Testing Security Brief Messaging..."
 # Mock quarantine on any platform
 OUTPUT=$(CONCATENATOR_MOCK_QUARANTINE=true npm run dev:cli -- test-security-brief 2>&1)
 if echo "$OUTPUT" | grep -q "Primary Proof of Integrity"; then
@@ -176,6 +177,54 @@ if echo "$OUTPUT" | grep -q "Primary Proof of Integrity"; then
 else
   echo -e "$FAIL  Security Brief messaging mismatch."
   echo "$OUTPUT"
+  exit 1
+fi
+
+# ── 11. Deterministic Build Verification ─────────────────────────────────────
+echo "[11/11] Testing Deterministic Build Verification (Bit-for-bit check)..."
+
+# Set timestamp to last commit for reproducibility
+export SOURCE_DATE_EPOCH=$(git log -1 --format=%ct 2>/dev/null || date +%s)
+
+# Helper to get current binary path
+get_binary_path() {
+  local VERSION=$(node -p "require('./package.json').version")
+  local PLATFORM=$(node -p "process.platform")
+  local EXE_NAME=$([ "$PLATFORM" == "win32" ] && echo "concatenator.exe" || echo "concatenator")
+  echo "dist/v${VERSION}/${PLATFORM}/${EXE_NAME}"
+}
+
+BINARY_PATH=$(get_binary_path)
+
+# Build A
+echo "  Building first artifact..."
+npm run clean > /dev/null 2>&1
+npm run build > /dev/null 2>&1 && npm run build:exe > /dev/null 2>&1
+if command -v sha256sum >/dev/null 2>&1; then
+  sha256sum "$BINARY_PATH" > dist/hash_a.txt
+elif command -v shasum >/dev/null 2>&1; then
+  shasum -a 256 "$BINARY_PATH" > dist/hash_a.txt
+fi
+cp dist/hash_a.txt .hash_a.tmp
+
+# Build B
+echo "  Building second artifact..."
+npm run clean > /dev/null 2>&1
+npm run build > /dev/null 2>&1 && npm run build:exe > /dev/null 2>&1
+if command -v sha256sum >/dev/null 2>&1; then
+  sha256sum "$BINARY_PATH" > dist/hash_b.txt
+elif command -v shasum >/dev/null 2>&1; then
+  shasum -a 256 "$BINARY_PATH" > dist/hash_b.txt
+fi
+mv .hash_a.tmp dist/hash_a.txt
+
+# Compare
+if diff dist/hash_a.txt dist/hash_b.txt > /dev/null 2>&1; then
+  echo -e "$PASS  Builds are bit-for-bit identical."
+else
+  echo -e "$FAIL  Build non-determinism detected!"
+  echo "  Hash A: $(cat dist/hash_a.txt)"
+  echo "  Hash B: $(cat dist/hash_b.txt)"
   exit 1
 fi
 

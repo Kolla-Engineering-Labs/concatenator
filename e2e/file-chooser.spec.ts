@@ -123,7 +123,10 @@ test.describe('File Upload via File Chooser', () => {
     ])
 
     try {
-      // Verify files appear
+      // Wait for processing to complete
+      await expect(page.getByTestId('processing-status')).not.toBeVisible({
+        timeout: 10000,
+      })
 
       // Verify file appears in the list
       const fileList = page.getByTestId('file-table')
@@ -150,7 +153,10 @@ test.describe('File Upload via File Chooser', () => {
     const cleanup = await setFilesForWebkitDirectory(page, fileContents)
 
     try {
-      // Verify files appear
+      // Wait for processing to complete
+      await expect(page.getByTestId('processing-status')).not.toBeVisible({
+        timeout: 20000,
+      })
 
       // Verify all files appear
       const fileList = page.getByTestId('file-table')
@@ -160,7 +166,7 @@ test.describe('File Upload via File Chooser', () => {
             .getByText(name, { exact: true })
             .filter({ visible: true })
             .first()
-        ).toBeVisible()
+        ).toBeVisible({ timeout: 10000 })
       }
       await expect(page.getByText(/Selected Files.*\d/)).toBeVisible()
     } finally {
@@ -191,7 +197,10 @@ test.describe('File Upload via File Chooser', () => {
     const cleanup = await setFilesForWebkitDirectory(page, structure)
 
     try {
-      // Verify files appear
+      // Wait for processing to complete
+      await expect(page.getByTestId('processing-status')).not.toBeVisible({
+        timeout: 20000,
+      })
 
       // Verify files appear
       const fileList = page.getByTestId('file-table')

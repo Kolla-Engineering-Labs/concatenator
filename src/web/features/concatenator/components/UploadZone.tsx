@@ -59,8 +59,8 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
         isTouchDevice && !isProcessing && 'active:scale-95 cursor-pointer'
       )}
       data-testid="upload-zone-container"
-      onDrop={!isTouchDevice ? handleDrop : undefined}
-      onDragOver={!isTouchDevice ? handleDragOver : undefined}
+      onDrop={handleDrop}
+      onDragOver={handleDragOver}
       onClick={handleContainerClick}
     >
       <button

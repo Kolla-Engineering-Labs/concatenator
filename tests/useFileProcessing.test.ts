@@ -11,10 +11,12 @@ import * as Engine from '../src/core/engine'
 import { logger } from '../src/lib/logger'
 
 // Mock JSZip
-const mockFile = vi.fn()
-const mockGenerateAsync = vi
-  .fn()
-  .mockResolvedValue(new Blob(['mock-zip'], { type: 'application/zip' }))
+const { mockFile, mockGenerateAsync } = vi.hoisted(() => ({
+  mockFile: vi.fn(),
+  mockGenerateAsync: vi
+    .fn()
+    .mockResolvedValue(new Blob(['mock-zip'], { type: 'application/zip' })),
+}))
 
 vi.mock('jszip', () => {
   return {
@@ -26,7 +28,9 @@ vi.mock('jszip', () => {
 })
 
 // Mock ApiClient
-const mockGetFileBlob = vi.fn()
+const { mockGetFileBlob } = vi.hoisted(() => ({
+  mockGetFileBlob: vi.fn(),
+}))
 vi.mock('../src/web/services/ApiClient', () => ({
   ApiClient: {
     getFileBlob: mockGetFileBlob,
@@ -34,11 +38,14 @@ vi.mock('../src/web/services/ApiClient', () => ({
 }))
 
 // Mock jsPDF
-const mockSave = vi.fn()
-const mockAddPage = vi.fn()
-const mockSetFont = vi.fn()
-const mockText = vi.fn()
-const mockSplitTextToSize = vi.fn((t) => [t])
+const { mockSave, mockAddPage, mockSetFont, mockText, mockSplitTextToSize } =
+  vi.hoisted(() => ({
+    mockSave: vi.fn(),
+    mockAddPage: vi.fn(),
+    mockSetFont: vi.fn(),
+    mockText: vi.fn(),
+    mockSplitTextToSize: vi.fn((t) => [t]),
+  }))
 
 vi.mock('jspdf', () => {
   const MockjsPDF = class {

@@ -265,7 +265,9 @@ async function startServer() {
   app.get('/api/config', (req, res) => {
     res.json({
       path: process.env.VFS_PATH,
-      maxFiles: 10000,
+      maxFiles: process.env.MAX_FILES
+        ? parseInt(process.env.MAX_FILES)
+        : undefined,
       autoSaveIgnore: false,
     })
   })
@@ -290,7 +292,10 @@ async function startServer() {
       )
 
       const vfsRoot = path.resolve(process.cwd(), process.env.VFS_PATH)
-      const vfs = new VFSManager(vfsRoot, ignoreList, 10000)
+      const maxFiles = process.env.MAX_FILES
+        ? parseInt(process.env.MAX_FILES)
+        : 10000
+      const vfs = new VFSManager(vfsRoot, ignoreList, maxFiles)
       const result = vfs.getTree()
       res.json(result)
     } catch (error) {

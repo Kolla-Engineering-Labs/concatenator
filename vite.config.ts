@@ -85,7 +85,7 @@ export default defineConfig(({ mode }) => {
         logLevel: mode === 'development' || !!env.CI ? 'debug' : 'info',
       }),
       visualizer({
-        open: true,
+        open: false,
         filename: 'concatenator-bundle-stats.html',
         gzipSize: true,
         brotliSize: true,
@@ -121,11 +121,23 @@ export default defineConfig(({ mode }) => {
       port: 4173,
       strictPort: true,
     },
+    worker: {
+      rollupOptions: {
+        output: {
+          entryFileNames: 'assets/[name].js',
+          chunkFileNames: 'assets/[name].js',
+          assetFileNames: 'assets/[name].[ext]',
+        },
+      },
+    },
     build: {
-      sourcemap: true, // Required for detailed bundle analysis
+      sourcemap: false, // Disabled for bit-for-bit determinism
       chunkSizeWarningLimit: 600,
       rollupOptions: {
         output: {
+          entryFileNames: 'assets/[name].js',
+          chunkFileNames: 'assets/[name].js',
+          assetFileNames: 'assets/[name].[ext]',
           manualChunks(id) {
             // 1. Move React and React-DOM (the biggest blue blocks)
             if (
@@ -145,6 +157,10 @@ export default defineConfig(({ mode }) => {
             // 4. Move heavy utils (the green block)
             if (id.includes('html2canvas') || id.includes('dompurify')) {
               return 'vendor-utils'
+            }
+            // 5. Move jsPDF to its own chunk (it's huge)
+            if (id.includes('node_modules/jspdf')) {
+              return 'vendor-jspdf'
             }
           },
         },

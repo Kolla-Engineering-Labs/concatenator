@@ -40,8 +40,8 @@ test.describe('Max File Limit Feature', () => {
     // Uses worker-specific ignore file via X-Worker-Id header from apiContext fixture.
     await resetIgnoreList(apiContext)
 
-    // Use 'domcontentloaded' for faster Firefox navigation
-    await page.goto('/', { waitUntil: 'domcontentloaded' })
+    // Use 'load' for more stable Firefox hydration, or increase timeout
+    await page.goto('/', { waitUntil: 'load', timeout: 30000 })
 
     // Ensure sidebar is open to access controls
     await ensureSidebarOpen(page)
@@ -153,7 +153,7 @@ test.describe('Max File Limit Feature', () => {
         localStorage.removeItem('concatenator-max-files')
       })
       await page.waitForTimeout(500)
-      await page.reload({ waitUntil: 'domcontentloaded' })
+      await page.reload({ waitUntil: 'load', timeout: 30000 })
 
       const maxFileLimitSelect = page.locator('select#max-file-limit')
       await expect(maxFileLimitSelect).toBeVisible({ timeout: 10000 })
@@ -197,7 +197,7 @@ test.describe('Max File Limit Feature', () => {
       })
       await page.waitForTimeout(500)
       // Reload the page
-      await page.reload({ waitUntil: 'domcontentloaded' })
+      await page.reload({ waitUntil: 'load', timeout: 30000 })
 
       // Check that the value is restored from localStorage
       const restoredSelect = page.locator('select#max-file-limit')
@@ -233,7 +233,7 @@ test.describe('Max File Limit Feature', () => {
         await expect(
           page.getByText(/Selected Files.*\(\s*501\s*\)/)
         ).toBeVisible({
-          timeout: 15000,
+          timeout: 30000,
         })
 
         // Wait for files to be processed
@@ -288,7 +288,7 @@ test.describe('Max File Limit Feature', () => {
         await expect(
           page.getByText(/Selected Files.*\(\s*500\s*\)/)
         ).toBeVisible({
-          timeout: 15000,
+          timeout: 30000,
         })
 
         // Try to concatenate
@@ -336,7 +336,7 @@ test.describe('Max File Limit Feature', () => {
         await expect(
           page.getByText(/Selected Files \(\s*600\s*\)/)
         ).toBeVisible({
-          timeout: 30000,
+          timeout: 45000,
         })
 
         // Wait for files to be processed

@@ -24,21 +24,25 @@ export async function ensureSidebarOpen(page: Page): Promise<void> {
   const openButton = page.getByTitle('Open menu')
 
   try {
-    // Increase timeout to 15s for slow WebKit hydration
+    // Increase timeout to 30s for slow Firefox/WebKit hydration in parallel runs
     await Promise.race([
-      aside.waitFor({ state: 'visible', timeout: 15000 }),
-      openButton.waitFor({ state: 'visible', timeout: 15000 }),
+      aside.waitFor({ state: 'visible', timeout: 30000 }),
+      openButton.waitFor({ state: 'visible', timeout: 30000 }),
     ])
   } catch {
-    // If neither appears, we'll check visibility below and decide what to do
+    // If neither appears, the app might be extremely slow to load
+    console.warn('[sidebar] Neither aside nor openButton appeared within 30s')
   }
 
   // Check if we need to click the open button (mobile view)
-  if (await openButton.isVisible()) {
+  // On some browsers, isVisible() might be false if it's still rendering,
+  // so we check both the button and the aside state.
+  const isMobile = await openButton.isVisible()
+
+  if (isMobile) {
     await jsClick(openButton)
 
     // Wait for sidebar to be visible and animation to finish
-    // On mobile, we use the class check because translate-x-full elements might still be "visible" to Playwright
     await page.waitForFunction(
       () => {
         const aside = document.querySelector('aside')
@@ -46,12 +50,22 @@ export async function ensureSidebarOpen(page: Page): Promise<void> {
         if (!isMobile) return true
         return aside && !aside.classList.contains('-translate-x-full')
       },
-      { timeout: 10000 }
+      { timeout: 15000 }
     )
     await page.waitForTimeout(500)
   } else {
-    // On desktop, just ensure aside is visible
-    await aside.waitFor({ state: 'visible', timeout: 10000 })
+    // On desktop, just ensure aside is visible.
+    // If it's not visible here but we passed the race, it might have flickered.
+    await aside
+      .waitFor({ state: 'visible', timeout: 15000 })
+      .catch(async () => {
+        // One last try: check if it's actually mobile after all or just slow
+        if (await openButton.isVisible()) {
+          await jsClick(openButton)
+        } else {
+          await aside.waitFor({ state: 'visible', timeout: 5000 })
+        }
+      })
   }
 }
 

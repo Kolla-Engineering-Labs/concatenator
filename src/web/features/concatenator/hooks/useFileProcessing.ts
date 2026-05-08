@@ -28,6 +28,7 @@ import {
   isPdfFile,
   estimateTokenCount,
 } from '../../../../lib/utils'
+import { ApiClient } from '../../../services/ApiClient'
 
 const RESERVED_WINDOWS_NAMES = new Set([
   'CON',
@@ -450,8 +451,7 @@ export const useFileProcessing = ({
       let lastRenderTime = Date.now()
       let processedCount = 0
 
-      // Import ApiClient for this method
-      const { ApiClient } = await import('../../../services/ApiClient')
+      // Process VFS files
 
       for (const file of vfsFiles) {
         if (cancelImportRef.current) break
@@ -566,7 +566,20 @@ export const useFileProcessing = ({
 
       try {
         const items = e.dataTransfer.items
-        if (!items) return
+        if (!items) {
+          const files = Array.from(e.dataTransfer.files)
+          if (files.length > 0) {
+            await processUploadedFiles(files)
+          } else {
+            setIsProcessing(false)
+          }
+          return
+        }
+
+        if (items.length === 0) {
+          setIsProcessing(false)
+          return
+        }
 
         const entries: FileSystemEntry[] = []
         for (let i = 0; i < items.length; i++) {
@@ -576,7 +589,10 @@ export const useFileProcessing = ({
           }
         }
 
-        if (entries.length === 0) return
+        if (entries.length === 0) {
+          setIsProcessing(false)
+          return
+        }
 
         setIsProcessing(true)
         setImportError(null)
