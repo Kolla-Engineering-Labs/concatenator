@@ -5,6 +5,9 @@ on:
     branches:
       - main # Triggers when a PR is merged into main
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
