@@ -4,7 +4,9 @@ import { useFileProcessing } from '../src/web/features/concatenator/hooks/useFil
 import { AppMode } from '../src/web/types/workbench'
 
 // Mock ApiClient
-const mockGetFileBlob = vi.fn()
+const { mockGetFileBlob } = vi.hoisted(() => ({
+  mockGetFileBlob: vi.fn(),
+}))
 vi.mock('../src/web/services/ApiClient', () => ({
   ApiClient: {
     getFileBlob: mockGetFileBlob,
@@ -12,12 +14,21 @@ vi.mock('../src/web/services/ApiClient', () => ({
 }))
 
 // Mock jsPDF
-const mockAddPage = vi.fn()
-const mockText = vi.fn()
-const mockSave = vi.fn()
-const mockSplitTextToSize = vi.fn((text) => [text])
-const mockGetPageWidth = vi.fn(() => 210)
-const mockGetPageHeight = vi.fn(() => 297)
+const {
+  mockAddPage,
+  mockText,
+  mockSave,
+  mockSplitTextToSize,
+  mockGetPageWidth,
+  mockGetPageHeight,
+} = vi.hoisted(() => ({
+  mockAddPage: vi.fn(),
+  mockText: vi.fn(),
+  mockSave: vi.fn(),
+  mockSplitTextToSize: vi.fn((text) => [text]),
+  mockGetPageWidth: vi.fn(() => 210),
+  mockGetPageHeight: vi.fn(() => 297),
+}))
 
 vi.mock('jspdf', () => ({
   default: class {

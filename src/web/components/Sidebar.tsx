@@ -59,11 +59,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <aside
+      data-testid="sidebar"
       className={cn(
-        'fixed lg:relative inset-y-0 left-0 z-50 w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-transform flex flex-col h-[calc(100vh-2.5rem)] shrink-0',
-        isSidebarOpen
-          ? 'translate-x-0'
-          : '-translate-x-full invisible lg:visible lg:translate-x-0'
+        'fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-transform duration-300 ease-in-out flex flex-col h-full shrink-0',
+        isSidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
       )}
     >
       {/* Sidebar Header */}
@@ -201,7 +200,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </nav>
 
       {/* Sidebar Footer */}
-      <div className="p-4 border-t border-slate-200 dark:border-slate-800 shrink-0">
+      <div className="p-3 border-t border-slate-200 dark:border-slate-800 shrink-0">
         <Footer />
       </div>
     </aside>

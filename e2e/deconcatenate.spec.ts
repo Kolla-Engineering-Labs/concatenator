@@ -139,9 +139,10 @@ test.describe('De-concatenate Mode', () => {
 
         // The file list should be cleared
         // Verify we're in de-concatenate mode by checking the dropzone text
-        await expect(
-          page.getByText(/Drop concatenated \.txt file here/)
-        ).toBeVisible()
+        await expect(page.getByTestId('dropzone-label')).toBeVisible()
+        await expect(page.getByTestId('dropzone-label')).toContainText(
+          /Drop concatenated|Tap to select/
+        )
       } finally {
         uploadHelper.cleanup()
       }
@@ -809,7 +810,7 @@ This content is valid
 
         // Wait for the file list to appear (indicates processing completed)
         await expect(
-          page.locator('span').filter({ hasText: 'valid.txt' }).first()
+          page.getByText('valid.txt').filter({ visible: true }).first()
         ).toBeVisible({ timeout: 30000 })
 
         // Small delay to allow React state updates to propagate
@@ -865,9 +866,10 @@ This content is valid
       page,
     }) => {
       // Dropzone should show de-concatenate specific message
-      await expect(
-        page.getByText(/Drop concatenated \.txt file here/)
-      ).toBeVisible()
+      await expect(page.getByTestId('dropzone-label')).toBeVisible()
+      await expect(page.getByTestId('dropzone-label')).toContainText(
+        /Drop concatenated|Tap to select/
+      )
     })
 
     test('should not show file view in de-concatenate mode initially', async ({

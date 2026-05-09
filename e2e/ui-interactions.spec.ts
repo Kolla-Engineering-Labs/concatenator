@@ -66,9 +66,12 @@ test.describe('UI Interactions and Edge Cases', () => {
         await page.waitForTimeout(500)
 
         // Verify minimized state (smaller padding or "Drop here" text)
-        await expect(page.getByText('Drop here')).toBeVisible({
+        await expect(page.getByTestId('dropzone-label')).toBeVisible({
           timeout: 10000,
         })
+        await expect(page.getByTestId('dropzone-label')).toContainText(
+          /Drop here|Tap to select/
+        )
 
         // Find and click maximize button
         const maximizeButton = page
@@ -81,9 +84,12 @@ test.describe('UI Interactions and Edge Cases', () => {
         await page.waitForTimeout(500)
 
         // Should show full dropzone again
-        await expect(page.getByText(/Drop folder or files here/)).toBeVisible({
+        await expect(page.getByTestId('dropzone-label')).toBeVisible({
           timeout: 10000,
         })
+        await expect(page.getByTestId('dropzone-label')).toContainText(
+          /Drop folder or files here|Tap to select files/
+        )
       }
     })
 
@@ -98,7 +104,10 @@ test.describe('UI Interactions and Edge Cases', () => {
 
         // Wait for upload to complete
         await expect(
-          page.getByText('test.js', { exact: true }).first()
+          page
+            .getByText('test.js', { exact: true })
+            .filter({ visible: true })
+            .first()
         ).toBeVisible({ timeout: 10000 })
 
         // Find ignore list minimize button and wait for it
@@ -144,10 +153,12 @@ test.describe('UI Interactions and Edge Cases', () => {
         ])
 
         // Scope to file list and use exact matching for filename
-        const fileList = page.locator('table').first()
-        await expect(
-          fileList.getByText('temp.tmp', { exact: true }).first()
-        ).toBeVisible({ timeout: 10000 })
+        const fileList = page.getByTestId('file-table')
+        const fileRow = fileList
+          .getByText('temp.tmp', { exact: true })
+          .filter({ visible: true })
+          .first()
+        await expect(fileRow).toBeVisible({ timeout: 10000 })
 
         // Expand ignore list if needed
         await ensureIgnoreListExpanded(page)
@@ -256,7 +267,9 @@ test.describe('UI Interactions and Edge Cases', () => {
         ])
 
         // File should be visible even with long name
-        await expect(page.getByText('very-long-filename').first()).toBeVisible({
+        await expect(
+          page.getByText('very-long-filename').filter({ visible: true }).first()
+        ).toBeVisible({
           timeout: 10000,
         })
       } finally {
@@ -358,9 +371,12 @@ test.describe('UI Interactions and Edge Cases', () => {
           .locator('button[title*="Expand dropzone"]')
           .first()
         await expect(expandButton).toBeVisible({ timeout: 10000 })
-        await expect(page.getByText('Drop here')).toBeVisible({
+        await expect(page.getByTestId('dropzone-label')).toBeVisible({
           timeout: 10000,
         })
+        await expect(page.getByTestId('dropzone-label')).toContainText(
+          /Drop here|Tap to select/
+        )
       }
     })
 
@@ -377,7 +393,10 @@ test.describe('UI Interactions and Edge Cases', () => {
 
         // Wait for file and ignore list to be visible
         await expect(
-          page.getByText('test.js', { exact: true }).first()
+          page
+            .getByText('test.js', { exact: true })
+            .filter({ visible: true })
+            .first()
         ).toBeVisible({ timeout: 10000 })
 
         const ignoreSection = page
@@ -407,9 +426,11 @@ test.describe('UI Interactions and Edge Cases', () => {
         ])
 
         // Wait for file to appear
-        await expect(
-          page.getByText('test2.js', { exact: true }).first()
-        ).toBeVisible({ timeout: 10000 })
+        const fileRow = page
+          .getByText('test2.js', { exact: true })
+          .filter({ visible: true })
+          .first()
+        await expect(fileRow).toBeVisible({ timeout: 10000 })
 
         // Ignore list should still be minimized
         await expect(

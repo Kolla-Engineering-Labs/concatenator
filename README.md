@@ -61,8 +61,13 @@ graph LR
   - **CLI Persistence**: Use `-i, --ignore-file <path>` to leverage existing project configurations for both bundling and extraction.
   - **Web Auto-Save**: Toggle the **"Auto-Save to .concatenate-ignore"** option in the UI to keep your local workspace in sync with your project's ignore configuration automatically.
 - **Structural Redundancy Fixes**:
-  - **Root Pruning (Web)**: Automatically reconciles overlapping folder drops. If you drop a parent folder after a child, the workbench "absorbs" the child into the new, higher-level structure to prevent duplicates.
+  - **Root Pruning (Web)**: Automatically reconciles overlapping folder drops. If you drop a parent folder after a child, the workbench "absorbs" the child into the new structure and provides visual feedback via the **Absorption Toast**.
   - **Input Pruning (CLI)**: Normalizes and filters overlapping command-line arguments. If both `./src` and `./src/components` are passed, the redundant sub-path is automatically pruned.
+- **High-Velocity Directory Ingestion**:
+  - **Concurrency Throttling**: Intelligent parallel discovery (batches of 20) ensures rapid folder scanning without overwhelming the browser's file handle pool.
+  - **Incremental Reading**: Eagerly consumes file content during traversal to prevent handle staleness and `InvalidStateError` during massive 1,000+ file imports.
+  - **Reserved Name Safety**: Automatically skips reserved Windows system filenames (`NUL`, `CON`, `PRN`, etc.) to guarantee a crash-free experience on all platforms.
+  - **Isolated Error Recovery**: Each file operation is self-contained; if one file fails due to OS-level locks, the import continues for the rest of the tree.
 - **Token Estimation & Analytics**:
   - Real-time token counting for every file using professional LLM heuristics (~4 chars/token).
   - Aggregate token reporting for the entire bundle to help stay within context windows.
@@ -77,6 +82,7 @@ graph LR
   - Dark Mode optimized for long coding sessions.
   - Automatic de-concatenation upon dropping a compatible `.txt` file.
   - Output format toggle (TEXT/PDF) with localStorage persistence.
+  - **Server Heartbeat Indicator**: a live status dot in the bottom bar shows CLI backend health at a glance — gray while checking, green when connected, amber when unreachable — with context-aware labels ("No server" vs "Reconnecting…").
 - **Hybrid SEA Architecture**: Run Concatenator as a high-performance, single standalone executable (SEA) that embeds the full Web UI. Perfect for air-gapped environments or simplified distribution.
 - **Security Hardening**:
   - **Verification**: Built-in `verify` command to check binary integrity against GPG-signed manifests.
@@ -85,12 +91,16 @@ graph LR
   - **Code Signing**: All official binaries are signed for Windows (`signtool`) and macOS (`codesign`). For non-certified macOS builds, we provide [ad-hoc signing documentation](./docs/MACOS_SECURITY.md).
 - **Release Auditing**: Integrated `test:release` script to perform dry-run audits of release candidates, verifying PGP signatures and SHA256 integrity before distribution.
 - **Privacy-First Analytics**: Lightweight usage tracking via **PostHog** to help us improve the tool. All data is collected using privacy-preserving, anonymous profiles.
+
+## Hardware Support
+
+- **Adaptive Touch Input**: The Drop Zone dynamically adapts to touch-primary devices (tablets, mobile). On these devices, the zone acts as a direct trigger for the native OS file picker, allowing seamless browsing of local storage and cloud providers like iCloud or Google Drive.
 - **Hardware Safety Guardrails**: Configurable **Max File Limit** (default: 10,000 files) to prevent browser memory exhaustion.
 - **Privacy-First File Access**: Uses the **File System Access API** with explicit user control — directory permissions are granted per-session through native browser picker dialogs. No persistent background access.
 - **Hidden File Handling**: Hidden files and directories (those starting with `.`) are not automatically excluded. Common hidden items (`.git`, `.env`, `.vscode`, etc.) are pre-configured in the default ignore list. You can add custom patterns to exclude additional hidden files.
 
 > [!WARNING]
-> **Hardware Safety**: Dragging massive directories without proper ignore patterns can temporarily freeze the browser thread. Always verify your **Max File Limit** settings before large imports. 🛡️
+> **Hardware Safety**: Dragging massive directories (326+ files) is now optimized with concurrency throttling and eager reading to prevent browser thread freezing. However, always verify your **Max File Limit** settings before importing extremely large corporate monorepos. 🛡️
 
 ## Tech Stack
 
@@ -235,12 +245,12 @@ By default, **hidden files are included** in imports. The File System Access API
 - Environment/config: `.env`, `.vscode`, `.secrets`
 - Build artifacts: `.next`, `.gradle`, `.expo`, `.terraform`
 - System files: `.DS_Store`
-- Cache patterns: `/^\\..*_cache$/` (matches `.pytest_cache`, `.eslint_cache`, etc.)
+- Cache patterns: `/^\..*_cache$/` (matches `.pytest_cache`, `.eslint_cache`, etc.)
 
 **To exclude additional hidden files**, add patterns to your ignore list:
 
 - Literal match: `.myconfig` (excludes `.myconfig` file or directory)
-- Regex pattern: `/^\\.custom-.*/` (excludes all files starting with `.custom-`)
+- Regex pattern: `/^\.custom-.*/` (excludes all files starting with `.custom-`)
 
 ### De-concatenating Files
 

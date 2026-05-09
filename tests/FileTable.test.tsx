@@ -55,11 +55,11 @@ describe('FileTable', () => {
     )
     expect(screen.getByText('Name')).toBeDefined()
     expect(screen.getByText('Path')).toBeDefined()
-    expect(screen.getByText('Size')).toBeDefined()
-    expect(screen.getByText('Tokens')).toBeDefined()
-    expect(screen.getByText('a.txt')).toBeDefined()
-    expect(screen.getByText('b.txt')).toBeDefined()
-    expect(screen.getByText('c.txt')).toBeDefined()
+    expect(screen.getByRole('columnheader', { name: /size/i })).toBeDefined()
+    expect(screen.getByRole('columnheader', { name: /tokens/i })).toBeDefined()
+    expect(screen.getAllByText('a.txt')[0]).toBeDefined()
+    expect(screen.getAllByText('b.txt')[0]).toBeDefined()
+    expect(screen.getAllByText('c.txt')[0]).toBeDefined()
   })
 
   it('sorts by name when header is clicked', () => {
@@ -92,7 +92,7 @@ describe('FileTable', () => {
         onQuickLook={mockOnQuickLook}
       />
     )
-    const sizeHeader = screen.getByText('Size')
+    const sizeHeader = screen.getByRole('columnheader', { name: /size/i })
     fireEvent.click(sizeHeader) // asc
     const rows = screen.getAllByRole('row').slice(1)
     expect(rows[0].textContent).toContain('a.txt') // 100
@@ -107,7 +107,7 @@ describe('FileTable', () => {
         onQuickLook={mockOnQuickLook}
       />
     )
-    const tokensHeader = screen.getByText('Tokens')
+    const tokensHeader = screen.getByRole('columnheader', { name: /tokens/i })
     fireEvent.click(tokensHeader) // asc
     const rows = screen.getAllByRole('row').slice(1)
     expect(rows[0].textContent).toContain('a.txt') // 10

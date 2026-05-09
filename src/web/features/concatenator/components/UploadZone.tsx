@@ -3,11 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react'
+import React, { useRef } from 'react'
 import { motion } from 'motion/react'
 import { Maximize2, Minimize2, X, Ban, Upload } from 'lucide-react'
 import { cn } from '../../../../lib/utils'
 import { AppMode } from '../../../../core/types'
+import { useTouchDevice } from '../../../hooks/useTouchDevice'
 
 interface UploadZoneProps {
   isProcessing: boolean
@@ -37,19 +38,36 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
   handleDrop,
   handleFileUpload,
 }) => {
+  const isTouchDevice = useTouchDevice()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
   }
 
+  const handleContainerClick = () => {
+    if (isTouchDevice && fileInputRef.current) {
+      fileInputRef.current.click()
+    }
+  }
+
   return (
     <div
-      className="relative group"
+      className={cn(
+        'relative group transition-transform duration-100',
+        isTouchDevice && !isProcessing && 'active:scale-95 cursor-pointer'
+      )}
+      data-testid="upload-zone-container"
       onDrop={handleDrop}
       onDragOver={handleDragOver}
+      onClick={handleContainerClick}
     >
       <button
-        onClick={() => setIsDropzoneMinimized(!isDropzoneMinimized)}
+        onClick={(e) => {
+          e.stopPropagation()
+          setIsDropzoneMinimized(!isDropzoneMinimized)
+        }}
         className="absolute -top-3 -right-3 z-20 p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-full shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-slate-400 hover:text-brand-500"
         title={isDropzoneMinimized ? 'Expand dropzone' : 'Minimize dropzone'}
       >
@@ -69,7 +87,10 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
         >
           <div className="w-full max-w-md space-y-4">
             <div className="flex items-center justify-between text-sm font-medium">
-              <span className="text-brand-600 dark:text-brand-400">
+              <span
+                className="text-brand-600 dark:text-brand-400"
+                data-testid="processing-status"
+              >
                 {appMode === 'deconcatenate'
                   ? 'Parsing...'
                   : importProgress.total === 0
@@ -96,7 +117,10 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
               </div>
               {isDropzoneMinimized && (
                 <button
-                  onClick={cancelProcessing}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    cancelProcessing()
+                  }}
                   className="flex items-center gap-1.5 px-2 py-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors whitespace-nowrap"
                   title="Cancel Import"
                 >
@@ -108,7 +132,10 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
             {!isDropzoneMinimized && (
               <div className="flex justify-center">
                 <button
-                  onClick={cancelProcessing}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    cancelProcessing()
+                  }}
                   className="px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors flex items-center gap-2"
                 >
                   <X className="w-4 h-4" />
@@ -123,7 +150,7 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
           <div
             className={cn(
               'border-2 border-dashed rounded-2xl flex flex-col items-center justify-center transition-all group-hover:border-brand-400 group-hover:bg-brand-50/50 dark:group-hover:bg-brand-900/10',
-              isDropzoneMinimized ? 'p-4 gap-2' : 'p-12 gap-4',
+              isDropzoneMinimized ? 'p-4 gap-2' : 'p-8 sm:p-12 gap-3 sm:gap-4',
               importError
                 ? 'border-red-300 bg-red-50/30 dark:border-red-900/50 dark:bg-red-900/10'
                 : 'border-slate-300 dark:border-slate-700'
@@ -132,7 +159,7 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
             {importError ? (
               <div className="flex flex-col items-center gap-2 text-center max-w-md relative z-20 ph-no-capture">
                 <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-full text-red-600 dark:text-red-400">
-                  <Ban className="w-6 h-6" />
+                  <Ban className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
                 <p className="text-sm font-medium text-red-600 dark:text-red-400">
                   {importError}
@@ -153,31 +180,42 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
                 <div
                   className={cn(
                     'bg-slate-100 dark:bg-slate-900 rounded-full group-hover:bg-brand-100 dark:group-hover:bg-brand-900/20 transition-colors',
-                    isDropzoneMinimized ? 'p-2' : 'p-4'
+                    isDropzoneMinimized ? 'p-2' : 'p-3 sm:p-4'
                   )}
                 >
                   <Upload
                     className={cn(
                       'text-slate-400 group-hover:text-brand-500',
-                      isDropzoneMinimized ? 'w-4 h-4' : 'w-8 h-8'
+                      isDropzoneMinimized ? 'w-4 h-4' : 'w-6 h-6 sm:w-8 sm:h-8'
                     )}
                   />
                 </div>
                 <div className="text-center ph-no-capture">
                   <p
+                    data-testid="dropzone-label"
                     className={cn(
                       'font-medium',
-                      isDropzoneMinimized ? 'text-sm' : 'text-lg'
+                      isDropzoneMinimized
+                        ? 'text-xs sm:text-sm'
+                        : 'text-base sm:text-lg'
                     )}
                   >
-                    {isDropzoneMinimized
-                      ? 'Drop here'
-                      : appMode === 'concatenate'
-                        ? 'Drop folder or files here'
-                        : 'Drop concatenated .txt file here'}
+                    {isTouchDevice
+                      ? isDropzoneMinimized
+                        ? 'Tap to select'
+                        : 'Tap to select files'
+                      : isDropzoneMinimized
+                        ? 'Drop here'
+                        : appMode === 'concatenate'
+                          ? 'Drop folder or files here'
+                          : 'Drop concatenated .txt file here'}
                   </p>
                   {!isDropzoneMinimized && (
-                    <p className="text-sm text-slate-500">or click to browse</p>
+                    <p className="text-xs sm:text-sm text-slate-500">
+                      {isTouchDevice
+                        ? 'Browse local or cloud storage'
+                        : 'or click to browse'}
+                    </p>
                   )}
                 </div>
               </>
@@ -185,13 +223,19 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
           </div>
           {!importError && (
             <input
+              ref={fileInputRef}
               // key={appMode} intentionally remounts input when mode changes to reset webkitdirectory attribute
               key={appMode}
               type="file"
               multiple
               {...(appMode === 'concatenate' ? { webkitdirectory: '' } : {})}
               onChange={handleFileUpload}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10 ph-no-capture"
+              className={cn(
+                'ph-no-capture',
+                isTouchDevice
+                  ? 'hidden'
+                  : 'absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10'
+              )}
               disabled={isProcessing}
               title=""
             />

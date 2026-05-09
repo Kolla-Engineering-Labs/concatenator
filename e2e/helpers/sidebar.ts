@@ -24,19 +24,48 @@ export async function ensureSidebarOpen(page: Page): Promise<void> {
   const openButton = page.getByTitle('Open menu')
 
   try {
+    // Increase timeout to 30s for slow Firefox/WebKit hydration in parallel runs
     await Promise.race([
-      aside.waitFor({ state: 'visible', timeout: 5000 }),
-      openButton.waitFor({ state: 'visible', timeout: 5000 }),
+      aside.waitFor({ state: 'visible', timeout: 30000 }),
+      openButton.waitFor({ state: 'visible', timeout: 30000 }),
     ])
   } catch {
-    // If neither appears, we'll check visibility below and decide what to do
+    // If neither appears, the app might be extremely slow to load
+    console.warn('[sidebar] Neither aside nor openButton appeared within 30s')
   }
 
-  if (await openButton.isVisible()) {
+  // Check if we need to click the open button (mobile view)
+  // On some browsers, isVisible() might be false if it's still rendering,
+  // so we check both the button and the aside state.
+  const isMobile = await openButton.isVisible()
+
+  if (isMobile) {
     await jsClick(openButton)
+
     // Wait for sidebar to be visible and animation to finish
-    await aside.waitFor({ state: 'visible', timeout: 10000 })
+    await page.waitForFunction(
+      () => {
+        const aside = document.querySelector('aside')
+        const isMobile = window.innerWidth < 1024
+        if (!isMobile) return true
+        return aside && !aside.classList.contains('-translate-x-full')
+      },
+      { timeout: 15000 }
+    )
     await page.waitForTimeout(500)
+  } else {
+    // On desktop, just ensure aside is visible.
+    // If it's not visible here but we passed the race, it might have flickered.
+    await aside
+      .waitFor({ state: 'visible', timeout: 15000 })
+      .catch(async () => {
+        // One last try: check if it's actually mobile after all or just slow
+        if (await openButton.isVisible()) {
+          await jsClick(openButton)
+        } else {
+          await aside.waitFor({ state: 'visible', timeout: 5000 })
+        }
+      })
   }
 }
 

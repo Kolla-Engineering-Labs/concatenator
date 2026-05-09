@@ -6,30 +6,31 @@ on:
       - 'v*'
 
 permissions:
-  contents: write
+  contents: write # Required to create the GitHub Release and upload assets
+  id-token: write # Required for OIDC binary attestation
+  attestations: write # Required for the GitHub provenance step
 
 jobs:
   build:
-    name: Build Binary (${{ matrix.os }})
+    name: Build & Verify (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         include:
           - os: ubuntu-latest
-            artifact_name: concatenator-linux-x64
-            asset_name: concatenator-linux-x64.tar.gz
+            platform: linux
             exe_name: concatenator
           - os: windows-latest
-            artifact_name: concatenator-windows-x64
-            asset_name: concatenator-windows-x64.zip
+            platform: win32
             exe_name: concatenator.exe
           - os: macos-latest
-            artifact_name: concatenator-macos-x64
-            asset_name: concatenator-macos-x64.tar.gz
+            platform: darwin
             exe_name: concatenator
-
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required for git log to set SOURCE_DATE_EPOCH
 
       - name: Set up Node 22
         uses: actions/setup-node@v4
@@ -40,55 +41,124 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Project
-        run: npm run build
-
-      - name: Build SEA Executable
-        run: npm run build:exe
-
-      - name: Package Binary (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
+      - name: Set SOURCE_DATE_EPOCH
+        shell: bash
         run: |
-          Compress-Archive -Path dist/concatenator.exe -DestinationPath ${{ matrix.asset_name }}
+          # Use the commit timestamp for deterministic builds
+          echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> $GITHUB_ENV
 
-      - name: Package Binary (Unix)
-        if: matrix.os != 'windows-latest'
+      - name: 'Pass 1: Build Artifact'
         run: |
-          tar -cvzf ${{ matrix.asset_name }} -C dist ${{ matrix.exe_name }}
+          npm run build
+          npm run build:exe
+        env:
+          SOURCE_DATE_EPOCH: ${{ env.SOURCE_DATE_EPOCH }}
 
-      - name: Upload Artifact
+      - name: Capture Hash 1
+        shell: bash
+        run: |
+          # Dynamically find the binary based on current tag version
+          BIN_PATH=$(find dist/${{ github.ref_name }}/${{ matrix.platform }} -type f -name "${{ matrix.exe_name }}")
+          echo "BIN_PATH=$BIN_PATH" >> $GITHUB_ENV
+          sha256sum "$BIN_PATH" | cut -d' ' -f 1 > hash1.txt
+
+      - name: Clean Environment
+        run: npm run clean
+
+      - name: 'Pass 2: Rebuild (Deterministic Check)'
+        run: |
+          npm run build
+          npm run build:exe
+        env:
+          SOURCE_DATE_EPOCH: ${{ env.SOURCE_DATE_EPOCH }}
+
+      - name: Capture Hash 2 & Verify
+        shell: bash
+        run: |
+          BIN_PATH=$(find dist/${{ github.ref_name }}/${{ matrix.platform }} -type f -name "${{ matrix.exe_name }}")
+          sha256sum "$BIN_PATH" | cut -d' ' -f 1 > hash2.txt
+          if ! diff hash1.txt hash2.txt; then
+            echo "ERROR: Non-deterministic build detected!"
+            exit 1
+          fi
+          echo "SUCCESS: Deterministic build verified."
+
+      - name: Attest Build Provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: 'dist/${{ github.ref_name }}/${{ matrix.platform }}/${{ matrix.exe_name }}'
+
+      - name: Upload Platform Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
-          path: ${{ matrix.asset_name }}
+          name: concatenator-${{ matrix.platform }}
+          path: dist/${{ github.ref_name }}/${{ matrix.platform }}/${{ matrix.exe_name }}
 
   release:
-    name: Create Release
+    name: Sign & Distribute
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          path: artifacts
-          merge-multiple: true
+          path: dist-release
+          merge-multiple: false
+
+      - name: Structure Distribution Directory
+        run: |
+          mkdir -p dist
+          cp dist-release/concatenator-linux/concatenator dist/concatenator-linux-x64
+          cp dist-release/concatenator-win32/concatenator.exe dist/concatenator-windows-x64.exe
+          cp dist-release/concatenator-darwin/concatenator dist/concatenator-macos-arm64
+
+      - name: Generate SHA256SUMS
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS
+
+      - name: Import GPG Key
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Sign Manifest (Kolla Protocol)
+        run: |
+          cd dist
+          gpg --clearsign --digest-algo SHA256 --batch --yes --pinentry-mode loopback --passphrase "${{ secrets.GPG_PASSPHRASE }}" SHA256SUMS
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/*
-          generate_release_notes: true
+          name: Concatenator ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          files: |
+            dist/concatenator-linux-x64
+            dist/concatenator-windows-x64.exe
+            dist/concatenator-macos-arm64
+            dist/SHA256SUMS
+            dist/SHA256SUMS.asc
+          body: |
+            ## Concatenator ${{ github.ref_name }}
+
+            This release implements the **Kolla Protocol** for verifiable distribution:
+            - **Deterministic Builds**: Bit-for-bit identity verified across multiple build passes.
+            - **SOURCE_DATE_EPOCH**: Normalized build timestamps for reproducibility.
+            - **GPG Signed Manifest**: All binaries are hashed and signed by the Lead Architect.
+            - **Binary Attestation**: Build provenance attested via GitHub Actions.
+
+            ### Verification
+            ```bash
+            # Download SHA256SUMS.asc and the binary
+            gpg --import PUBLIC_KEY.gpg
+            gpg --verify SHA256SUMS.asc
+            sha256sum --check SHA256SUMS.asc
+            ```
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Deploy to Vercel
-        # Only run this on the Ubuntu runner to avoid triple-deploying from Windows/Mac
-        if: matrix.os == 'ubuntu-latest'
-        env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-        run: |
-          npm install --global vercel@latest
-          vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
-          vercel deploy --prod --token=${{ secrets.VERCEL_TOKEN }}

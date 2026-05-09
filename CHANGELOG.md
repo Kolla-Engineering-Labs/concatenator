@@ -1,5 +1,54 @@
 # Changelog
 
+## [0.6.0] - 2026-05-06
+
+### Minor Changes
+
+- ### Added
+  - **Heartbeat Indicator**: A live server-connection dot in the Status Bar that gives instant visibility into the CLI backend's health:
+    - 🔘 **Gray / pulsing** — initial check in flight ("Checking…")
+    - 🟢 **Green / pulsing** — CLI server is reachable ("Connected")
+    - 🟡 **Amber / static** — server unreachable; label is context-aware:
+      - **"No server"** — never established a connection (Vite dev mode or CLI not running)
+      - **"Reconnecting…"** — connection was previously live and has since dropped
+    - Always rendered (not hidden in dev mode) so it can be tested without a CLI binary.
+    - `title` + `aria-label` tooltip reflects the current state for screen-reader accessibility.
+  - **`useHeartbeat` tri-state**: `isConnected: boolean | null` + `wasEverConnected: boolean` — separates "first check pending" from "confirmed alive" from "lost connection" to drive all indicator states without ambiguity.
+  - **Vite dev stub for `/api/security/info`**: a lightweight `configureServer` plugin intercepts the route before the proxy can attempt a connection to port 3000, eliminating the red network error logged in DevTools when running without a CLI backend.
+  - **Root Pruning — Reconciliation on Drop** (`src/core/reconciler.ts`): When files or folders are added to the workbench, the ingestion pipeline now reconciles the new entries against the existing Virtual File System using two phases:
+    - **Phase 1 — Suffix absorption**: detects when a previously-loaded sub-folder (e.g. `drivers/zip-driver.ts`) was dropped in isolation and the same files now appear under a wider parent drop (e.g. `src/drivers/zip-driver.ts`). Stale shallow entries are removed and replaced by the correct deep paths. Uses a pre-built suffix `Map` for O(1) lookups — O(n + m×depth) overall.
+    - **Phase 2 — Parent absorption**: detects when a newly-dropped directory is an ancestor of already-loaded entries (e.g. `src` absorbing a previously-loaded `src/components`). Uses ancestor-walk + a `Set` for O(1) membership — no O(n²) loops.
+    - Both phases produce an `Absorption[]` list consumed by the UI Toast below.
+  - **Root Pruning — Minimum Common Root** (`src/web/features/concatenator/hooks/useFileTree.ts`): The Tree View already collapses single-child intermediate directories to ensure the displayed root always begins at the deepest common ancestor (no spurious top-level nodes).
+  - **Absorption Toast** (`src/web/components/Toast.tsx`): A non-blocking `AbsorptionToast` notification appears top-right whenever Phase 1 or Phase 2 absorptions occur:
+    - Groups absorbed children by parent for a single, readable message (e.g. _"Merged 'components, hooks' into 'src'"_).
+    - Auto-dismisses after 5 seconds with a slide-in/out Tailwind transition.
+    - `role="status"` + `aria-live="polite"` for screen-reader accessibility.
+    - Driven by `pendingAbsorptions` state exposed from `useFileProcessing` and consumed in `App.tsx`.
+
+  ### Fixed
+  - **Status Bar hidden behind fixed sidebar**: added `lg:pl-[19rem]` (18 rem sidebar + 1 rem padding) to the Status Bar wrapper so all content clears the `position: fixed` sidebar on `lg` breakpoints.
+  - **`ApiClient.getSecurityInfo` console 404**: the method now returns `null` silently on a `404` response instead of throwing, matching the pattern already established by `getPulse`.
+  - **Tailwind class purging in StatusBar**: replaced dynamically-joined class strings (invisible to the JIT scanner) with fully-static conditional JSX branches so dot colour and animation classes are always included in the production CSS bundle.
+  - **Directory entry self-absorption bug**: the Phase 2 parent-absorption loop now snapshots `originalExistingPaths` before iterating new files, preventing a directory entry from the _current_ drop (e.g. `drivers`) from wrongly absorbing its own sibling files (e.g. `drivers/zip-driver.ts`) that were added earlier in the same loop.
+  - **O(n²) directory dedup in file-reading loop**: replaced `newFiles.some(f => f.path === dirPath)` with a `Set<string>` (`newDirPaths`) for O(1) deduplication — eliminates quadratic growth when reading 300+ files with deeply-nested paths.
+  - **React 18 batching timing issue with absorptions**: `reconcileFiles` is now called with `filesRef.current` (a ref synced on every render) _before_ any `setState`, so `setPendingAbsorptions` can be called directly with the computed result. The previous approach stored absorptions inside a `setFiles` functional updater whose execution is deferred by React 18 automatic batching, causing the Toast to never fire.
+  - **Windows-specific `InvalidStateError` in large drops**: implemented a multi-layered fix for "cached state changed" errors during bulk folder ingestion:
+    - **Incremental Reading**: File content is now read immediately as files are discovered, preventing handles from going stale during long traversals.
+    - **Concurrency Throttling**: Limited parallel directory discovery to 20 simultaneous operations to avoid overwhelming the OS/Browser file handle pool.
+    - **Modern File APIs**: Switched from legacy `FileReader` to `File.text()` and `File.arrayBuffer()` for better performance and robustness on Windows.
+    - **Reserved Name Safety**: Automatically skips reserved Windows system names (`NUL`, `CON`, `PRN`, etc.) which are known to trigger browser-level state errors when accessed via directory entries.
+    - **Isolated Error Recovery**: Each file operation is isolated in its own try/catch, allowing the import to skip problematic files and continue rather than crashing.
+  - **Toast Visibility and Re-mounting**: Added a `key` to `AbsorptionToast` based on absorption count and increased entrance delay to `100ms` to ensure the notification always triggers and animates correctly even during heavy React 18 batching.
+
+  ### Tests
+  - **`tests/StatusBar.test.tsx`** — 5 new unit tests covering all heartbeat indicator states (Checking, Connected, No server, Reconnecting) and tooltip values.
+  - **`tests/ApiClient.test.ts`** — 3 new unit tests for `getSecurityInfo`: success, silent 404, non-404 error propagation.
+  - **`e2e/heartbeat.spec.ts`** — new E2E spec covering indicator visibility, aria-label presence, the "Connected" state (live CLI), and the "No server" state (routes intercepted to 503).
+  - **`tests/reconciler.test.ts`** — 9 new unit tests for `reconcileFiles` covering: parent absorption, suffix absorption (the isolated sub-folder scenario), false-positive guard (unrelated drops with shared file names), duplicate-path invariant, and empty-input edge cases.
+  - **`tests/stability.test.ts`** — new unit tests for Windows-specific stability logic, verifying correct identification of reserved system names (`NUL`, `CON`, etc.).
+  - **`tests/AbsorptionToast.test.tsx`** — new unit tests for the root-pruning feedback UI, covering auto-dismiss timing, path grouping logic, and manual dismissal.
+
 ## [0.5.0] - 2026-05-03
 
 ### Minor Changes
@@ -12,6 +61,7 @@
   - **Hybrid SEA Architecture**: Implemented a single standalone executable (SEA) that embeds the full Node.js runtime and Web Workbench assets. This enables zero-dependency distribution and improved performance in air-gapped environments.
   - **Code Signing Pipeline**: Integrated an automated signing and notarization pipeline for Windows (`signtool`) and macOS (`codesign`/`notarytool`), ensuring binary integrity and a seamless user experience on protected OS environments.
   - **Distribution Workflow**: Standardized the build process to output versioned, platform-specific artifacts in `dist/v{version}/{platform}/`.
+  - **Adaptive Input Logic**: The Drop Zone now acts as a native file-picker trigger on touch devices for seamless mobile/cloud browsing.
 
   ***
 

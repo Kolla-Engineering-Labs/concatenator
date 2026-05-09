@@ -28,6 +28,17 @@ describe('Health Endpoint Integration', () => {
       })
     })
 
+    it('should return 200 OK for /health alias', async () => {
+      const response = await fetch(`http://127.0.0.1:${port}/health`)
+      expect(response.status).toBe(200)
+      const data = await response.json()
+      expect(data).toMatchObject({
+        status: 'ready',
+        version: expect.any(String),
+        uptime: expect.any(Number),
+      })
+    })
+
     it('should return 404 for unknown routes', async () => {
       const response = await fetch(`http://127.0.0.1:${port}/unknown`)
       expect(response.status).toBe(404)
@@ -86,6 +97,17 @@ describe('Health Endpoint Integration', () => {
 
     it('should return 200 OK for /api/health without token', async () => {
       const response = await fetch(`http://127.0.0.1:${port}/api/health`)
+      expect(response.status).toBe(200)
+      const data = await response.json()
+      expect(data).toMatchObject({
+        status: 'ready',
+        version: expect.any(String),
+        uptime: expect.any(Number),
+      })
+    })
+
+    it('should return 200 OK for /health alias without token', async () => {
+      const response = await fetch(`http://127.0.0.1:${port}/health`)
       expect(response.status).toBe(200)
       const data = await response.json()
       expect(data).toMatchObject({

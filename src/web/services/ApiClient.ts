@@ -107,10 +107,12 @@ export class ApiClient {
     version: string
     buildHash: string
     fingerprint: string
-  }> {
+  } | null> {
     const res = await fetch('/api/security/info', {
       headers: this.getHeaders(),
     })
+    // 404 = not running via CLI binary; return null silently
+    if (res.status === 404) return null
     if (!res.ok) {
       throw new Error('Failed to fetch security info')
     }

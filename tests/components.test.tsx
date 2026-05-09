@@ -94,7 +94,10 @@ describe('Footer Component', () => {
     const { container } = render(<Footer />)
 
     const paragraph = container.querySelector('p')
-    expect(paragraph?.classList.contains('text-center')).toBe(true)
+    expect(paragraph?.className).toContain('text-slate-500')
+    // We check the footer itself for centering since it's the flex container
+    const footer = container.querySelector('footer')
+    expect(footer?.classList.contains('text-center')).toBe(true)
   })
 })
 

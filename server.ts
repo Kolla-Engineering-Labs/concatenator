@@ -72,7 +72,11 @@ async function startServer() {
   if (API_TOKEN) {
     app.use((req, res, next) => {
       // Allow health checks and static assets through without a token
-      if (req.path === '/api/health' || !req.path.startsWith('/api')) {
+      if (
+        req.path === '/api/health' ||
+        req.path === '/health' ||
+        !req.path.startsWith('/api')
+      ) {
         return next()
       }
       const provided = req.headers['x-concatenator-token']
@@ -87,8 +91,8 @@ async function startServer() {
     )
   }
 
-  // Health check endpoint
-  app.get('/api/health', (req, res) => {
+  // Health check endpoint (supports both /api/health and shorter /health)
+  app.get(['/api/health', '/health'], (req, res) => {
     res.json({
       status: 'ready',
       version,
@@ -261,7 +265,9 @@ async function startServer() {
   app.get('/api/config', (req, res) => {
     res.json({
       path: process.env.VFS_PATH,
-      maxFiles: 10000,
+      maxFiles: process.env.MAX_FILES
+        ? parseInt(process.env.MAX_FILES)
+        : undefined,
       autoSaveIgnore: false,
     })
   })
@@ -286,7 +292,10 @@ async function startServer() {
       )
 
       const vfsRoot = path.resolve(process.cwd(), process.env.VFS_PATH)
-      const vfs = new VFSManager(vfsRoot, ignoreList, 10000)
+      const maxFiles = process.env.MAX_FILES
+        ? parseInt(process.env.MAX_FILES)
+        : 10000
+      const vfs = new VFSManager(vfsRoot, ignoreList, maxFiles)
       const result = vfs.getTree()
       res.json(result)
     } catch (error) {

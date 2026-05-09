@@ -79,6 +79,9 @@ function checkSessionIdCollision(
   const sessionMarkerCore = `(ID: ${sessionId})${END_DELIMITER}`
 
   for (const file of files) {
+    // Defensive check: if content is not a string (e.g. ArrayBuffer from binary file), skip collision check
+    if (typeof file.content !== 'string') continue
+
     // Check for manifest header collision
     if (file.content.includes(manifestPattern)) return true
 
@@ -476,7 +479,7 @@ export function concatenate(
   for (let i = 0; i < totalFiles; i++) {
     const file = files[i]
     result += `${buildFileStartMarker(file.path, sid)}\n`
-    result += file.content
+    result += typeof file.content === 'string' ? file.content : ''
     result += `\n${FILE_END_DELIMITER}\n\n`
 
     if (onProgress) {

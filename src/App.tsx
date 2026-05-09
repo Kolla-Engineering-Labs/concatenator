@@ -24,9 +24,10 @@ import { FileItem, TreeItem, OutputFormat } from './core/types'
 import { useHeartbeat } from './web/hooks/useHeartbeat'
 import { usePulseMonitor } from './web/hooks/usePulseMonitor'
 import { SessionExpiredModal } from './web/components/SessionExpiredModal'
+import { AbsorptionToast } from './web/components/Toast'
 
 export default function App() {
-  const { isExpired } = useHeartbeat()
+  const { isExpired, isConnected, wasEverConnected } = useHeartbeat()
   const { isHeavyProcessing, progress: pulseProgress } =
     usePulseMonitor(isExpired)
 
@@ -57,6 +58,7 @@ export default function App() {
     mode: appMode,
     view: viewMode,
     isIgnored,
+    isSidebarOpen,
     setSidebarOpen,
     virtualFileSystem,
     setVirtualFileSystem,
@@ -79,6 +81,8 @@ export default function App() {
     loadVfsFiles,
     validationResult,
     clearValidation,
+    pendingAbsorptions,
+    clearAbsorptions,
   } = useFileProcessing({
     appMode,
     isIgnored,
@@ -243,6 +247,22 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Global drag and drop prevention to stop browser from opening files dropped outside the zone
+  useEffect(() => {
+    const preventDefault = (e: DragEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+
+    window.addEventListener('dragover', preventDefault)
+    window.addEventListener('drop', preventDefault)
+
+    return () => {
+      window.removeEventListener('dragover', preventDefault)
+      window.removeEventListener('drop', preventDefault)
+    }
+  }, [])
+
   // Track previously seen paths to only auto-expand new ones
   const seenPathsRef = useRef<Set<string>>(new Set(['']))
 
@@ -291,8 +311,16 @@ export default function App() {
   }, [isDarkMode])
 
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden font-sans flex-col">
-      <div className="flex flex-1 overflow-hidden h-[calc(100vh-2.5rem)]">
+    <div className="relative flex h-screen bg-slate-50 dark:bg-slate-950 overflow-hidden font-sans flex-col">
+      {/* Sidebar Overlay */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 lg:hidden animate-in fade-in duration-300"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      <div className="flex flex-1 overflow-hidden">
         {/* Sidebar - Persistent on desktop, drawer on mobile */}
         <Sidebar
           isDarkMode={isDarkMode}
@@ -314,7 +342,7 @@ export default function App() {
         />
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden lg:ml-72">
           {/* Mobile Header Toggle - Using div to avoid locator ambiguity in accessibility tests */}
           <nav
             className="lg:hidden h-14 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 flex items-center justify-between shrink-0"
@@ -428,6 +456,8 @@ export default function App() {
         totalTokens={totalTokens}
         tokensSaved={tokensSaved}
         isPrecise={isPrecise}
+        isConnected={isConnected}
+        wasEverConnected={wasEverConnected}
       />
 
       {isExpired && !isHeavyProcessing && <SessionExpiredModal />}
@@ -469,6 +499,14 @@ export default function App() {
 
       <Analytics />
       <SpeedInsights />
+
+      {pendingAbsorptions.length > 0 && (
+        <AbsorptionToast
+          key={pendingAbsorptions.length}
+          absorptions={pendingAbsorptions}
+          onDismiss={clearAbsorptions}
+        />
+      )}
     </div>
   )
 }

@@ -165,7 +165,7 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const [isSidebarOpen, setIsSidebarOpen] = useLocalStorage<boolean>(
     'concat_sidebar',
-    true
+    false
   )
 
   const [forceMode, setForceMode] = useLocalStorage<boolean>(

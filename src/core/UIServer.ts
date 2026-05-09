@@ -90,9 +90,9 @@ export class UIServer {
 
         // 2. Static Assets (Bypass Auth)
         const isApi = pathname.startsWith('/api/')
-        const isHealth = pathname === '/api/health'
+        const isHealth = pathname === '/api/health' || pathname === '/health'
 
-        if (!isApi) {
+        if (!isApi && !isHealth) {
           this.handleStaticAssets(req, res)
           return
         }

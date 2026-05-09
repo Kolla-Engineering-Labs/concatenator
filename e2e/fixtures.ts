@@ -61,6 +61,13 @@ export const test = baseTest.extend<TestFixtures>({
       ...(apiToken && { 'X-Concatenator-Token': apiToken }),
     })
 
+    // Also persist the token to sessionStorage so ApiClient can find it
+    if (apiToken) {
+      await page.addInitScript((token) => {
+        sessionStorage.setItem('CONCATENATOR_TOKEN', token)
+      }, apiToken)
+    }
+
     // Mock /api/vfs to return an empty tree so tests start in a clean state
     await page.route('**/api/vfs', (route) => {
       route.fulfill({
