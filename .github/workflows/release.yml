@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      - 'v*'
 
 permissions:
   contents: write # Required to create the GitHub Release and upload assets
@@ -37,7 +37,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: "npm"
+          cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
@@ -47,7 +47,7 @@ jobs:
         run: |
           echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> $GITHUB_ENV
 
-      - name: "Pass 1: Build Artifact"
+      - name: 'Pass 1: Build Artifact'
         run: |
           npm run build
           # If on macOS, we allow the signing check to fail in CI
@@ -63,17 +63,23 @@ jobs:
       - name: Capture Hash 1
         shell: bash
         run: |
-          # Robust search for the binary within the dist directory
-          BIN_PATH=$(find ./dist -name "${{ matrix.exe_name }}" | grep "${{ matrix.platform }}" | head -n 1)
+          # Look for the binary specifically in the dist folder
+          # We search only 2 levels deep to avoid picking up source files
+          BIN_PATH=$(find ./dist -maxdepth 2 -name "${{ matrix.exe_name }}" | head -n 1)
+
           echo "Found binary at: $BIN_PATH"
-          if [ -z "$BIN_PATH" ]; then echo "ERROR: Binary not found!"; exit 1; fi
+          if [ -z "$BIN_PATH" ]; then
+            echo "ERROR: Could not find ${{ matrix.exe_name }} in ./dist"
+            ls -R ./dist # Print the tree so we can debug if it fails
+            exit 1
+          fi
+
           echo "BIN_PATH=$BIN_PATH" >> $GITHUB_ENV
           sha256sum "$BIN_PATH" | cut -d' ' -f 1 > hash1.txt
-
       - name: Clean Environment
         run: npm run clean
 
-      - name: "Pass 2: Rebuild (Deterministic Check)"
+      - name: 'Pass 2: Rebuild (Deterministic Check)'
         run: |
           npm run build
           npm run build:exe
@@ -84,7 +90,18 @@ jobs:
       - name: Capture Hash 2 & Verify
         shell: bash
         run: |
-          BIN_PATH=$(find ./dist -name "${{ matrix.exe_name }}" | grep "${{ matrix.platform }}" | head -n 1)
+          # Look for the binary specifically in the dist folder
+          # We search only 2 levels deep to avoid picking up source files
+          BIN_PATH=$(find ./dist -maxdepth 2 -name "${{ matrix.exe_name }}" | head -n 1)
+
+          echo "Found binary at: $BIN_PATH"
+          if [ -z "$BIN_PATH" ]; then
+            echo "ERROR: Could not find ${{ matrix.exe_name }} in ./dist"
+            ls -R ./dist # Print the tree so we can debug if it fails
+            exit 1
+          fi
+
+          echo "BIN_PATH=$BIN_PATH" >> $GITHUB_ENV
           sha256sum "$BIN_PATH" | cut -d' ' -f 1 > hash2.txt
           if ! diff hash1.txt hash2.txt; then
             echo "ERROR: Non-deterministic build detected!"
@@ -95,7 +112,7 @@ jobs:
       - name: Attest Build Provenance
         uses: actions/attest-build-provenance@v2
         with:
-          subject-path: "${{ env.BIN_PATH }}"
+          subject-path: '${{ env.BIN_PATH }}'
 
       - name: Upload Platform Artifact
         uses: actions/upload-artifact@v4
