@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 permissions:
   contents: write # Required to create the GitHub Release and upload assets
@@ -37,7 +37,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: 'npm'
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
@@ -47,7 +47,7 @@ jobs:
         run: |
           echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> $GITHUB_ENV
 
-      - name: 'Pass 1: Build Artifact'
+      - name: "Pass 1: Build Artifact"
         shell: bash
         run: |
           npm run build
@@ -63,10 +63,12 @@ jobs:
       - name: Capture Hash 1
         shell: bash
         run: |
-          # Try to find in platform subfolder first, then fallback to root dist
-          BIN_PATH=$(find ./dist -maxdepth 4 -name "${{ matrix.exe_name }}" | grep "${{ matrix.platform }}" | head -n 1)
+          # Use '|| true' to prevent the pipefail from killing the script when grep finds nothing
+          BIN_PATH=$(find ./dist -maxdepth 4 -name "${{ matrix.exe_name }}" | grep "${{ matrix.platform }}" | head -n 1 || true)
+
+          # Fallback if the platform-specific grep found nothing (common on macOS)
           if [ -z "$BIN_PATH" ]; then
-            BIN_PATH=$(find ./dist -maxdepth 2 -name "${{ matrix.exe_name }}" | head -n 1)
+            BIN_PATH=$(find ./dist -maxdepth 2 -name "${{ matrix.exe_name }}" | head -n 1 || true)
           fi
 
           echo "Found binary at: $BIN_PATH"
@@ -82,7 +84,7 @@ jobs:
       - name: Clean Environment
         run: npm run clean
 
-      - name: 'Pass 2: Rebuild (Deterministic Check)'
+      - name: "Pass 2: Rebuild (Deterministic Check)"
         shell: bash
         run: |
           npm run build
@@ -98,10 +100,11 @@ jobs:
       - name: Capture Hash 2 & Verify
         shell: bash
         run: |
-          # Same robust find logic as Pass 1
-          BIN_PATH=$(find ./dist -maxdepth 4 -name "${{ matrix.exe_name }}" | grep "${{ matrix.platform }}" | head -n 1)
+          # Use '|| true' to bypass the pipefail during platform discovery
+          BIN_PATH=$(find ./dist -maxdepth 4 -name "${{ matrix.exe_name }}" | grep "${{ matrix.platform }}" | head -n 1 || true)
+
           if [ -z "$BIN_PATH" ]; then
-            BIN_PATH=$(find ./dist -maxdepth 2 -name "${{ matrix.exe_name }}" | head -n 1)
+            BIN_PATH=$(find ./dist -maxdepth 2 -name "${{ matrix.exe_name }}" | head -n 1 || true)
           fi
 
           echo "Found binary at: $BIN_PATH"
@@ -122,7 +125,7 @@ jobs:
       - name: Attest Build Provenance
         uses: actions/attest-build-provenance@v2
         with:
-          subject-path: '${{ env.BIN_PATH }}'
+          subject-path: "${{ env.BIN_PATH }}"
 
       - name: Upload Platform Artifact
         uses: actions/upload-artifact@v4
