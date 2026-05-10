@@ -1,5 +1,6 @@
 # Concatenator
 
+[![Release](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/release.yml/badge.svg)](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/release.yml)
 [![CI & Quality Gate](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/ci.yml/badge.svg)](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/github-code-scanning/codeql)
 [![codecov](https://codecov.io/gh/Kolla-Engineering-Labs/concatenator/graph/badge.svg?token=ubXyDShjEa)](https://codecov.io/gh/Kolla-Engineering-Labs/concatenator)
