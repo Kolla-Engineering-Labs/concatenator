@@ -69,6 +69,10 @@ graph LR
   - **Incremental Reading**: Eagerly consumes file content during traversal to prevent handle staleness and `InvalidStateError` during massive 1,000+ file imports.
   - **Reserved Name Safety**: Automatically skips reserved Windows system filenames (`NUL`, `CON`, `PRN`, etc.) to guarantee a crash-free experience on all platforms.
   - **Isolated Error Recovery**: Each file operation is self-contained; if one file fails due to OS-level locks, the import continues for the rest of the tree.
+- **Root Pruning & Absorption Toast**:
+  - **Reconciliation on Drop**: When files or folders are added, the ingestion pipeline reconciles new entries against the existing workbench. It detects if a newly-dropped directory is an ancestor of already-loaded entries or if previously-loaded sub-folders should be absorbed into a wider parent drop.
+  - **Absorption Toast**: A non-blocking notification appears whenever files are merged or absorbed, providing clear feedback on how your workbench was reorganized.
+  - **Minimum Common Root**: The Tree View automatically collapses single-child intermediate directories to ensure the displayed root always begins at the deepest common ancestor.
 - **Token Estimation & Analytics**:
   - Real-time token counting for every file using professional LLM heuristics (~4 chars/token).
   - Aggregate token reporting for the entire bundle to help stay within context windows.
@@ -84,6 +88,11 @@ graph LR
   - Automatic de-concatenation upon dropping a compatible `.txt` file.
   - Output format toggle (TEXT/PDF) with localStorage persistence.
   - **Server Heartbeat Indicator**: a live status dot in the bottom bar shows CLI backend health at a glance — gray while checking, green when connected, amber when unreachable — with context-aware labels ("No server" vs "Reconnecting…").
+  - **Stability & Performance**:
+    - **Incremental Reading**: File content is read immediately during discovery to prevent handle staleness on Windows.
+    - **Concurrency Throttling**: Parallel directory discovery is limited to 20 operations to avoid OS handle exhaustion.
+    - **Modern File APIs**: Utilizes `File.text()` and `File.arrayBuffer()` for maximum performance.
+    - **Reserved Name Safety**: Automatically skips reserved Windows system names (`NUL`, `CON`, etc.) to prevent browser-level crashes.
 - **Hybrid SEA Architecture**: Run Concatenator as a high-performance, single standalone executable (SEA) that embeds the full Web UI. Perfect for air-gapped environments or simplified distribution.
 - **Security Hardening**:
   - **Verification**: Built-in `verify` command to check binary integrity against GPG-signed manifests.
@@ -304,7 +313,7 @@ You can compile Concatenator into a single standalone executable (SEA) for Windo
 npm run build:exe
 ```
 
-The generated executable will be available in the `dist/v0.4.0/{platform}/` directory.
+The generated executable will be available in the `dist/v0.6.0/{platform}/` directory.
 
 #### Distribution Structure
 
@@ -312,7 +321,7 @@ Concatenator follows a versioned distribution pattern to ensure reliable deploym
 
 ```
 dist/
-└── v0.4.0/
+└── v0.6.0/
     ├── win32/
     │   └── concatenator.exe  (Signed binary)
     └── darwin/

@@ -47,7 +47,7 @@ export const SecurityStatus: React.FC = () => {
               Security Center
             </div>
             <div className="text-[10px] text-slate-500 dark:text-slate-400">
-              v{info.version} • Verified Build
+              Verified Build
             </div>
           </div>
         </div>

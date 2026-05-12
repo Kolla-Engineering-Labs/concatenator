@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.6.1] - 2026-05-11
+
+### Patch Changes
+
+- # Stabilization & Versioning Sync
+
+  ## Core Fixes
+  - **Build-Time Version Injection**: Implemented a robust version injection mechanism using `esbuild` and `Vite`'s `define` feature. This ensures that standalone binaries (SEA) correctly report their version without requiring an external `package.json` file.
+  - **CLI/UI Synchronization**: Resolved an issue where the Web UI would report `v0.0.0` or an outdated version when served from the compiled binary.
+
+  ## UI/UX Enhancements
+  - **Sidebar Footer Overhaul**: Moved the footer into the scrollable sidebar area to prevent overlap with the status bar and ensure visibility across all viewport heights.
+  - **Metadata Mini-Grid**: Redesigned footer information into a compact, 2-column grid of labeled tiles (Storage, License, Analytics, Source) for a premium, dashboard-like aesthetic.
+  - **Content Optimization**: Removed redundant application titles and condensed tracking labels to improve readability in narrow sidebars.
+  - **Global Version Indicator**: Introduced a permanent version badge in the `StatusBar` component for better traceability during bug reporting.
+  - **UI De-cluttering**: Removed redundant version info from the Security Center module to maintain a cleaner interface.
+
+  ## Documentation Updates
+  - **v0.6.0 Roadmap alignment**: Updated `README.md` and `QUICKSTART.md` to reflect the latest distribution patterns and binary verification commands (`verify self`).
+  - **Development Environment**: Updated `bug_report.md` template to encourage testing on Node.js v22.
+
+  ## Quality Assurance
+  - **New E2E Suite**: Added automated Playwright tests to validate version reporting consistency across the UI.
+
 ## [0.6.0] - 2026-05-06
 
 ### Minor Changes

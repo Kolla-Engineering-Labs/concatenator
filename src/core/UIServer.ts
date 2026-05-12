@@ -39,7 +39,10 @@ export interface UIConfig {
   path?: string
   maxFiles?: number
   ignoreFile?: string
+  version?: string
 }
+
+declare const PROCESS_VERSION: string
 
 export class UIServer {
   private server: Server
@@ -276,15 +279,22 @@ export class UIServer {
   }
 
   private handleGetHealth(req: IncomingMessage, res: ServerResponse): void {
-    let version = '0.0.0'
-    try {
-      const pkgPath = resolve(
-        dirname(fileURLToPath(import.meta.url)),
-        '../../package.json'
-      )
-      version = JSON.parse(this.fs.readFileSync(pkgPath, 'utf-8')).version
-    } catch {
-      /* ignore */
+    let version = this.uiConfig.version || '0.0.0'
+
+    if (version === '0.0.0') {
+      try {
+        if (typeof PROCESS_VERSION !== 'undefined') {
+          version = PROCESS_VERSION
+        } else {
+          const pkgPath = resolve(
+            dirname(fileURLToPath(import.meta.url)),
+            '../../package.json'
+          )
+          version = JSON.parse(this.fs.readFileSync(pkgPath, 'utf-8')).version
+        }
+      } catch {
+        /* ignore */
+      }
     }
     res.writeHead(200, { 'Content-Type': 'application/json' })
     res.end(
@@ -527,15 +537,22 @@ export class UIServer {
     req: IncomingMessage,
     res: ServerResponse
   ): void {
-    let version = '0.0.0'
-    try {
-      const pkgPath = resolve(
-        dirname(fileURLToPath(import.meta.url)),
-        '../../package.json'
-      )
-      version = JSON.parse(fsDefault.readFileSync(pkgPath, 'utf-8')).version
-    } catch {
-      /* ignore */
+    let version = this.uiConfig.version || '0.0.0'
+
+    if (version === '0.0.0') {
+      try {
+        if (typeof PROCESS_VERSION !== 'undefined') {
+          version = PROCESS_VERSION
+        } else {
+          const pkgPath = resolve(
+            dirname(fileURLToPath(import.meta.url)),
+            '../../package.json'
+          )
+          version = JSON.parse(fsDefault.readFileSync(pkgPath, 'utf-8')).version
+        }
+      } catch {
+        /* ignore */
+      }
     }
 
     res.writeHead(200, { 'Content-Type': 'application/json' })

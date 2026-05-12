@@ -74,13 +74,19 @@ describe('Header Component', () => {
 })
 
 describe('Footer Component', () => {
-  it('renders footer text', () => {
+  it('renders footer attribution', () => {
     render(<Footer />)
 
     expect(screen.getByText(/Built with React & Tailwind/i)).toBeInTheDocument()
-    expect(
-      screen.getByText(/Minimalist File Concatenator/i)
-    ).toBeInTheDocument()
+  })
+
+  it('renders metadata tiles', () => {
+    render(<Footer />)
+
+    expect(screen.getByText(/Storage/i)).toBeInTheDocument()
+    expect(screen.getByText(/License/i)).toBeInTheDocument()
+    expect(screen.getByText(/Analytics/i)).toBeInTheDocument()
+    expect(screen.getByText(/Source/i)).toBeInTheDocument()
   })
 
   it('renders within footer element', () => {
@@ -93,8 +99,6 @@ describe('Footer Component', () => {
   it('has centered text alignment', () => {
     const { container } = render(<Footer />)
 
-    const paragraph = container.querySelector('p')
-    expect(paragraph?.className).toContain('text-slate-500')
     // We check the footer itself for centering since it's the flex container
     const footer = container.querySelector('footer')
     expect(footer?.classList.contains('text-center')).toBe(true)
