@@ -37,6 +37,9 @@ Don't want to install Node.js? Download the pre-built binary for your platform f
 # macOS / Linux (Recommended for macOS security checks)
 ./concatenator start
 
+# Verify binary integrity
+./concatenator verify self
+
 # Or specify a path
 ./concatenator ui ./src
 ```

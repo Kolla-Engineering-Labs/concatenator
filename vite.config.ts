@@ -65,9 +65,16 @@ export default defineConfig(({ mode }) => {
           server.middlewares.use((req, res, next) => {
             if (req.method !== 'GET') return next()
             if (stubs.some((path) => req.url?.startsWith(path))) {
+              const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf-8'))
               res.setHeader('Content-Type', 'application/json')
               res.statusCode = 200
-              res.end(JSON.stringify(null))
+              res.end(
+                JSON.stringify({
+                  version: pkg.version,
+                  buildHash: 'dev-hash',
+                  fingerprint: 'dev-fingerprint',
+                })
+              )
               return
             }
             next()
@@ -91,7 +98,11 @@ export default defineConfig(({ mode }) => {
         brotliSize: true,
       }),
     ],
-    define: {},
+    define: {
+      PROCESS_VERSION: JSON.stringify(
+        JSON.parse(fs.readFileSync('./package.json', 'utf-8')).version
+      ),
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

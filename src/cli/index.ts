@@ -35,18 +35,22 @@ import {
   UserError,
 } from './cli-utils.js'
 
-// Build-time flag injected by esbuild
+// Build-time flags injected by esbuild
 declare const PROCESS_IS_UNSIGNED: boolean
+declare const PROCESS_VERSION: string
+
 const IS_UNSIGNED =
   process.env.CONCATENATOR_FORCE_UNSIGNED === 'true' ||
   (typeof PROCESS_IS_UNSIGNED !== 'undefined' ? PROCESS_IS_UNSIGNED : false)
 
-// Load version from package.json
-let cliVersion = '0.3.0'
+// Load version from package.json or build-time flag
+let cliVersion =
+  typeof PROCESS_VERSION !== 'undefined' ? PROCESS_VERSION : '0.6.0'
 try {
   if (
     typeof import.meta !== 'undefined' &&
-    (import.meta as { url?: string }).url
+    (import.meta as { url?: string }).url &&
+    typeof PROCESS_VERSION === 'undefined' // Only try on-disk lookup if not bundled
   ) {
     const __filename = fileURLToPath(
       (import.meta as { url?: string }).url as string
@@ -83,7 +87,7 @@ program
   .option('-m, --max-files <number>', 'Preset the maximum file limit', parseInt)
   .option('-i, --ignore-file <file>', 'Specify a custom ignore file')
   .action((path, options) => {
-    launchUI(path, options)
+    launchUI(path, { ...options, version: cliVersion })
   })
 
 // Start command (alias for UI, with security check)
@@ -97,7 +101,7 @@ program
       const { checkQuarantine } = await import('./cli-utils.js')
       checkQuarantine()
     }
-    await launchUI(path, options)
+    await launchUI(path, { ...options, version: cliVersion })
   })
 
 // Verify command
@@ -772,7 +776,7 @@ program.on('--help', () => {
 if (!process.env.VITEST) {
   if (process.argv.includes('--ui') && !process.argv.includes('ui')) {
     // Backwards compatibility for --ui flag without arguments
-    launchUI()
+    launchUI(undefined, { version: cliVersion })
   } else {
     program.parse()
   }

@@ -30,6 +30,7 @@ import { TokenService } from '../core/TokenService.js'
 export interface UIConfig {
   maxFiles?: number
   ignoreFile?: string
+  version?: string
 }
 
 /**
@@ -604,6 +605,7 @@ export async function launchUI(path?: string, options: UIConfig = {}) {
       path,
       maxFiles: options.maxFiles,
       ignoreFile: options.ignoreFile,
+      version: options.version,
     })
     const port = await server.start()
 

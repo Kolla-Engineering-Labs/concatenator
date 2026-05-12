@@ -100,7 +100,11 @@ console.log('\n📦 Bundling CLI...')
 const isUnsigned = platform === 'darwin' && !isSigningEnabled(platform)
 
 try {
-  const defineArgs = [`--define:PROCESS_IS_UNSIGNED=${isUnsigned}`]
+  const pkg = JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf-8'))
+  const defineArgs = [
+    `--define:PROCESS_IS_UNSIGNED=${isUnsigned}`,
+    `--define:PROCESS_VERSION=${JSON.stringify(pkg.version).replace(/"/g, '\\"')}`,
+  ]
 
   execSync(
     `npx esbuild src/cli/index.ts --bundle --platform=node --format=cjs --outfile=dist/sea/concatenator.js --external:fs --external:path --external:url --external:os ${defineArgs.join(' ')}`,

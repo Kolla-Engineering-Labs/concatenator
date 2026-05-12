@@ -197,12 +197,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
           <SecurityStatus />
         </div>
-      </nav>
 
-      {/* Sidebar Footer */}
-      <div className="p-3 border-t border-slate-200 dark:border-slate-800 shrink-0">
-        <Footer />
-      </div>
+        <div className="pt-8 pb-12">
+          <Footer />
+        </div>
+      </nav>
     </aside>
   )
 }

@@ -68,7 +68,7 @@ To find your browser version:
 
 - **Concatenator Version**: <!-- If known, e.g., commit hash or release version -->
 - **Running Mode**: <!-- Development (`npm run dev`) or Production build -->
-- **Node.js Version** (if running locally): <!-- e.g., v20.12.0 -->
+- **Node.js Version** (if running locally): <!-- e.g., v22.0.0 -->
 
 ## File Details
 
