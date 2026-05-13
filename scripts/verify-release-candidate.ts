@@ -114,7 +114,6 @@ async function verifyRelease() {
       continue
     }
     if (line.startsWith('-----BEGIN PGP SIGNATURE-----')) {
-      inMessage = false
       break
     }
     if (inMessage && line.trim() && !line.startsWith('Hash:')) {
