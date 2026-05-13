@@ -124,20 +124,32 @@ export const FileView: React.FC<FileViewProps> = ({
                 .length
             }
             )<span className="mx-2 opacity-20">|</span>
-            <span
-              className={cn(
-                'transition-opacity',
-                !filteredFiles.every((f) => f.isPrecise || f.isIgnored) &&
-                  'opacity-60'
+            <div className="flex items-center gap-1.5 ml-2">
+              <span
+                className={cn(
+                  'transition-opacity font-mono text-[11px] font-bold',
+                  !filteredFiles.every(
+                    (f) => f.kind !== 'file' || f.isPrecise || f.isIgnored
+                  ) && 'opacity-60'
+                )}
+              >
+                {filteredFiles
+                  .filter((f) => !f.isIgnored)
+                  .reduce((acc, f) => acc + (f.tokens || 0), 0)
+                  .toLocaleString()}
+              </span>
+              {filteredFiles.every(
+                (f) => f.kind !== 'file' || f.isPrecise || f.isIgnored
+              ) ? (
+                <span className="px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[7px] font-black uppercase tracking-widest border border-emerald-200/50 dark:border-emerald-500/20 shadow-sm">
+                  Precision
+                </span>
+              ) : (
+                <span className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[7px] font-black uppercase tracking-widest border border-amber-200/50 dark:border-amber-500/20 shadow-sm animate-pulse">
+                  Heuristic
+                </span>
               )}
-            >
-              {!filteredFiles.every((f) => f.isPrecise || f.isIgnored) && '~'}
-              {filteredFiles
-                .filter((f) => !f.isIgnored)
-                .reduce((acc, f) => acc + (f.tokens || 0), 0)
-                .toLocaleString()}{' '}
-              tokens
-            </span>
+            </div>
           </h2>
         </div>
 
@@ -243,12 +255,22 @@ export const FileView: React.FC<FileViewProps> = ({
                     </span>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-50 dark:bg-slate-800/50 text-slate-500 border border-slate-200 dark:border-slate-700">
-                    <Info className="w-3.5 h-3.5" />
-                    <span className="text-[10px] font-medium leading-none">
-                      Files will be bundled into a single{' '}
-                      {outputFormat.toUpperCase()} file.
-                    </span>
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-50 dark:bg-slate-800/50 text-slate-500 border border-slate-200 dark:border-slate-700">
+                      <Info className="w-3.5 h-3.5" />
+                      <span className="text-[10px] font-medium leading-none">
+                        Files will be bundled into a single{' '}
+                        {outputFormat.toUpperCase()} file.
+                      </span>
+                    </div>
+                    {totalTokens > 0 && (
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 border border-brand-200 dark:border-brand-800/50 animate-in fade-in slide-in-from-bottom-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span className="text-[10px] font-bold uppercase tracking-tight">
+                          Efficiency: +0.2% Context Gained
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

@@ -25,6 +25,7 @@ import { useHeartbeat } from './web/hooks/useHeartbeat'
 import { usePulseMonitor } from './web/hooks/usePulseMonitor'
 import { SessionExpiredModal } from './web/components/SessionExpiredModal'
 import { AbsorptionToast } from './web/components/Toast'
+import { TokenService } from './core/TokenService'
 
 export default function App() {
   const { isExpired, isConnected, wasEverConnected } = useHeartbeat()
@@ -176,7 +177,9 @@ export default function App() {
         } else {
           acc.totalTokens += f.tokens || 0
         }
-        if (!f.isPrecise) acc.isPrecise = false
+        if (f.kind === 'file' && !f.isPrecise) {
+          acc.isPrecise = false
+        }
         return acc
       },
       { totalTokens: 0, tokensSaved: 0, isPrecise: true }
@@ -198,6 +201,11 @@ export default function App() {
     let mounted = true
     const initWorkspace = async () => {
       try {
+        // Load precision token counting strategy in background
+        TokenService.loadPrecisionStrategy().catch((err) => {
+          logger.warn(`Failed to load precision token strategy: ${err}`)
+        })
+
         const config = await ApiClient.getConfig()
         if (mounted && config.maxFiles) {
           setMaxFileLimit(config.maxFiles)
@@ -336,7 +344,7 @@ export default function App() {
             .reduce((acc, f) => acc + (f.tokens || 0), 0)}
           ignoredIsPrecise={displayFiles
             .filter((f) => f.isIgnored)
-            .every((f) => f.isPrecise)}
+            .every((f) => f.kind !== 'file' || f.isPrecise)}
           filterText={filterText}
           setFilterText={setFilterText}
         />

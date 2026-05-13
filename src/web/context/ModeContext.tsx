@@ -5,6 +5,7 @@ import { ModeContext } from './ModeContextCore'
 import { DEFAULT_IGNORE_LIST } from '../../core/constants'
 import { IgnoreEngine } from '../../core/ignore/IgnoreEngine'
 import { ApiClient } from '../services/ApiClient'
+import { logger } from '../../lib/logger'
 
 export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
@@ -70,7 +71,7 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
           // Ignore VFS fetch errors
         }
       } catch {
-        console.warn(
+        logger.warn(
           'Failed to fetch ignore list from server, using local only.'
         )
         if (mounted) {
@@ -93,7 +94,7 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
                 await ApiClient.updateIgnoreList(listToSync)
                 lastSyncedList.current = listToSync
               } catch {
-                console.error('Failed to sync ignore list to server')
+                logger.error('Failed to sync ignore list to server')
               } finally {
                 isSyncing.current = false
                 if (pendingSync.current) saveToServer()
@@ -151,7 +152,7 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
         await ApiClient.updateIgnoreList(listToSync)
         lastSyncedList.current = listToSync
       } catch {
-        console.error('Failed to sync ignore list to server')
+        logger.error('Failed to sync ignore list to server')
       } finally {
         isSyncing.current = false
         // If another sync was requested while we were busy, trigger it now

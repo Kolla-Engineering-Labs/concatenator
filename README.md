@@ -73,8 +73,9 @@ graph LR
   - **Reconciliation on Drop**: When files or folders are added, the ingestion pipeline reconciles new entries against the existing workbench. It detects if a newly-dropped directory is an ancestor of already-loaded entries or if previously-loaded sub-folders should be absorbed into a wider parent drop.
   - **Absorption Toast**: A non-blocking notification appears whenever files are merged or absorbed, providing clear feedback on how your workbench was reorganized.
   - **Minimum Common Root**: The Tree View automatically collapses single-child intermediate directories to ensure the displayed root always begins at the deepest common ancestor.
-- **Token Estimation & Analytics**:
-  - Real-time token counting for every file using professional LLM heuristics (~4 chars/token).
+- **Precise Token Analytics**:
+  - Real-time token counting using the **Tiktoken (BPE)** standard (`o200k_base`), matching GPT-4o and modern coding assistants.
+  - **Efficiency Metrics**: Automatically calculates "Context Gained" through BPE boundary optimization during concatenation.
   - Aggregate token reporting for the entire bundle to help stay within context windows.
   - **Budget Guard**: Set token budgets in the CLI to receive warnings when bundles exceed target limits.
 - **Workbench Context & Quick Look**:
@@ -379,7 +380,7 @@ Options:
 - `-e, --exclude <patterns>` - Additional patterns to ignore (comma-separated)
 - `-i, --ignore-file <path>` - Path to an ignore file (.concatignore, .gitignore, etc.)
 - `-v, --verbose` - Verbosity level (-v: dir-level tokens, -vv: file-level tokens)
-- `--max-tokens <number>` - Budget guard: warn if the estimated token count is exceeded
+- `--max-tokens <number>` - Budget guard: warn if the precise token count is exceeded
 - `-f, --force` - Overwrite existing files or directories without prompting
 - `--follow-symlinks` - Follow symbolic links during traversal (CAUTION: may cause infinite loops)
 - `-q, --quiet` - Suppress all logging output

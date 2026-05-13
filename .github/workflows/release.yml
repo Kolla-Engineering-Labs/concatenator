@@ -89,7 +89,7 @@ jobs:
         run: |
           npm run build
           if [ "${{ matrix.platform }}" == "darwin" ]; then
-            npm run build:exe || echo "Ad-hoc signing verification failed, continuing for Kolla Protocol..."
+            npm run build:exe || echo "Ad-hoc signing verification failed, continuing for Kolla Engineering LabsProtocol..."
           else
             npm run build:exe
           fi
@@ -165,7 +165,7 @@ jobs:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.GPG_PASSPHRASE }}
 
-      - name: Sign Manifest (Kolla Protocol)
+      - name: Sign Manifest (Kolla Engineering Labs Protocol)
         run: |
           cd dist
           gpg --clearsign --digest-algo SHA256 --batch --yes --pinentry-mode loopback --passphrase "${{ secrets.GPG_PASSPHRASE }}" SHA256SUMS
@@ -184,7 +184,7 @@ jobs:
           body: |
             ## Concatenator ${{ github.ref_name }}
 
-            This release implements the **Kolla Protocol** for verifiable distribution:
+            This release implements the **Kolla Engineering Labs Protocol** for verifiable distribution:
             - **Deterministic Builds**: Bit-for-bit identity verified across multiple build passes.
             - **SOURCE_DATE_EPOCH**: Normalized build timestamps for reproducibility.
             - **GPG Signed Manifest**: All binaries are hashed and signed by the Lead Architect.

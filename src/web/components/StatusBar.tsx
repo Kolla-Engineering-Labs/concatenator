@@ -121,10 +121,27 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         </div>
         <div className="flex items-center gap-2">
           <span className="opacity-60">Total Tokens:</span>
-          <span className="text-slate-900 dark:text-slate-100 font-bold tabular-nums">
-            {totalTokens.toLocaleString()}
-            {!isPrecise && <span className="ml-1 text-slate-400">~</span>}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-slate-900 dark:text-slate-100 font-bold tabular-nums">
+              {!isPrecise && '~'}
+              {totalTokens.toLocaleString()}
+            </span>
+            {isPrecise ? (
+              <span
+                className="px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[8px] font-black uppercase tracking-wider border border-emerald-200/50 dark:border-emerald-500/20 shadow-sm"
+                title="BPE Precision Mode (cl100k_base)"
+              >
+                Precision
+              </span>
+            ) : (
+              <span
+                className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[8px] font-black uppercase tracking-wider border border-amber-200/50 dark:border-amber-500/20 shadow-sm animate-pulse"
+                title="Fast Heuristic Mode (estimating...)"
+              >
+                Heuristic
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <span className="opacity-60 text-emerald-600 dark:text-emerald-500/80">

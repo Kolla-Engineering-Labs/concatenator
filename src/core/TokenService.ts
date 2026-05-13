@@ -5,40 +5,114 @@
 
 import { IgnoreEngine } from './ignore/IgnoreEngine.js'
 import { TreeItem } from './types.js'
+import { logger } from '../lib/logger.js'
 
 /**
- * TokenService provides utilities for estimating token counts and generating context metadata.
+ * Strategy interface for token calculation.
+ */
+export interface ITokenStrategy {
+  calculate(text: string): number
+}
+
+/**
+ * HeuristicStrategy: Zero-dependency fallback using character count.
+ * $1 token ≈ 4 characters$.
+ */
+export class HeuristicStrategy implements ITokenStrategy {
+  calculate(text: string): number {
+    if (!text) return 0
+    return Math.ceil(text.length / 4)
+  }
+}
+
+export interface ITiktokenEncoder {
+  encode(text: string): number[] | Uint32Array
+}
+
+/**
+ * PrecisionStrategy: Accurate BPE tokenization using tiktoken (cl100k_base).
+ */
+export class PrecisionStrategy implements ITokenStrategy {
+  private encoder: ITiktokenEncoder
+
+  constructor(encoder: ITiktokenEncoder) {
+    this.encoder = encoder
+  }
+
+  calculate(text: string): number {
+    if (!text) return 0
+    try {
+      return this.encoder.encode(text).length
+    } catch (err) {
+      logger.warn(
+        '[PrecisionStrategy] Tokenization failed, using heuristic.',
+        err
+      )
+      return Math.ceil(text.length / 4)
+    }
+  }
+}
+
+/**
+ * TokenService acts as the orchestrator for token metrics.
+ * It defaults to HeuristicStrategy for instant LTI and hot-swaps to PrecisionStrategy
+ * once the underlying library is loaded asynchronously.
  */
 export class TokenService {
+  private static strategy: ITokenStrategy = new HeuristicStrategy()
+  private static _isPrecise = false
+  private static loadingPromise: Promise<void> | null = null
+
   /**
-   * Fast Estimate formula: Math.ceil(content.length / 4)
-   * This is a common heuristic for LLM tokens where 1 token is roughly 4 characters.
+   * Initializes the precision strategy.
+   * In Web UI, this is typically called via dynamic import to keep initial bundle lean.
    */
-  static getTokenEstimate(content: string): number {
-    if (!content) return 0
-    return Math.ceil(content.length / 4)
+  static async loadPrecisionStrategy(): Promise<void> {
+    if (this.loadingPromise) return this.loadingPromise
+
+    this.loadingPromise = (async () => {
+      try {
+        // Dynamic import ensures the main thread remains unblocked and bundle stays lean.
+        // o200k_base is the standard for gpt-4o.
+        const { getEncoding } = await import('js-tiktoken')
+        const encoder = getEncoding('o200k_base')
+        this.strategy = new PrecisionStrategy(encoder)
+        this._isPrecise = true
+      } catch {
+        this.strategy = new HeuristicStrategy()
+        this._isPrecise = false
+      }
+    })()
+
+    return this.loadingPromise
   }
 
   /**
-   * Precise Tokenization (BPE-lite)
-   * A more accurate count based on common BPE patterns (spaces, punctuation, sub-words).
+   * Calculate tokens using the current active strategy.
    */
-  static getPreciseTokenCount(content: string): number {
-    if (!content) return 0
+  static getTokenCount(text: string): number {
+    return this.strategy.calculate(text)
+  }
 
-    // BPE-lite: Split by whitespace and common punctuation,
-    // then apply a slightly different ratio for longer words.
-    // This is a placeholder for a real BPE tokenizer like tiktoken.
-    const tokens = content.split(/(\s+|[.,!?;:()[\]{}'"])/g).filter(Boolean)
-    let count = 0
-    for (const token of tokens) {
-      if (token.length > 8) {
-        count += Math.ceil(token.length / 3) // Longer technical words usually have more tokens
-      } else {
-        count += 1
-      }
-    }
-    return count
+  /**
+   * Legacy alias for getTokenCount.
+   */
+  static getPreciseTokenCount(text: string): number {
+    return this.getTokenCount(text)
+  }
+
+  /**
+   * Heuristic estimate (exposed for cases where precision isn't needed or available).
+   */
+  static getTokenEstimate(text: string): number {
+    return new HeuristicStrategy().calculate(text)
+  }
+
+  /**
+   * Check if the service is currently in precision mode.
+   */
+  static isPrecise(): boolean {
+    return this._isPrecise
   }
 
   /**
@@ -56,10 +130,6 @@ export class TokenService {
 
   /**
    * Calculate the aggregate tokens for a file-map, excluding files that match the ignore list.
-   *
-   * @param fileMap - A record of file paths to their content
-   * @param ignorePatterns - List of patterns to exclude
-   * @returns Total estimated token count for non-ignored files
    */
   static calculateAggregateTokens(
     fileMap: Record<string, string>,
@@ -70,7 +140,7 @@ export class TokenService {
 
     for (const [path, content] of Object.entries(fileMap)) {
       if (!ignoreEngine.isIgnored(path)) {
-        totalTokens += this.getTokenEstimate(content)
+        totalTokens += this.getTokenCount(content)
       }
     }
 
@@ -78,12 +148,7 @@ export class TokenService {
   }
 
   /**
-   * Generate a "Context Metadata" string to be injected into the bundle header.
-   * Example: --- METADATA: Tokens: 42,500 | Budget: 128,000 ---
-   *
-   * @param tokens - The estimated token count
-   * @param budget - Optional token budget
-   * @returns Formatted metadata string
+   * Generate formatted context metadata for the bundle header.
    */
   static generateContextMetadata(tokens: number, budget?: number): string {
     const formattedTokens = tokens.toLocaleString()
@@ -93,11 +158,6 @@ export class TokenService {
 
   /**
    * Recursive function to compute directory weights in a tree.
-   * Modifies the tree nodes in-place with tokenWeight and isPrecise flags.
-   *
-   * @param node - The root node of the tree or sub-tree
-   * @param tokenMap - Map of file paths to their individual token counts
-   * @returns The aggregate tokens and precision for this node
    */
   static computeTreeWeights(
     node: TreeItem,
@@ -109,13 +169,14 @@ export class TokenService {
           node.file?.tokens !== undefined
             ? node.file.tokens
             : typeof node.file?.content === 'string'
-              ? this.getTokenEstimate(node.file.content)
+              ? this.getTokenCount(node.file.content)
               : 0,
-        isPrecise: node.file?.isPrecise || false,
+        isPrecise:
+          node.file?.isPrecise ??
+          (tokenMap[node.path]?.isPrecise || this.isPrecise()),
       }
       node.tokenWeight = meta.tokens
       node.isPrecise = meta.isPrecise
-      // If file is ignored, it contributes 0 to parent total
       if (node.isIgnored) {
         return { tokens: 0, isPrecise: true }
       }
@@ -135,7 +196,6 @@ export class TokenService {
 
     node.tokenWeight = total
     node.isPrecise = allPrecise
-    // If directory is ignored, it contributes 0 to parent total
     if (node.isIgnored) {
       return { tokens: 0, isPrecise: true }
     }

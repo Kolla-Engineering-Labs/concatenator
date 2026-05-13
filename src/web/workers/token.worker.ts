@@ -3,31 +3,52 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { TokenService } from '../../core/TokenService'
+import { getEncoding, type Tiktoken } from 'js-tiktoken'
+import { logger } from '../../lib/logger'
 
-/**
- * Background worker for precise token counting.
- * Prevents main thread blocking during massive project scans.
- */
-self.onmessage = (e: MessageEvent) => {
+let encoder: Tiktoken | null = null
+
+self.onmessage = async (e: MessageEvent) => {
   const { files } = e.data as { files: Array<{ id: string; content: string }> }
-
-  const results = files.map((file) => {
-    try {
-      return {
-        id: file.id,
-        tokens: TokenService.getPreciseTokenCount(file.content),
-        success: true,
-      }
-    } catch (err) {
-      return {
-        id: file.id,
-        tokens: 0,
-        success: false,
-        error: err instanceof Error ? err.message : String(err),
-      }
+  try {
+    if (!encoder) {
+      // o200k_base is the standard for GPT-4o
+      encoder = getEncoding('o200k_base')
     }
-  })
 
-  self.postMessage({ results })
+    const results = files.map((file) => {
+      try {
+        const tokens = encoder?.encode(file.content).length || 0
+        return {
+          id: file.id,
+          tokens,
+          isPrecise: true,
+          success: true,
+        }
+      } catch (err) {
+        return {
+          id: file.id,
+          tokens: Math.ceil(file.content.length / 4),
+          isPrecise: false,
+          success: false,
+          error: err instanceof Error ? err.message : String(err),
+        }
+      }
+    })
+
+    self.postMessage({ results })
+  } catch (err) {
+    logger.error(
+      '[Worker] Fatal error:',
+      err instanceof Error ? err : new Error(String(err))
+    )
+    self.postMessage({
+      results: files.map((f) => ({
+        id: f.id,
+        tokens: Math.ceil(f.content.length / 4),
+        isPrecise: false,
+        success: false,
+      })),
+    })
+  }
 }

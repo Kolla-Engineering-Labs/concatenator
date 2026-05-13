@@ -19,20 +19,20 @@ test.describe('Adaptive File Input', () => {
 
   test('should display touch-specific labels on mobile', async ({ page }) => {
     // Verify the primary label
-    await expect(page.getByText('Tap to select files')).toBeVisible({
+    await expect(page.getByText(/Tap to select folder or files/i)).toBeVisible({
       timeout: 10000,
     })
 
     // Verify the secondary helper text
-    await expect(page.getByText('Browse local or cloud storage')).toBeVisible()
+    await expect(page.getByText(/Browse local or cloud storage/i)).toBeVisible()
   })
 
   test('should trigger native file picker on tap', async ({ page }) => {
     // Start listening for the file chooser event before clicking
     const fileChooserPromise = page.waitForEvent('filechooser')
 
-    // Tap the Drop Zone container (targeted by the label text)
-    await page.getByText('Tap to select files').click()
+    // Tap the Drop Zone container (targeted by the test ID)
+    await page.getByTestId('upload-zone-container').click()
 
     // If the click() method on the hidden input was triggered,
     // Playwright will catch the filechooser event
@@ -44,11 +44,7 @@ test.describe('Adaptive File Input', () => {
   })
 
   test('should apply active scale effect on tap', async ({ page }) => {
-    const dropZone = page
-      .getByText('Tap to select files')
-      .locator('xpath=..')
-      .locator('xpath=..')
-      .locator('xpath=..')
+    const dropZone = page.getByTestId('upload-zone-container')
 
     // We can check if the class for active state is present,
     // though :active only applies during the click.

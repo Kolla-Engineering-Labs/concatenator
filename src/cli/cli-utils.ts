@@ -64,35 +64,35 @@ export function checkQuarantine(): void {
     }
 
     if (isQuarantined) {
-      console.log('\n' + '█'.repeat(80))
-      console.log(' 🛡️  SECURITY BRIEF: MACOS QUARANTINE DETECTED')
-      console.log('█'.repeat(80))
-      console.log(
+      logger.raw('\n' + '█'.repeat(80))
+      logger.raw(' 🛡️  SECURITY BRIEF: MACOS QUARANTINE DETECTED')
+      logger.raw('█'.repeat(80))
+      logger.raw(
         '\nThis tool is currently restricted by macOS Gatekeeper because it is ad-hoc signed.'
       )
-      console.log(
+      logger.raw(
         'To unlock full functionality and bypass security prompts, run:'
       )
-      console.log(
+      logger.raw(
         '\n  \x1b[33m%s\x1b[0m',
         `xattr -d com.apple.quarantine "${exePath}"`
       )
-      console.log(
+      logger.raw(
         '\n--------------------------------------------------------------------------------'
       )
-      console.log('WHY THIS IS HAPPENING:')
-      console.log(
+      logger.raw('WHY THIS IS HAPPENING:')
+      logger.raw(
         'The SHA-256 hash in our GPG-signed manifest is the \x1b[1mPrimary Proof of Integrity\x1b[0m,'
       )
-      console.log(
+      logger.raw(
         'overriding the OS\'s "Unsigned" warning to provide a verifiable guarantee'
       )
-      console.log('without centralized dependencies or the "Apple Tax".')
-      console.log('\nDetailed rationale: docs/MACOS_SECURITY.md')
-      console.log(
+      logger.raw('without centralized dependencies or the "Apple Tax".')
+      logger.raw('\nDetailed rationale: docs/MACOS_SECURITY.md')
+      logger.raw(
         '--------------------------------------------------------------------------------'
       )
-      console.log('█'.repeat(80) + '\n')
+      logger.raw('█'.repeat(80) + '\n')
     }
   } catch {
     // If ls -l@ fails, we just continue
@@ -214,7 +214,7 @@ export function collectFiles(
       try {
         const stats = statSync(fullPath)
         const content = readFileSync(fullPath, 'utf-8')
-        const tokens = TokenService.getTokenEstimate(content)
+        const tokens = TokenService.getTokenCount(content)
 
         files.push({
           path: relativePath,
@@ -238,7 +238,7 @@ export function collectFiles(
 
   if (verbose >= 1) {
     const relDir = relative(baseDir, dir) || '.'
-    logger.info(`Dir: ${relDir} (~${dirTokens.toLocaleString()} tokens)`)
+    logger.info(`Dir: ${relDir} (${dirTokens.toLocaleString()} tokens)`)
   }
 
   return { files, totalTokens: dirTokens }

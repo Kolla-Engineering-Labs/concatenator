@@ -6,6 +6,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { FileItem, TreeItem } from '../../core/types'
 import { TokenService } from '../../core/TokenService'
+import { logger } from '../../lib/logger'
 
 interface TokenMetadata {
   tokens: number
@@ -22,39 +23,92 @@ export const useTokenAggregation = (files: FileItem[]) => {
   // Cache for hashed content results
   const hashCacheRef = useRef<Map<string, number>>(new Map())
 
-  // Worker reference
-  const workerRef = useRef<Worker | null>(null)
+  // Worker state
+  const [worker, setWorker] = useState<Worker | null>(null)
 
   // Queue for precision counting
   const dirtyQueueRef = useRef<Set<string>>(new Set())
+  const processingPathsRef = useRef<Set<string>>(new Set())
 
   // Pending results for debounced update
   const pendingResultsRef = useRef<Record<string, TokenMetadata>>({})
   const processResultsTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const [queueTrigger, setQueueTrigger] = useState(0)
 
-  // Initialize/Update worker
+  // Initialize worker
   useEffect(() => {
-    workerRef.current = new Worker(
+    const w = new Worker(
       new URL('../workers/token.worker.ts', import.meta.url),
       { type: 'module' }
     )
 
-    workerRef.current.onmessage = (e: MessageEvent) => {
+    w.onerror = (err) => {
+      logger.error(
+        '[Worker] Initialization error:',
+        err instanceof Error ? err : new Error(String(err))
+      )
+    }
+
+    setWorker(w)
+
+    return () => {
+      w.terminate()
+      setWorker(null)
+    }
+  }, []) // Persistent worker for the hook's lifecycle
+
+  // Handle worker messages with latest files
+  useEffect(() => {
+    if (!worker) return
+
+    worker.onmessage = (e: MessageEvent) => {
       const { results } = e.data
+      if (!results || !Array.isArray(results)) return
+
+      // Optimization: Create a lookup map once for the entire batch of results
+      const fileLookup = new Map<string, string>()
+      if (results.length > 5) {
+        // Only worth it for larger batches
+        for (const file of files) {
+          if (file.kind === 'file' && typeof file.content === 'string') {
+            fileLookup.set(file.path, file.content)
+          }
+        }
+      }
 
       results.forEach(
-        (res: { id: string; tokens: number; success: boolean }) => {
+        (res: {
+          id: string
+          tokens: number
+          isPrecise: boolean
+          success: boolean
+        }) => {
+          processingPathsRef.current.delete(res.id)
+
           if (res.success) {
             pendingResultsRef.current[res.id] = {
               tokens: res.tokens,
-              isPrecise: true,
+              isPrecise: res.isPrecise,
             }
 
-            // Update hash cache
-            const file = files.find((f) => f.path === res.id)
-            if (file && typeof file.content === 'string') {
-              const hash = TokenService.hashContent(file.content)
+            // Update hash cache for future optimization
+            let content: string | undefined
+            if (fileLookup.size > 0) {
+              content = fileLookup.get(res.id)
+            } else {
+              const file = files.find((f) => f.path === res.id)
+              if (file && typeof file.content === 'string')
+                content = file.content
+            }
+
+            if (content) {
+              const hash = TokenService.hashContent(content)
               hashCacheRef.current.set(hash, res.tokens)
+            }
+          } else {
+            pendingResultsRef.current[res.id] = {
+              tokens: res.tokens,
+              isPrecise: true, // Mark as "processed" even if failed to avoid loops
             }
           }
         }
@@ -64,42 +118,48 @@ export const useTokenAggregation = (files: FileItem[]) => {
         clearTimeout(processResultsTimerRef.current)
 
       processResultsTimerRef.current = setTimeout(() => {
-        setTokenMap((prev) => ({ ...prev, ...pendingResultsRef.current }))
+        const resultsToCommit = { ...pendingResultsRef.current }
+        setTokenMap((prev) => ({ ...prev, ...resultsToCommit }))
         pendingResultsRef.current = {}
         processResultsTimerRef.current = null
       }, 200)
     }
-
-    return () => {
-      workerRef.current?.terminate()
-    }
-  }, [files])
+  }, [worker, files])
 
   // Process files when they change
   useEffect(() => {
     const newMetadata: Record<string, TokenMetadata> = {}
     let hasChanges = false
+    let addedToQueue = false
 
-    files.forEach((file) => {
+    // Optimization: avoid expensive hashing if we already have a precise result
+    for (const file of files) {
       if (
         file.kind !== 'file' ||
         !file.content ||
         typeof file.content !== 'string'
-      )
-        return
+      ) {
+        continue
+      }
 
+      const current = tokenMap[file.path]
+
+      // If already precise or already being processed by worker, skip
+      if (current?.isPrecise || processingPathsRef.current.has(file.path))
+        continue
+
+      // Only hash if we don't have a precise result
       const hash = TokenService.hashContent(file.content)
       const cached = hashCacheRef.current.get(hash)
 
       if (cached !== undefined) {
-        if (!tokenMap[file.path] || tokenMap[file.path].tokens !== cached) {
+        if (!current || current.tokens !== cached) {
           newMetadata[file.path] = { tokens: cached, isPrecise: true }
           hasChanges = true
         }
-        return
+        continue
       }
 
-      const current = tokenMap[file.path]
       if (!current) {
         // Immediate Heuristic
         newMetadata[file.path] = {
@@ -108,37 +168,67 @@ export const useTokenAggregation = (files: FileItem[]) => {
         }
         dirtyQueueRef.current.add(file.path)
         hasChanges = true
+        addedToQueue = true
+      } else if (!current.isPrecise && !dirtyQueueRef.current.has(file.path)) {
+        // Already has heuristic, but not yet precise and not in current queue
+        dirtyQueueRef.current.add(file.path)
+        addedToQueue = true
       }
-    })
+    }
 
     if (hasChanges) {
       setTokenMap((prev) => ({ ...prev, ...newMetadata }))
+    }
+
+    if (addedToQueue) {
+      setQueueTrigger((prev) => prev + 1)
     }
   }, [files, tokenMap])
 
   // Background processing of the dirty queue
   useEffect(() => {
-    if (dirtyQueueRef.current.size === 0 || !workerRef.current) return
+    if (!worker || dirtyQueueRef.current.size === 0) return
 
+    // Small delay to allow multiple fast file changes to batch into one worker cycle
     const timer = setTimeout(() => {
-      const batch = Array.from(dirtyQueueRef.current)
-        .map((path) => {
-          const file = files.find((f) => f.path === path)
-          if (file && typeof file.content === 'string') {
-            return { id: path, content: file.content }
-          }
-          return null
-        })
-        .filter(Boolean) as Array<{ id: string; content: string }>
-
-      if (batch.length > 0) {
-        workerRef.current?.postMessage({ files: batch })
-      }
+      const allDirty: string[] = Array.from(dirtyQueueRef.current)
       dirtyQueueRef.current.clear()
-    }, 500) // Small delay to batch uploads
+
+      if (allDirty.length > 0) {
+        // Optimization: Create a lookup map once to avoid O(N^2) search in allDirty loop
+        const fileLookup = new Map<string, string>()
+        for (const file of files) {
+          if (
+            file.kind === 'file' &&
+            typeof file.content === 'string' &&
+            file.content
+          ) {
+            fileLookup.set(file.path, file.content)
+          }
+        }
+
+        const filesToProcess = allDirty
+          .map((path) => {
+            const content = fileLookup.get(path)
+            if (content === undefined) return null
+            processingPathsRef.current.add(path)
+            return { id: path, content }
+          })
+          .filter(Boolean) as Array<{ id: string; content: string }>
+
+        if (filesToProcess.length > 0) {
+          // Send in batches of 500 to avoid blocking the worker bridge
+          const BATCH_SIZE = 500
+          for (let i = 0; i < filesToProcess.length; i += BATCH_SIZE) {
+            const batch = filesToProcess.slice(i, i + BATCH_SIZE)
+            worker.postMessage({ files: batch })
+          }
+        }
+      }
+    }, 500)
 
     return () => clearTimeout(timer)
-  }, [files])
+  }, [worker, queueTrigger, files])
 
   /**
    * Recursive function to compute directory weights from the token map.

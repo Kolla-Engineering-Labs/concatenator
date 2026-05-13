@@ -17,6 +17,7 @@ class MockWorker {
             results: data.files.map((f: any) => ({
               id: f.id,
               tokens: f.content.length, // Simple mock calculation
+              isPrecise: true,
               success: true,
             })),
           },

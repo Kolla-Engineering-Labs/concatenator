@@ -20,6 +20,9 @@ import { logger } from '../lib/logger.js'
 import { IgnoreEngine } from '../core/ignore/IgnoreEngine.js'
 import { TokenService } from '../core/TokenService.js'
 import { formatFileSize } from '../lib/utils.js'
+
+// Initialize TokenService precision strategy in background for immediate CLI use
+TokenService.loadPrecisionStrategy().catch(() => {})
 import { UnifiedCrawler } from '../core/Crawler.js'
 import { PulseEmitter } from '../core/PulseEmitter.js'
 import {
@@ -124,8 +127,8 @@ program
     const manifestPath =
       options.manifest || join(dirname(targetPath), 'SHA256SUMS.asc')
 
-    console.log('\n🛡️  Concatenator Integrity Verification')
-    console.log(''.padEnd(40, '─'))
+    logger.raw('\n🛡️  Concatenator Integrity Verification')
+    logger.raw(''.padEnd(40, '─'))
 
     try {
       if (!existsSync(targetPath)) {
@@ -141,14 +144,12 @@ program
         )
         hasKey = true
       } catch {
-        console.warn(
-          '⚠️  Architect PGP Public Key not found in local keychain.'
-        )
-        console.log(`🖋️  Fingerprint: ${ARCHITECT_PGP_FINGERPRINT}`)
-        console.log(
+        logger.warn('⚠️  Architect PGP Public Key not found in local keychain.')
+        logger.raw(`🖋️  Fingerprint: ${ARCHITECT_PGP_FINGERPRINT}`)
+        logger.raw(
           `🌐 Download Key: ${OFFICIAL_MANIFEST_URL.replace('SHA256SUMS.asc', 'public.key')}`
         )
-        console.log(
+        logger.raw(
           '💡 Run: gpg --import public.key && gpg --verify SHA256SUMS.asc\n'
         )
       }
@@ -198,39 +199,39 @@ program
       const colWidth = { file: 15, hash: 32, result: 12 }
       const separator = `+${'─'.repeat(colWidth.file + 2)}+${'─'.repeat(colWidth.hash + 2)}+${'─'.repeat(colWidth.hash + 2)}+${'─'.repeat(colWidth.result + 2)}+`
 
-      console.log(separator)
-      console.log(
+      logger.raw(separator)
+      logger.raw(
         `| ${'File'.padEnd(colWidth.file)} | ${'Calculated Hash'.padEnd(colWidth.hash)} | ${'Manifest Hash'.padEnd(colWidth.hash)} | ${'Result'.padEnd(colWidth.result)} |`
       )
-      console.log(separator)
+      logger.raw(separator)
 
       const truncatedCalc = currentHash.substring(0, 29) + '...'
       const truncatedManifest = manifestHash.substring(0, 29) + '...'
       const resultColor = result === 'VERIFIED' ? '\x1b[32m' : '\x1b[31m'
       const reset = '\x1b[0m'
 
-      console.log(
+      logger.raw(
         `| ${filename.padEnd(colWidth.file)} | ${truncatedCalc.padEnd(colWidth.hash)} | ${truncatedManifest.padEnd(colWidth.hash)} | ${resultColor}${result.padEnd(colWidth.result)}${reset} |`
       )
-      console.log(separator)
+      logger.raw(separator)
 
       if (result === 'VERIFIED') {
-        console.log(
+        logger.raw(
           '\n✅ Integrity check passed. This binary matches the official signed manifest.'
         )
         if (hasKey)
-          console.log(
+          logger.raw(
             '🛡️  Signature valid (manually verified via GPG keychain).'
           )
       } else {
-        console.error('\n❌ Integrity: COMPROMISED')
-        console.error(
+        logger.rawError('\n❌ Integrity: COMPROMISED')
+        logger.rawError(
           '⚠️  The binary hash does not match the manifest. Do not execute this tool!'
         )
         process.exit(1)
       }
     } catch (error: unknown) {
-      console.error(
+      logger.rawError(
         '\n❌ Verification failed:',
         error instanceof Error ? error.message : String(error)
       )
@@ -302,6 +303,8 @@ program
         pulse: boolean
       }
     ) => {
+      // Ensure high-precision BPE strategy is loaded before execution
+      await TokenService.loadPrecisionStrategy()
       try {
         if (options.quiet) {
           logger._setLevel('error')
@@ -357,7 +360,7 @@ program
             if (entry.kind === 'file') {
               try {
                 const content = readFileSync(entry.fullPath, 'utf-8')
-                const tokens = TokenService.getTokenEstimate(content)
+                const tokens = TokenService.getTokenCount(content)
 
                 allFiles.push({
                   path: entry.path,
@@ -400,9 +403,7 @@ program
               return depthB - depthA // deepest first
             })
             for (const [dirPath, tokens] of sortedDirs) {
-              logger.info(
-                `Dir: ${dirPath} (~${tokens.toLocaleString()} tokens)`
-              )
+              logger.info(`Dir: ${dirPath} (${tokens.toLocaleString()} tokens)`)
             }
           }
         }
@@ -442,9 +443,21 @@ program
           // Check for directory collision before writing
           checkOutputPath(options.output, options.force, 'file')
           writeFileSync(options.output, result)
+          const finalOutputTokens = TokenService.getTokenCount(result)
+          const tokensSaved = Math.max(0, totalTokens - finalOutputTokens)
+          const savedPercent =
+            totalTokens > 0
+              ? ((tokensSaved / totalTokens) * 100).toFixed(1)
+              : '0'
+
           logger.info(
-            `✔ Created ${options.output} (${formatFileSize(bundleSize)} | ~${totalTokens.toLocaleString()} tokens).`
+            `✔ Created ${options.output} (${formatFileSize(bundleSize)} | ${finalOutputTokens.toLocaleString()} precise tokens).`
           )
+          if (tokensSaved > 0) {
+            logger.info(
+              `  └─ Tokens Saved: ${tokensSaved.toLocaleString()} (${savedPercent}%)`
+            )
+          }
         } else {
           process.stdout.write(result)
         }
@@ -511,6 +524,8 @@ program
         pulse: boolean
       }
     ) => {
+      // Ensure high-precision BPE strategy is loaded before execution
+      await TokenService.loadPrecisionStrategy()
       try {
         if (options.quiet) {
           logger._setLevel('error')
@@ -671,6 +686,8 @@ program
         quiet: boolean
       }
     ) => {
+      // Ensure high-precision BPE strategy is loaded before execution
+      await TokenService.loadPrecisionStrategy()
       try {
         if (options.quiet) {
           logger._setLevel('error')
@@ -728,7 +745,7 @@ program
                 '--------------------------------------------------------------------------------'
               )
               logger.info(
-                `TOTAL CONTEXT WEIGHT (tokens): ${totalTokens.toLocaleString()}`
+                `TOTAL CONTEXT WEIGHT (Precise Tokens): ${totalTokens.toLocaleString()}`
               )
               logger.info(
                 '--------------------------------------------------------------------------------'
@@ -741,7 +758,7 @@ program
                 options.verbose
               )
               logger.info(
-                `✓ Pre-flight check passed for ${inputPath}: ${files.length} files, ~${totalTokens.toLocaleString()} tokens.`
+                `✓ Pre-flight check passed for ${inputPath}: ${files.length} files, ${totalTokens.toLocaleString()} tokens.`
               )
             }
           } else {
@@ -762,14 +779,14 @@ program
 
 // Add custom help text with examples
 program.on('--help', () => {
-  console.log('')
-  console.log('Examples:')
-  console.log('  $ concatenator --ui')
-  console.log('  $ concatenator concat -o context.txt ./src')
-  console.log('  $ concatenator concat -v -e node_modules,dist ./my-project')
-  console.log('  $ concatenator extract -o ./restored bundle.txt')
-  console.log('  $ concatenator extract --zip -o restored.zip bundle.txt')
-  console.log('  $ concatenator validate --verbose bundle.txt')
+  logger.raw('')
+  logger.raw('Examples:')
+  logger.raw('  $ concatenator --ui')
+  logger.raw('  $ concatenator concat -o context.txt ./src')
+  logger.raw('  $ concatenator concat -v -e node_modules,dist ./my-project')
+  logger.raw('  $ concatenator extract -o ./restored bundle.txt')
+  logger.raw('  $ concatenator extract --zip -o restored.zip bundle.txt')
+  logger.raw('  $ concatenator validate --verbose bundle.txt')
 })
 
 // Parse CLI arguments if not launching UI and not in test environment

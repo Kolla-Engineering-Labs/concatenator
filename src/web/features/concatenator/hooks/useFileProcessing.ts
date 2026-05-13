@@ -23,6 +23,7 @@ import { reconcileFiles } from '../../../../core/reconciler'
 import type { Absorption } from '../../../../core/reconciler'
 import type { ValidationResult } from '../../../../core/types'
 import { logger } from '../../../../lib/logger'
+import { TokenService } from '../../../../core/TokenService'
 import {
   isImageFile,
   isPdfFile,
@@ -936,6 +937,32 @@ export const useFileProcessing = ({
         document.body.appendChild(a)
         a.click()
         document.body.removeChild(a)
+
+        // Efficiency Analytics
+        const totalRawTokens = fileList.reduce(
+          (acc, f) =>
+            acc +
+            (typeof f.content === 'string'
+              ? TokenService.getTokenCount(f.content)
+              : 0),
+          0
+        )
+        const finalOutputTokens = TokenService.getTokenCount(result)
+        const tokensSaved = Math.max(0, totalRawTokens - finalOutputTokens)
+        const savedPercent =
+          totalRawTokens > 0
+            ? ((tokensSaved / totalRawTokens) * 100).toFixed(2)
+            : '0.00'
+
+        logger.info(
+          `Concatenation Complete: ${finalOutputTokens.toLocaleString()} precise tokens.`
+        )
+        if (tokensSaved > 0) {
+          logger.info(
+            `Efficiency Gain: ${tokensSaved.toLocaleString()} tokens saved (${savedPercent}% optimization).`
+          )
+        }
+
         // Ensure the browser has time to initiate the download before revoking
         setTimeout(() => URL.revokeObjectURL(url), 1000)
       }
