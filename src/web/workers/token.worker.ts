@@ -16,25 +16,29 @@ self.onmessage = async (e: MessageEvent) => {
       encoder = getEncoding('o200k_base')
     }
 
-    const results = files.map((file) => {
-      try {
-        const tokens = encoder?.encode(file.content).length || 0
-        return {
-          id: file.id,
-          tokens,
-          isPrecise: true,
-          success: true,
-        }
-      } catch (err) {
-        return {
-          id: file.id,
-          tokens: Math.ceil(file.content.length / 4),
-          isPrecise: false,
-          success: false,
-          error: err instanceof Error ? err.message : String(err),
+    const results = files.map(
+      (file: { id: string; content: string; hash?: string }) => {
+        try {
+          const tokens = encoder?.encode(file.content).length || 0
+          return {
+            id: file.id,
+            tokens,
+            isPrecise: true,
+            success: true,
+            hash: file.hash,
+          }
+        } catch (err) {
+          return {
+            id: file.id,
+            tokens: Math.ceil(file.content.length / 4),
+            isPrecise: false,
+            success: false,
+            hash: file.hash,
+            error: err instanceof Error ? err.message : String(err),
+          }
         }
       }
-    })
+    )
 
     self.postMessage({ results })
   } catch (err) {
@@ -43,12 +47,15 @@ self.onmessage = async (e: MessageEvent) => {
       err instanceof Error ? err : new Error(String(err))
     )
     self.postMessage({
-      results: files.map((f) => ({
-        id: f.id,
-        tokens: Math.ceil(f.content.length / 4),
-        isPrecise: false,
-        success: false,
-      })),
+      results: files.map(
+        (f: { id: string; hash?: string; content: string }) => ({
+          id: f.id,
+          tokens: Math.ceil(f.content.length / 4),
+          isPrecise: false,
+          success: false,
+          hash: f.hash,
+        })
+      ),
     })
   }
 }
