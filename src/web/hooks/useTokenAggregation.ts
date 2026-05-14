@@ -6,153 +6,232 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { FileItem, TreeItem } from '../../core/types'
 import { TokenService } from '../../core/TokenService'
+import { logger } from '../../lib/logger'
 
 interface TokenMetadata {
   tokens: number
   isPrecise: boolean
+  hash?: string
+}
+
+interface WorkerResult {
+  id: string
+  tokens: number
+  isPrecise: boolean
+  success: boolean
+  hash?: string
 }
 
 /**
  * Hook to manage hierarchical token aggregation with background worker precision.
  */
 export const useTokenAggregation = (files: FileItem[]) => {
-  // State for tracking file tokens (path -> metadata)
   const [tokenMap, setTokenMap] = useState<Record<string, TokenMetadata>>({})
-
-  // Cache for hashed content results
-  const hashCacheRef = useRef<Map<string, number>>(new Map())
-
-  // Worker reference
-  const workerRef = useRef<Worker | null>(null)
-
-  // Queue for precision counting
+  const hashCacheRef = useRef<
+    Map<string, { tokens: number; isPrecise: boolean }>
+  >(new Map())
+  const contentHashesRef = useRef<Map<string, string>>(new Map())
+  const [worker, setWorker] = useState<Worker | null>(null)
   const dirtyQueueRef = useRef<Set<string>>(new Set())
+  const processingPathsRef = useRef<Set<string>>(new Set())
+  const [queueTrigger, setQueueTrigger] = useState(0)
 
-  // Pending results for debounced update
-  const pendingResultsRef = useRef<Record<string, TokenMetadata>>({})
-  const processResultsTimerRef = useRef<NodeJS.Timeout | null>(null)
+  // Refs for stable access in async handlers and effect optimization
+  const filesRef = useRef(files)
+  filesRef.current = files
+  const tokenMapRef = useRef(tokenMap)
+  tokenMapRef.current = tokenMap
 
-  // Initialize/Update worker
   useEffect(() => {
-    workerRef.current = new Worker(
+    const w = new Worker(
       new URL('../workers/token.worker.ts', import.meta.url),
       { type: 'module' }
     )
+    w.onerror = (err) => logger.error('[Worker] Initialization error:', err)
+    setWorker(w)
+    return () => {
+      w.terminate()
+      setWorker(null)
+    }
+  }, [])
 
-    workerRef.current.onmessage = (e: MessageEvent) => {
+  // 1. Worker Result Listener (Atomic Updates)
+  useEffect(() => {
+    if (!worker) return
+
+    const resultsBuffer: Record<string, TokenMetadata> = {}
+    let bufferTimer: NodeJS.Timeout | null = null
+
+    worker.onmessage = (e: MessageEvent) => {
       const { results } = e.data
+      if (!results || !Array.isArray(results)) return
 
-      results.forEach(
-        (res: { id: string; tokens: number; success: boolean }) => {
-          if (res.success) {
-            pendingResultsRef.current[res.id] = {
-              tokens: res.tokens,
-              isPrecise: true,
-            }
-
-            // Update hash cache
-            const file = files.find((f) => f.path === res.id)
-            if (file && typeof file.content === 'string') {
-              const hash = TokenService.hashContent(file.content)
-              hashCacheRef.current.set(hash, res.tokens)
-            }
-          }
+      results.forEach((r: WorkerResult) => {
+        if (!r.success) {
+          processingPathsRef.current.delete(r.id)
+          return
         }
-      )
 
-      if (processResultsTimerRef.current)
-        clearTimeout(processResultsTimerRef.current)
+        resultsBuffer[r.id] = {
+          tokens: r.tokens,
+          isPrecise: r.isPrecise,
+          hash: r.hash,
+        }
+        if (r.hash) {
+          hashCacheRef.current.set(r.hash, {
+            tokens: r.tokens,
+            isPrecise: r.isPrecise,
+          })
+        }
+      })
 
-      processResultsTimerRef.current = setTimeout(() => {
-        setTokenMap((prev) => ({ ...prev, ...pendingResultsRef.current }))
-        pendingResultsRef.current = {}
-        processResultsTimerRef.current = null
-      }, 200)
+      if (bufferTimer) clearTimeout(bufferTimer)
+      bufferTimer = setTimeout(() => {
+        const updates = { ...resultsBuffer }
+        Object.keys(resultsBuffer).forEach((k) => delete resultsBuffer[k])
+
+        setTokenMap((prev) => {
+          const next = { ...prev, ...updates }
+          Object.keys(updates).forEach((id) => {
+            processingPathsRef.current.delete(id)
+
+            // Check for "edit during flight"
+            const file = filesRef.current.find((f) => f.path === id)
+            if (file && file.content && typeof file.content === 'string') {
+              const currentHash = TokenService.hashContent(file.content)
+              if (currentHash !== updates[id].hash) {
+                dirtyQueueRef.current.add(id)
+                setQueueTrigger((q) => q + 1)
+              }
+            }
+          })
+          return next
+        })
+      }, 100)
     }
 
     return () => {
-      workerRef.current?.terminate()
+      worker.onmessage = null
+      if (bufferTimer) clearTimeout(bufferTimer)
     }
-  }, [files])
+  }, [worker])
 
-  // Process files when they change
+  // 2. Initial Sync (Heuristics & Cleanup)
   useEffect(() => {
     const newMetadata: Record<string, TokenMetadata> = {}
     let hasChanges = false
+    let addedToQueue = false
 
-    files.forEach((file) => {
+    const currentPaths = new Set(files.map((f) => f.path))
+
+    // Cleanup stale hashes
+    for (const path of contentHashesRef.current.keys()) {
+      if (!currentPaths.has(path)) contentHashesRef.current.delete(path)
+    }
+
+    for (const file of files) {
       if (
         file.kind !== 'file' ||
         !file.content ||
         typeof file.content !== 'string'
       )
-        return
+        continue
 
-      const hash = TokenService.hashContent(file.content)
-      const cached = hashCacheRef.current.get(hash)
-
-      if (cached !== undefined) {
-        if (!tokenMap[file.path] || tokenMap[file.path].tokens !== cached) {
-          newMetadata[file.path] = { tokens: cached, isPrecise: true }
-          hasChanges = true
-        }
-        return
+      let hash = contentHashesRef.current.get(file.path)
+      if (hash === undefined) {
+        hash = TokenService.hashContent(file.content)
+        contentHashesRef.current.set(file.path, hash)
       }
 
-      const current = tokenMap[file.path]
-      if (!current) {
-        // Immediate Heuristic
-        newMetadata[file.path] = {
-          tokens: TokenService.getTokenEstimate(file.content),
-          isPrecise: false,
+      const current = tokenMapRef.current[file.path]
+
+      if (!current || current.hash !== hash) {
+        const cached = hashCacheRef.current.get(hash)
+        if (cached) {
+          newMetadata[file.path] = {
+            tokens: cached.tokens,
+            isPrecise: true,
+            hash,
+          }
+        } else {
+          newMetadata[file.path] = {
+            tokens: TokenService.getTokenEstimate(file.content),
+            isPrecise: false,
+            hash,
+          }
+          dirtyQueueRef.current.add(file.path)
+          addedToQueue = true
         }
-        dirtyQueueRef.current.add(file.path)
         hasChanges = true
+      } else if (
+        !current.isPrecise &&
+        !processingPathsRef.current.has(file.path) &&
+        !dirtyQueueRef.current.has(file.path)
+      ) {
+        dirtyQueueRef.current.add(file.path)
+        addedToQueue = true
       }
-    })
-
-    if (hasChanges) {
-      setTokenMap((prev) => ({ ...prev, ...newMetadata }))
     }
-  }, [files, tokenMap])
 
-  // Background processing of the dirty queue
+    setTokenMap((prev) => {
+      let changed = false
+      const next = { ...prev }
+
+      // Cleanup stale entries
+      Object.keys(next).forEach((p) => {
+        if (!currentPaths.has(p)) {
+          delete next[p]
+          changed = true
+        }
+      })
+
+      if (hasChanges) return { ...next, ...newMetadata }
+      return changed ? next : prev
+    })
+    if (addedToQueue) setQueueTrigger((q) => q + 1)
+  }, [files]) // Only depend on files; tokenMap accessed via Ref to avoid loop
+
+  // 3. Background Processing (Debounced Batches)
   useEffect(() => {
-    if (dirtyQueueRef.current.size === 0 || !workerRef.current) return
+    if (!worker || dirtyQueueRef.current.size === 0) return
 
     const timer = setTimeout(() => {
-      const batch = Array.from(dirtyQueueRef.current)
-        .map((path) => {
-          const file = files.find((f) => f.path === path)
-          if (file && typeof file.content === 'string') {
-            return { id: path, content: file.content }
-          }
-          return null
+      const allDirty = Array.from(dirtyQueueRef.current)
+      dirtyQueueRef.current.clear()
+      if (allDirty.length === 0) return
+
+      const fileLookup = new Map<string, string>()
+      files.forEach((f) => {
+        if (f.kind === 'file' && typeof f.content === 'string')
+          fileLookup.set(f.path, f.content)
+      })
+
+      const batch = allDirty
+        .map((path: string) => {
+          const content = fileLookup.get(path)
+          if (content === undefined) return null
+          processingPathsRef.current.add(path)
+          const hash =
+            contentHashesRef.current.get(path) ||
+            TokenService.hashContent(content)
+          return { id: path, content, hash }
         })
-        .filter(Boolean) as Array<{ id: string; content: string }>
+        .filter(Boolean) as Array<{ id: string; content: string; hash: string }>
 
       if (batch.length > 0) {
-        workerRef.current?.postMessage({ files: batch })
+        const BATCH_SIZE = 500
+        for (let i = 0; i < batch.length; i += BATCH_SIZE) {
+          worker.postMessage({ files: batch.slice(i, i + BATCH_SIZE) })
+        }
       }
-      dirtyQueueRef.current.clear()
-    }, 500) // Small delay to batch uploads
-
+    }, 500)
     return () => clearTimeout(timer)
-  }, [files])
+  }, [worker, queueTrigger, files])
 
-  /**
-   * Recursive function to compute directory weights from the token map.
-   * This is memoized to prevent expensive re-calculations.
-   */
   const computeTreeWeights = useCallback(
-    (node: TreeItem): { tokens: number; isPrecise: boolean } => {
-      return TokenService.computeTreeWeights(node, tokenMap)
-    },
+    (node: TreeItem) => TokenService.computeTreeWeights(node, tokenMap),
     [tokenMap]
   )
 
-  return {
-    tokenMap,
-    computeTreeWeights,
-  }
+  return { tokenMap, computeTreeWeights }
 }

@@ -35,30 +35,29 @@ describe('UploadZone Component', () => {
   it('renders desktop labels when isTouchDevice is false', () => {
     vi.mocked(useTouchDevice).mockReturnValue(false)
     render(<UploadZone {...defaultProps} />)
-    expect(screen.getByText('Drop folder or files here')).toBeInTheDocument()
-    expect(screen.getByText('or click to browse')).toBeInTheDocument()
+    expect(screen.getByText(/Drop folder or files here/i)).toBeInTheDocument()
+    expect(screen.getByText(/or click to browse/i)).toBeInTheDocument()
   })
 
   it('renders touch labels when isTouchDevice is true', () => {
     vi.mocked(useTouchDevice).mockReturnValue(true)
     render(<UploadZone {...defaultProps} />)
-    expect(screen.getByText('Tap to select files')).toBeInTheDocument()
     expect(
-      screen.getByText('Browse local or cloud storage')
+      screen.getByText(/Tap to select folder or files/i)
+    ).toBeInTheDocument()
+    expect(
+      screen.getByText(/Browse local or cloud storage/i)
     ).toBeInTheDocument()
   })
 
   it('triggers input click when container is clicked on touch device', () => {
     vi.mocked(useTouchDevice).mockReturnValue(true)
-    const { container } = render(<UploadZone {...defaultProps} />)
+    render(<UploadZone {...defaultProps} />)
 
-    const input = container.querySelector(
-      'input[type="file"]'
-    ) as HTMLInputElement
+    const input = screen.getByTitle('') as HTMLInputElement // The hidden input has title=""
     const clickSpy = vi.spyOn(input, 'click')
 
-    // The outermost div of the component (excluding the wrapper in test)
-    const dropZone = container.firstChild as HTMLElement
+    const dropZone = screen.getByTestId('upload-zone-container')
     fireEvent.click(dropZone)
 
     expect(clickSpy).toHaveBeenCalled()
@@ -146,7 +145,9 @@ describe('UploadZone Component', () => {
     render(<UploadZone {...defaultProps} />)
     const minimizeBtn = screen.getByTitle('Minimize dropzone')
     fireEvent.click(minimizeBtn)
-    expect(defaultProps.setIsDropzoneMinimized).toHaveBeenCalledWith(true)
+    expect(defaultProps.setIsDropzoneMinimized).toHaveBeenCalledWith(
+      expect.any(Function)
+    )
   })
 
   it('handles dragOver event', () => {

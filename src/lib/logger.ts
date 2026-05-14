@@ -71,6 +71,22 @@ export const logger = {
       console.error(formatMessage('error', message), ...args)
     }
   },
+  /**
+   * Raw unformatted output. Respects log level (only logs if level <= info).
+   */
+  raw: (message: string, ...args: unknown[]): void => {
+    if (shouldLog('info')) {
+      console.log(message, ...args)
+    }
+  },
+  /**
+   * Raw error output.
+   */
+  rawError: (message: string, ...args: unknown[]): void => {
+    if (shouldLog('error')) {
+      console.error(message, ...args)
+    }
+  },
   // Internal method for testing only
   _setLevel: (level: LogLevel | null): void => {
     _testLevel = level

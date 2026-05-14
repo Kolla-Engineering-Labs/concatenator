@@ -49,6 +49,9 @@ export default defineConfig(({ mode }) => {
         ],
       },
     },
+    optimizeDeps: {
+      include: ['js-tiktoken'],
+    },
     plugins: [
       react(),
       tailwindcss(),
@@ -111,7 +114,7 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       host: '127.0.0.1',
-      strictPort: true,
+      strictPort: false,
       proxy: {
         '^/api': {
           target: 'http://127.0.0.1:3000',
@@ -133,10 +136,11 @@ export default defineConfig(({ mode }) => {
       strictPort: true,
     },
     worker: {
+      format: 'es',
       rollupOptions: {
         output: {
           entryFileNames: 'assets/[name].js',
-          chunkFileNames: 'assets/[name].js',
+          chunkFileNames: 'assets/[name]-[hash].js',
           assetFileNames: 'assets/[name].[ext]',
         },
       },
@@ -147,7 +151,7 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           entryFileNames: 'assets/[name].js',
-          chunkFileNames: 'assets/[name].js',
+          chunkFileNames: 'assets/[name]-[hash].js',
           assetFileNames: 'assets/[name].[ext]',
           manualChunks(id) {
             // 1. Move React and React-DOM (the biggest blue blocks)
@@ -172,6 +176,10 @@ export default defineConfig(({ mode }) => {
             // 5. Move jsPDF to its own chunk (it's huge)
             if (id.includes('node_modules/jspdf')) {
               return 'vendor-jspdf'
+            }
+            // 6. Move tiktoken to its own chunk (it's huge)
+            if (id.includes('node_modules/js-tiktoken')) {
+              return 'vendor-tiktoken'
             }
           },
         },

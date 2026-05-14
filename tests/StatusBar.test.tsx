@@ -23,7 +23,7 @@ describe('StatusBar', () => {
 
   it('shows tilde when not precise', () => {
     render(<StatusBar totalTokens={50} tokensSaved={10} isPrecise={false} />)
-    expect(screen.getByText('~')).toBeDefined()
+    expect(screen.getByText(/~/)).toBeDefined()
   })
 
   it('displays different colors based on saturation', () => {

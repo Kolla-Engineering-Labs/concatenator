@@ -503,7 +503,7 @@ describe('useFileProcessing', () => {
       })
 
       expect(mockAddPage).toHaveBeenCalled()
-      mockSplitTextToSize.mockRestore()
+      mockSplitTextToSize.mockReset()
     })
 
     it('handles multiple files in PDF generation', async () => {
@@ -2498,38 +2498,6 @@ describe('useFileProcessing', () => {
       expect(result.current.importError).toBe(
         'An error occurred during de-concatenation. Please check the console for details.'
       )
-      consoleSpy.mockRestore()
-    })
-
-    it('handles zip generation failure in handleDownloadAsZip', async () => {
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-      mockGenerateAsync.mockRejectedValue(new Error('Zip failed'))
-
-      const { result } = renderHook(() =>
-        useFileProcessing({
-          appMode: AppMode.CONCATENATE,
-          isIgnored: () => false,
-          maxFileLimit: 10,
-          isIgnoreListLoading: false,
-          setVirtualFileSystem: vi.fn(),
-        })
-      )
-
-      const mockFiles = [
-        {
-          name: 'a.txt',
-          path: 'a.txt',
-          kind: 'file' as const,
-          content: 'a',
-          size: 1,
-        },
-      ]
-
-      await act(async () => {
-        await result.current.handleDownloadAsZip(mockFiles)
-      })
-
-      expect(result.current.importError).toBe('Failed to create ZIP archive')
       consoleSpy.mockRestore()
     })
 

@@ -59,7 +59,7 @@ Choose your preferred interface:
 #### 1. Concatenate Files
 
 - **Drag & Drop**: Drop your project folder onto the upload zone.
-- **Analyze**: Review file sizes and **Token Estimates** in real-time. Toggle between **Tree** and **List** views to inspect your project structure. The Tree View automatically prunes redundant levels to start at the **Minimum Common Root**.
+- **Analyze**: Review file sizes and **Precise Token Counts** in real-time. Toggle between **Tree** and **List** views to inspect your project structure. The Tree View automatically prunes redundant levels to start at the **Minimum Common Root**.
 - **Quick Look**: Click the preview icon next to any file to instantly inspect its content (Code, PDF, or SVG) without leaving the app.
 - **Filter**: Use the **Ignore List** to filter out unwanted noise (e.g., `node_modules`, `.git`).
 - **Export**: Choose your format and click **"Concatenate & Download."**

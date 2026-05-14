@@ -145,7 +145,7 @@ describe('ModeContext (Workbench State)', () => {
 
     await waitFor(() => {
       expect(consoleSpy).toHaveBeenCalledWith(
-        'Failed to sync ignore list to server'
+        expect.stringContaining('Failed to sync ignore list to server')
       )
     })
     consoleSpy.mockRestore()

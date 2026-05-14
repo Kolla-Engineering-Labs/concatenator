@@ -33,6 +33,8 @@ const mockLogger = {
   warn: vi.fn(),
   error: vi.fn(),
   debug: vi.fn(),
+  raw: vi.fn((msg) => console.log(msg)),
+  rawError: vi.fn((msg) => console.error(msg)),
 }
 vi.doMock('../src/lib/logger.js', () => ({
   logger: mockLogger,
@@ -42,6 +44,7 @@ vi.doMock('../src/lib/logger.js', () => ({
 vi.doMock('../src/core/TokenService.js', () => ({
   TokenService: {
     getTokenEstimate: vi.fn().mockReturnValue(10),
+    getTokenCount: vi.fn().mockReturnValue(10),
   },
 }))
 

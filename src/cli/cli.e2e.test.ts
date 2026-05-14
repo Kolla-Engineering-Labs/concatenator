@@ -695,7 +695,7 @@ content
       // Check summary format: ✔ Created [filename] ([size] | ~[tokenCount] tokens).
       // Note: logger adds timestamps and prefix
       expect(result.stdout).toMatch(
-        /✔ Created .*output\.txt \(.* | ~3 tokens\)\./
+        /✔ Created .*output\.txt \(.* | 2 precise tokens\)\./
       )
     })
 
@@ -712,7 +712,7 @@ content
         join(tempDir, 'out1.txt'),
         '-v',
       ])
-      expect(resultV.stdout).toContain('Dir: sub (~6 tokens)')
+      expect(resultV.stdout).toContain('Dir: sub (3 tokens)')
       expect(resultV.stdout).toContain('Dir: .')
 
       // Test -vv (individual file tokens)
@@ -728,7 +728,7 @@ content
     })
 
     it('should output high-visibility warning when max-tokens budget exceeded', () => {
-      writeFileSync(join(tempDir, 'large.txt'), 'A'.repeat(400)) // ~100 tokens
+      writeFileSync(join(tempDir, 'large.txt'), 'token '.repeat(100)) // exactly 100 tokens
 
       const result = runCLI([
         'concat',
@@ -742,7 +742,7 @@ content
       const output = result.stdout + result.stderr
       expect(output).toContain('BUDGET WARNING: Token limit exceeded')
       expect(output).toContain('Limit:   50')
-      expect(output).toContain('Current: 100')
+      expect(output).toContain('Current: 101')
       expect(output).toContain('Created') // Should still complete the write
     })
 
@@ -754,8 +754,8 @@ content
 
       expect(output).toContain('[DRY RUN] Pre-flight Analysis for')
       expect(output).toContain('preflight.txt')
-      expect(output).toContain('5')
-      expect(output).toContain('TOTAL CONTEXT WEIGHT (tokens): 5')
+      expect(output).toContain('3')
+      expect(output).toContain('TOTAL CONTEXT WEIGHT (Precise Tokens): 3')
     })
   })
 }, 60000)

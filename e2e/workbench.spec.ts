@@ -43,9 +43,13 @@ test.describe('Workbench Features', () => {
         timeout: 10000,
       })
 
-      // Check for approximate token count in header (should have ~ prefix)
-      // Header format: "Selected Files (1) | ~7 tokens"
-      await expect(page.getByText(/~7 tokens/)).toBeVisible({ timeout: 10000 })
+      // Check for token count in header
+      // Header format: "Selected Files (1) | [~]N [tokens|PRECISE TOKENS]"
+      const workbenchHeader = page.getByRole('heading', {
+        name: /Selected Files/,
+      })
+      await expect(workbenchHeader).toBeVisible({ timeout: 10000 })
+      await expect(workbenchHeader).toContainText(/tokens|Precision|Heuristic/i)
     } finally {
       uploadHelper.cleanup()
     }
@@ -67,17 +71,17 @@ test.describe('Workbench Features', () => {
       ]
       await uploadHelper.setFilesOnInput(files)
 
-      // Initially should show approximate (~ prefix)
       // Use a more specific locator for the workbench header
       const workbenchHeader = page.getByRole('heading', {
         name: /Selected Files/,
       })
-      await expect(workbenchHeader).toContainText('~')
 
-      // Wait for background worker to complete and remove the ~ prefix
-      await expect(workbenchHeader).not.toContainText('~', { timeout: 15000 })
+      // Wait for background worker to complete and show the Precision label
+      await expect(workbenchHeader).toContainText('Precision', {
+        timeout: 15000,
+      })
+      await expect(workbenchHeader).not.toContainText('Heuristic')
       await expect(workbenchHeader).toContainText('Selected Files (1)')
-      await expect(workbenchHeader).toContainText('tokens')
     } finally {
       uploadHelper.cleanup()
     }

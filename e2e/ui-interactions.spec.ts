@@ -88,7 +88,7 @@ test.describe('UI Interactions and Edge Cases', () => {
           timeout: 10000,
         })
         await expect(page.getByTestId('dropzone-label')).toContainText(
-          /Drop folder or files here|Tap to select files/
+          /Drop folder or files here|Tap to select folder or files/
         )
       }
     })

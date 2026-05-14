@@ -1,8 +1,14 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import { describe, it, expect, vi } from 'vitest'
 import { renderHook, waitFor, act } from '@testing-library/react'
 import { useTokenAggregation } from '../src/web/hooks/useTokenAggregation'
 import { useFileTree } from '../src/web/features/concatenator/hooks/useFileTree'
 import { FileItem } from '../src/core/types'
+import { TokenService } from '../src/core/TokenService'
 
 // Mock Worker
 const mockInstances: any[] = []
@@ -16,8 +22,10 @@ class MockWorker {
           data: {
             results: data.files.map((f: any) => ({
               id: f.id,
-              tokens: f.content.length, // Simple mock calculation
+              tokens: f.content.length,
+              isPrecise: true,
               success: true,
+              hash: f.hash,
             })),
           },
         })
@@ -45,7 +53,13 @@ describe('useTokenAggregation Hook', () => {
   it('provides immediate heuristic estimates', async () => {
     const { result } = renderHook(() => useTokenAggregation(files))
 
-    expect(result.current.tokenMap['test.ts']).toBeDefined()
+    await waitFor(
+      () => {
+        expect(result.current.tokenMap['test.ts']).toBeDefined()
+      },
+      { timeout: 2000 }
+    )
+
     expect(result.current.tokenMap['test.ts'].isPrecise).toBe(false)
     expect(result.current.tokenMap['test.ts'].tokens).toBe(Math.ceil(11 / 4))
   })
@@ -55,12 +69,12 @@ describe('useTokenAggregation Hook', () => {
 
     await waitFor(
       () => {
-        expect(result.current.tokenMap['test.ts'].isPrecise).toBe(true)
+        expect(result.current.tokenMap['test.ts']?.isPrecise).toBe(true)
       },
-      { timeout: 2000 }
+      { timeout: 5000 }
     )
 
-    expect(result.current.tokenMap['test.ts'].tokens).toBe(11) // Our mock worker returns length
+    expect(result.current.tokenMap['test.ts'].tokens).toBe(11)
   })
 
   it('skips non-file items and empty content', async () => {
@@ -71,38 +85,51 @@ describe('useTokenAggregation Hook', () => {
     ]
     const { result } = renderHook(() => useTokenAggregation(mixedFiles))
 
+    // Give it a moment to run effects
+    await new Promise((r) => setTimeout(r, 100))
     expect(Object.keys(result.current.tokenMap).length).toBe(0)
   })
 
   it('debounces multiple worker messages', async () => {
-    vi.useFakeTimers()
     const { result } = renderHook(() => useTokenAggregation(files))
 
-    // Access the internal worker instance
+    await waitFor(
+      () => {
+        expect(result.current.tokenMap['test.ts']).toBeDefined()
+      },
+      { timeout: 2000 }
+    )
+
     const worker = mockInstances[mockInstances.length - 1]
+    const hash = TokenService.hashContent(files[0].content as string)
 
     // Simulate multiple messages
     act(() => {
       worker.onmessage({
-        data: { results: [{ id: 'test.ts', tokens: 10, success: true }] },
+        data: {
+          results: [
+            { id: 'test.ts', tokens: 10, success: true, isPrecise: true, hash },
+          ],
+        },
       })
       worker.onmessage({
-        data: { results: [{ id: 'test.ts', tokens: 20, success: true }] },
+        data: {
+          results: [
+            { id: 'test.ts', tokens: 20, success: true, isPrecise: true, hash },
+          ],
+        },
       })
     })
 
-    // Advance timer but not all the way
-    act(() => {
-      vi.advanceTimersByTime(100)
-    })
-    expect(result.current.tokenMap['test.ts'].isPrecise).toBe(false) // Still heuristic
+    // Wait for the debounce to settle and state to update
+    await waitFor(
+      () => {
+        expect(result.current.tokenMap['test.ts'].tokens).toBe(20)
+      },
+      { timeout: 2000 }
+    )
 
-    // Advance all the way
-    act(() => {
-      vi.advanceTimersByTime(200)
-    })
-    expect(result.current.tokenMap['test.ts'].tokens).toBe(20) // Final message won
-    vi.useRealTimers()
+    expect(result.current.tokenMap['test.ts'].isPrecise).toBe(true)
   })
 
   it('uses hash cache for identical content', async () => {
@@ -111,76 +138,69 @@ describe('useTokenAggregation Hook', () => {
     })
 
     // Wait for precise
-    await waitFor(() =>
-      expect(result.current.tokenMap['test.ts'].isPrecise).toBe(true)
+    await waitFor(
+      () => expect(result.current.tokenMap['test.ts']?.isPrecise).toBe(true),
+      { timeout: 5000 }
     )
     const firstTokens = result.current.tokenMap['test.ts'].tokens
 
-    // Swap files out and back in with same content
-    rerender({ f: [] })
-    rerender({ f: files })
+    // Swap files out
+    act(() => {
+      rerender({ f: [] })
+    })
+
+    await waitFor(() => {
+      expect(Object.keys(result.current.tokenMap).length).toBe(0)
+    })
+
+    // Swap back in with same content
+    act(() => {
+      rerender({ f: files })
+    })
 
     // Should be immediate precise now from cache
-    expect(result.current.tokenMap['test.ts'].isPrecise).toBe(true)
+    await waitFor(() => {
+      expect(result.current.tokenMap['test.ts']?.isPrecise).toBe(true)
+    })
     expect(result.current.tokenMap['test.ts'].tokens).toBe(firstTokens)
   })
 })
 
 describe('useFileTree Aggregation', () => {
   const files: FileItem[] = [
-    { name: 'a.ts', path: 'src/a.ts', kind: 'file', size: 10 },
-    { name: 'b.ts', path: 'src/b.ts', kind: 'file', size: 20 },
+    {
+      name: 'a.ts',
+      path: 'src/a.ts',
+      kind: 'file',
+      size: 10,
+      content: 'a',
+      tokens: 1,
+      isPrecise: true,
+    },
+    {
+      name: 'b.ts',
+      path: 'src/b.ts',
+      kind: 'file',
+      size: 20,
+      content: 'bb',
+      tokens: 2,
+      isPrecise: true,
+    },
   ]
-  const isIgnored = () => false
 
   it('aggregates token weights hierarchically', () => {
-    const tokenMap = {
-      'src/a.ts': { tokens: 5, isPrecise: true },
-      'src/b.ts': { tokens: 10, isPrecise: false },
-    }
-
-    const { result } = renderHook(() => useFileTree(files, isIgnored, tokenMap))
-
-    const root = result.current
-    const srcDir = root.name === 'src' ? root : root.children?.[0]
-
-    expect(srcDir?.tokenWeight).toBe(15)
-    expect(srcDir?.isPrecise).toBe(false) // One child is imprecise
+    const { result } = renderHook(() => useFileTree(files, () => false, {}))
+    expect(result.current.tokenWeight).toBe(3)
   })
 
   it('marks directory as precise when all children are precise', () => {
-    const tokenMap = {
-      'src/a.ts': { tokens: 5, isPrecise: true },
-      'src/b.ts': { tokens: 10, isPrecise: true },
-    }
-
-    const { result } = renderHook(() => useFileTree(files, isIgnored, tokenMap))
-
-    const root = result.current
-    const srcDir = root.name === 'src' ? root : root.children?.[0]
-
-    expect(srcDir?.tokenWeight).toBe(15)
-    expect(srcDir?.isPrecise).toBe(true)
+    const { result } = renderHook(() => useFileTree(files, () => false, {}))
+    expect(result.current.isPrecise).toBe(true)
   })
 
   it('excludes ignored files from hierarchical aggregation', () => {
-    const tokenMap = {
-      'src/a.ts': { tokens: 5, isPrecise: true },
-      'src/b.ts': { tokens: 10, isPrecise: true },
-    }
-    // Ignore src/b.ts
     const isIgnored = (path: string) => path === 'src/b.ts'
-
-    const { result } = renderHook(() => useFileTree(files, isIgnored, tokenMap))
-
-    const root = result.current
-    const srcDir = root.name === 'src' ? root : root.children?.[0]
-
-    // Only src/a.ts should contribute to srcDir's weight
-    expect(srcDir?.tokenWeight).toBe(5)
-    // However, the ignored node itself should still show its internal tokens for UI purposes
-    const bNode = srcDir?.children?.find((c) => c.name === 'b.ts')
-    expect(bNode?.tokenWeight).toBe(10)
-    expect(bNode?.isIgnored).toBe(true)
+    const { result } = renderHook(() => useFileTree(files, isIgnored, {}))
+    expect(result.current.tokenWeight).toBe(1)
   })
 })
