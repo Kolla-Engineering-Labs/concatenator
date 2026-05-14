@@ -25,33 +25,9 @@
   - **Comprehensive Testing**: Added 20+ new unit and E2E tests to verify token accuracy and analytics consistency.
   - **Kolla Engineering Labs Protocol**: Refined macOS security reporting and branding across the CLI and documentation.
 
-## [0.6.2] - 2026-05-12
-
-### Minor Changes
-
-- # Precise Token Counting & Efficiency Analytics
-
-  ## Core Engine
-  - **Tiktoken Integration**: Replaced character-based heuristics with precise **BPE (Byte-Pair Encoding)** tokenization using `js-tiktoken`.
-  - **o200k_base Support**: Standardized on the `o200k_base` encoding (GPT-4o), ensuring compatibility with modern LLMs.
-  - **Resilient Fallback**: Implemented a singleton-initialized encoder with automatic fallback to character estimation for robust operation in all environments.
-
-  ## CLI Enhancements
-  - **Precise Metrics**: Updated all CLI commands to report "Precise Tokens" instead of estimates.
-  - **Efficiency Analytics**: Added "Tokens Saved" and optimization percentages to the concatenation summary, highlighting BPE boundary gains.
-  - **Pre-flight Precision**: Updated `validate --tokens` to provide exact context weight analysis.
-
-  ## Web UI Features
-  - **Context Budget Transparency**: Introduced an **Efficiency Badge** ("Context Gained") in the workbench to provide real-time feedback on bundle optimization.
-  - **Precise Labels**: Updated all UI token indicators to clearly signify precise, BPE-based counts.
-  - **Performance Optimization**: Preserved UI responsiveness by utilizing background Web Workers for tokenization tasks.
-
-  ## Quality & Branding
-  - **Comprehensive Testing**: Added 20+ new unit and E2E tests to verify token accuracy and analytics consistency.
-
 ## [0.6.1] - 2026-05-11
 
-### Patch Changes
+### Minor Changes
 
 - # Stabilization & Versioning Sync
 
