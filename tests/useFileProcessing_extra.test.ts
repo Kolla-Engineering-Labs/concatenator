@@ -62,6 +62,7 @@ describe('useFileProcessing Extra Coverage', () => {
         maxFileLimit: 100,
         isIgnoreListLoading: false,
         setVirtualFileSystem: vi.fn(),
+        shouldRecurse: () => false,
       })
     )
 
@@ -103,6 +104,7 @@ describe('useFileProcessing Extra Coverage', () => {
         maxFileLimit: 100,
         isIgnoreListLoading: false,
         setVirtualFileSystem: vi.fn(),
+        shouldRecurse: () => false,
       })
     )
 
@@ -126,6 +128,7 @@ describe('useFileProcessing Extra Coverage', () => {
         maxFileLimit: 100,
         isIgnoreListLoading: false,
         setVirtualFileSystem: vi.fn(),
+        shouldRecurse: () => false,
       })
     )
 
@@ -169,6 +172,7 @@ describe('useFileProcessing Extra Coverage', () => {
         maxFileLimit: 100,
         isIgnoreListLoading: false,
         setVirtualFileSystem: vi.fn(),
+        shouldRecurse: () => false,
       })
     )
 
@@ -200,6 +204,7 @@ describe('useFileProcessing Extra Coverage', () => {
         maxFileLimit: 100,
         isIgnoreListLoading: false,
         setVirtualFileSystem: vi.fn(),
+        shouldRecurse: () => false,
       })
     )
 
@@ -245,6 +250,7 @@ describe('useFileProcessing Extra Coverage', () => {
         maxFileLimit: 100,
         isIgnoreListLoading: false,
         setVirtualFileSystem: vi.fn(),
+        shouldRecurse: () => false,
       })
     )
 

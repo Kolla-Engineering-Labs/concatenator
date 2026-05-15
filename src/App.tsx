@@ -65,6 +65,10 @@ export default function App() {
     setVirtualFileSystem,
     tokenBudget,
     isInitialized,
+    showIgnored,
+    setShowIgnored,
+    isExplicitlyNegated,
+    shouldRecurse,
   } = useWorkbench()
 
   const {
@@ -87,9 +91,11 @@ export default function App() {
   } = useFileProcessing({
     appMode,
     isIgnored,
+    isExplicitlyNegated,
     maxFileLimit,
     isIgnoreListLoading: !isInitialized,
     setVirtualFileSystem,
+    shouldRecurse,
   })
 
   const handleClearAll = useCallback(() => {
@@ -156,18 +162,21 @@ export default function App() {
 
   const displayFiles = useMemo(() => {
     return baseFiles.map((f) => {
+      const ignored = isIgnored(f.path)
+      const negated = isExplicitlyNegated(f.path)
       const meta = tokenMap[f.path] || {
         tokens: f.tokens || 0,
-        isPrecise: f.isPrecise || false,
+        isPrecise: f.isPrecise || ignored || false,
       }
       return {
         ...f,
         tokens: meta.tokens,
         isPrecise: meta.isPrecise,
-        isIgnored: isIgnored(f.path),
+        isIgnored: ignored,
+        isNegated: negated,
       }
     })
-  }, [baseFiles, isIgnored, tokenMap])
+  }, [baseFiles, isIgnored, isExplicitlyNegated, tokenMap])
 
   const { totalTokens, tokensSaved, isPrecise } = useMemo(() => {
     return displayFiles.reduce(
@@ -177,7 +186,7 @@ export default function App() {
         } else {
           acc.totalTokens += f.tokens || 0
         }
-        if (f.kind === 'file' && !f.isPrecise) {
+        if (f.kind === 'file' && !f.isIgnored && !f.isPrecise) {
           acc.isPrecise = false
         }
         return acc
@@ -186,7 +195,20 @@ export default function App() {
     )
   }, [displayFiles])
 
-  const fileTree = useFileTree(displayFiles, isIgnored, tokenMap)
+  const filteredForTree = useMemo(() => {
+    return displayFiles.filter(
+      (f) =>
+        (showIgnored || !f.isIgnored) &&
+        (!filterText || f.path.toLowerCase().includes(filterText.toLowerCase()))
+    )
+  }, [displayFiles, showIgnored, filterText])
+
+  const fileTree = useFileTree(
+    filteredForTree,
+    isIgnored,
+    isExplicitlyNegated,
+    tokenMap
+  )
 
   // Clear files and VFS when switching modes to avoid state bleed
   useEffect(() => {
@@ -230,7 +252,7 @@ export default function App() {
               path: node.path,
               kind: node.kind,
               size: node.size || 0,
-              content: '', // content isn't loaded yet
+              content: undefined, // content isn't loaded yet
               isIgnored: node.isIgnored,
               isNegated: node.isNegated,
             })
@@ -281,32 +303,30 @@ export default function App() {
     }
   }, [files.length, virtualFileSystem])
 
-  // Auto-expand all directories when in Tree mode and files change
+  // Auto-expand NEWLY discovered directories when in Tree mode
   useEffect(() => {
     if (!fileTree || viewMode !== ViewPreference.TREE) return
 
-    setExpandedPaths((prev) => {
-      const next = new Set(prev)
-      let changed = false
-
-      const allPaths: string[] = []
-      const collect = (node: TreeItem) => {
-        if (node.kind === 'directory') {
-          allPaths.push(node.path)
-          node.children?.forEach(collect)
-        }
+    const allPaths: string[] = []
+    const collect = (node: TreeItem) => {
+      if (node.kind === 'directory') {
+        allPaths.push(node.path)
+        node.children?.forEach(collect)
       }
-      collect(fileTree)
+    }
+    collect(fileTree)
 
-      allPaths.forEach((p) => {
-        if (!next.has(p)) {
-          next.add(p)
-          changed = true
-        }
+    const newPaths = allPaths.filter((p) => !seenPathsRef.current.has(p))
+
+    if (newPaths.length > 0) {
+      setExpandedPaths((prev) => {
+        const next = new Set(prev)
+        newPaths.forEach((p) => next.add(p))
+        return next
       })
 
-      return changed ? next : prev
-    })
+      newPaths.forEach((p) => seenPathsRef.current.add(p))
+    }
   }, [fileTree, viewMode])
 
   useEffect(() => {
@@ -420,8 +440,9 @@ export default function App() {
                   files={files}
                   filteredFiles={displayFiles.filter(
                     (f) =>
-                      !filterText ||
-                      f.path.toLowerCase().includes(filterText.toLowerCase())
+                      (showIgnored || !f.isIgnored) &&
+                      (!filterText ||
+                        f.path.toLowerCase().includes(filterText.toLowerCase()))
                   )}
                   fileTree={fileTree}
                   expandedPaths={expandedPaths}
@@ -453,6 +474,8 @@ export default function App() {
                   tokenBudget={tokenBudget}
                   totalTokens={totalTokens}
                   importError={importError}
+                  showIgnored={showIgnored}
+                  setShowIgnored={setShowIgnored}
                 />
               )}
             </div>

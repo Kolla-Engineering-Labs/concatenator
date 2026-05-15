@@ -18,12 +18,29 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
     'concat_view',
     ViewPreference.LIST
   )
-  const [ignoreList, setIgnoreList] = useLocalStorage<string[]>(
+  const [ignoreList, setIgnoreListInternal] = useLocalStorage<string[]>(
     'concat_ignore',
     [...DEFAULT_IGNORE_LIST]
   )
+
+  const setIgnoreList = useCallback(
+    (updater: string[] | ((prev: string[]) => string[])) => {
+      setIgnoreListInternal((prev) => {
+        const next = typeof updater === 'function' ? updater(prev) : updater
+        // Custom sort: normal patterns first (alphabetical), then negated patterns (alphabetical)
+        const normal = next.filter((p) => !p.startsWith('!')).sort()
+        const negated = next.filter((p) => p.startsWith('!')).sort()
+        return [...normal, ...negated]
+      })
+    },
+    [setIgnoreListInternal]
+  )
   const [autoSaveIgnore, setAutoSaveIgnore] = useLocalStorage<boolean>(
     'concat_auto_save_ignore',
+    false
+  )
+  const [showIgnored, setShowIgnored] = useLocalStorage<boolean>(
+    'concat_show_ignored',
     false
   )
   const isInitialMount = React.useRef(true)
@@ -42,9 +59,6 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
       try {
         const serverList = await ApiClient.getIgnoreList()
         if (mounted && Array.isArray(serverList)) {
-          const sorted = [...serverList].sort((a: string, b: string) =>
-            a.localeCompare(b)
-          )
           setIgnoreList((prev) => {
             // Merge server list with any items added locally during the fetch
             // (items that are neither in the default list nor in the server list)
@@ -53,12 +67,10 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
                 !DEFAULT_IGNORE_LIST.includes(item) &&
                 !serverList.includes(item)
             )
-            const merged = Array.from(
-              new Set([...serverList, ...localOnly])
-            ).sort((a: string, b: string) => a.localeCompare(b))
-            return merged
+            const merged = Array.from(new Set([...serverList, ...localOnly]))
+            return merged.sort()
           })
-          lastSyncedList.current = sorted
+          lastSyncedList.current = [...serverList].sort()
         }
 
         // Also fetch VFS tree if available
@@ -188,8 +200,7 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
     (pattern: string) => {
       setIgnoreList((prev) => {
         if (prev.includes(pattern)) return prev
-        const next = [...prev, pattern].sort((a, b) => a.localeCompare(b))
-        return next
+        return [...prev, pattern]
       })
     },
     [setIgnoreList]
@@ -208,6 +219,11 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const isIgnored = useCallback(
     (path: string) => ignoreEngine.isIgnored(path),
+    [ignoreEngine]
+  )
+
+  const isExplicitlyNegated = useCallback(
+    (path: string) => ignoreEngine.isExplicitlyNegated(path),
     [ignoreEngine]
   )
 
@@ -248,6 +264,10 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
         setAutoSaveIgnore,
         resetWorkbench,
         isInitialized,
+        showIgnored,
+        setShowIgnored,
+        isExplicitlyNegated,
+        shouldRecurse: (path: string) => ignoreEngine.shouldRecurse(path),
       }}
     >
       {children}

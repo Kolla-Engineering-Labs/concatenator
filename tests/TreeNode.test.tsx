@@ -35,6 +35,9 @@ vi.mock('../src/web/hooks/useWorkbench', () => ({
   useWorkbench: () => ({
     addIgnorePattern: mockAddIgnorePattern,
     removeIgnorePattern: mockRemoveIgnorePattern,
+    ignoreList: ['src/**'],
+    isIgnored: (path: string) => path === 'src' || path.startsWith('src/'),
+    isExplicitlyNegated: () => false,
   }),
 }))
 

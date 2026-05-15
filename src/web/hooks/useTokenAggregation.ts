@@ -130,16 +130,25 @@ export const useTokenAggregation = (files: FileItem[]) => {
     }
 
     for (const file of files) {
-      if (
-        file.kind !== 'file' ||
-        !file.content ||
-        typeof file.content !== 'string'
-      )
+      if (file.kind !== 'file' || file.content === undefined) continue
+      const content = file.content
+      if (typeof content !== 'string') {
+        // Binary or missing content: treat as precise (heuristic is the only option here)
+        // to avoid blocking the global precision indicator.
+        const current = tokenMapRef.current[file.path]
+        if (!current) {
+          newMetadata[file.path] = {
+            tokens: file.tokens || 0,
+            isPrecise: true,
+          }
+          hasChanges = true
+        }
         continue
+      }
 
       let hash = contentHashesRef.current.get(file.path)
       if (hash === undefined) {
-        hash = TokenService.hashContent(file.content)
+        hash = TokenService.hashContent(content)
         contentHashesRef.current.set(file.path, hash)
       }
 
@@ -155,7 +164,7 @@ export const useTokenAggregation = (files: FileItem[]) => {
           }
         } else {
           newMetadata[file.path] = {
-            tokens: TokenService.getTokenEstimate(file.content),
+            tokens: TokenService.getTokenEstimate(content),
             isPrecise: false,
             hash,
           }

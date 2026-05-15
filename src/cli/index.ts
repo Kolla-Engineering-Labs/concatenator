@@ -288,6 +288,7 @@ program
     'Mirror pulse data to stderr for headless CI environments',
     false
   )
+  .option('--show-ignored', 'Show ignored files and reasons in stderr', false)
   .action(
     async (
       paths: string[],
@@ -301,6 +302,7 @@ program
         followSymlinks: boolean
         quiet: boolean
         pulse: boolean
+        showIgnored: boolean
       }
     ) => {
       // Ensure high-precision BPE strategy is loaded before execution
@@ -357,41 +359,45 @@ program
           const dirTokens = new Map<string, number>()
 
           for (const entry of entries) {
-            if (entry.kind === 'file') {
-              try {
-                const content = readFileSync(entry.fullPath, 'utf-8')
-                const tokens = TokenService.getTokenCount(content)
-
-                allFiles.push({
-                  path: entry.path,
-                  content,
-                  tokens,
-                  size: entry.size,
-                })
-
-                totalTokens += tokens
-
-                if (options.verbose >= 2) {
-                  logger.info(
-                    `  [${tokens.toLocaleString().padStart(8)} tokens] ${entry.path}`
-                  )
-                }
-
-                // Roll tokens up to every ancestor directory
-                if (options.verbose >= 1) {
-                  const parts = entry.path.split('/')
-                  for (let depth = 1; depth < parts.length; depth++) {
-                    const dirPath = parts.slice(0, depth).join('/')
-                    dirTokens.set(
-                      dirPath,
-                      (dirTokens.get(dirPath) ?? 0) + tokens
-                    )
-                  }
-                  dirTokens.set('.', (dirTokens.get('.') ?? 0) + tokens)
-                }
-              } catch {
-                // Skip files that can't be read
+            if (entry.status === 'ignored' || entry.status === 'rejected') {
+              if (options.showIgnored) {
+                process.stderr.write(
+                  `[${entry.status}] ${entry.path} - ${entry.reason}\n`
+                )
               }
+              continue
+            }
+
+            try {
+              const content = readFileSync(entry.fullPath, 'utf-8')
+              const tokens = TokenService.getTokenCount(content)
+
+              allFiles.push({
+                path: entry.path,
+                content,
+                tokens,
+                size: entry.size,
+              })
+
+              totalTokens += tokens
+
+              if (options.verbose >= 2) {
+                logger.info(
+                  `  [${tokens.toLocaleString().padStart(8)} tokens] ${entry.path}`
+                )
+              }
+
+              // Roll tokens up to every ancestor directory
+              if (options.verbose >= 1) {
+                const parts = entry.path.split('/')
+                for (let depth = 1; depth < parts.length; depth++) {
+                  const dirPath = parts.slice(0, depth).join('/')
+                  dirTokens.set(dirPath, (dirTokens.get(dirPath) ?? 0) + tokens)
+                }
+                dirTokens.set('.', (dirTokens.get('.') ?? 0) + tokens)
+              }
+            } catch {
+              // Skip files that can't be read
             }
           }
 
@@ -450,8 +456,9 @@ program
               ? ((tokensSaved / totalTokens) * 100).toFixed(1)
               : '0'
 
+          const isPrecise = TokenService.isPrecise()
           logger.info(
-            `✔ Created ${options.output} (${formatFileSize(bundleSize)} | ${finalOutputTokens.toLocaleString()} precise tokens).`
+            `✔ Created ${options.output} (${formatFileSize(bundleSize)} | Total Tokens (cl100k): ${finalOutputTokens.toLocaleString()}${isPrecise ? '' : ' [Heuristic Estimation]'}).`
           )
           if (tokensSaved > 0) {
             logger.info(

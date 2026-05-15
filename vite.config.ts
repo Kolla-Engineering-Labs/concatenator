@@ -101,14 +101,21 @@ export default defineConfig(({ mode }) => {
         brotliSize: true,
       }),
     ],
+    // v0.8.0-observability-sync: force config reload to pick up package.json version
     define: {
       PROCESS_VERSION: JSON.stringify(
         JSON.parse(fs.readFileSync('./package.json', 'utf-8')).version
       ),
+      'process.platform': JSON.stringify('browser'),
+      'process.env': {},
+      'path.sep': JSON.stringify('/'),
     },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
+        ...(mode !== 'test'
+          ? { path: path.resolve(__dirname, './src/web/path-shim.ts') }
+          : {}),
       },
     },
     server: {

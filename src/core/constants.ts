@@ -139,3 +139,24 @@ export const ARCHITECT_PGP_FINGERPRINT =
   '2D08 0B10 4329 E787 4DDB  7E19 0970 CC48 540A FF31'
 export const OFFICIAL_MANIFEST_URL =
   'https://github.com/Kolla-Engineering-Labs/concatenator/releases/latest/download/SHA256SUMS.asc'
+
+// Size and Type guards
+export const MAX_FILE_SIZE = 1 * 1024 * 1024 // 1MB
+export const BINARY_EXTENSIONS = [
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.webp',
+  '.ico',
+  '.pdf',
+  '.zip',
+  '.exe',
+  '.dll',
+  '.pyc',
+  '.o',
+  '.obj',
+  '.bin',
+  '.so',
+  '.dylib',
+]

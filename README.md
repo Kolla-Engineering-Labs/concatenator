@@ -58,9 +58,16 @@ graph LR
   - **PDF**: Export concatenated files as a formatted PDF document with proper pagination and delimiters.
 - **Smart Ignore System**:
   - Exclude common noise (e.g., `node_modules`, `.git`, `package-lock.json`) using simple string matches or powerful Regular Expressions.
+  - **Discovery-First Traversal**: The core engine now prioritizes negations (e.g., `!core`). Files matching a negation pattern are discovered and included even if they reside within an ignored directory (e.g., `tests/`), ensuring complete visibility for "exception" files.
   - **Auto-Discovery**: CLI automatically respects `.concatignore` or `.gitignore` in your current working directory.
   - **CLI Persistence**: Use `-i, --ignore-file <path>` to leverage existing project configurations for both bundling and extraction.
   - **Web Auto-Save**: Toggle the **"Auto-Save to .concatenate-ignore"** option in the UI to keep your local workspace in sync with your project's ignore configuration automatically.
+- **File Status Indicators**:
+  - The Workbench uses visual badges to clarify how ignore rules are applied:
+    - **Ignored**: Explicitly matches a pattern in your ignore list.
+    - **Negated**: Re-included via a negation pattern (prefixed with `!`).
+    - **Inherited**: Automatically excluded because a parent directory is ignored.
+    - **Negated + Inherited**: A powerful hybrid state indicating an "exception" file that is included even though its containing folder is ignored.
 - **Structural Redundancy Fixes**:
   - **Root Pruning (Web)**: Automatically reconciles overlapping folder drops. If you drop a parent folder after a child, the workbench "absorbs" the child into the new structure and provides visual feedback via the **Absorption Toast**.
   - **Input Pruning (CLI)**: Normalizes and filters overlapping command-line arguments. If both `./src` and `./src/components` are passed, the redundant sub-path is automatically pruned.

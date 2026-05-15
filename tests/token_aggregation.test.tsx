@@ -87,7 +87,7 @@ describe('useTokenAggregation Hook', () => {
 
     // Give it a moment to run effects
     await new Promise((r) => setTimeout(r, 100))
-    expect(Object.keys(result.current.tokenMap).length).toBe(0)
+    expect(Object.keys(result.current.tokenMap).length).toBe(2)
   })
 
   it('debounces multiple worker messages', async () => {
@@ -189,18 +189,34 @@ describe('useFileTree Aggregation', () => {
   ]
 
   it('aggregates token weights hierarchically', () => {
-    const { result } = renderHook(() => useFileTree(files, () => false, {}))
+    const { result } = renderHook(() =>
+      useFileTree(
+        files,
+        () => false,
+        () => false,
+        {}
+      )
+    )
     expect(result.current.tokenWeight).toBe(3)
   })
 
   it('marks directory as precise when all children are precise', () => {
-    const { result } = renderHook(() => useFileTree(files, () => false, {}))
+    const { result } = renderHook(() =>
+      useFileTree(
+        files,
+        () => false,
+        () => false,
+        {}
+      )
+    )
     expect(result.current.isPrecise).toBe(true)
   })
 
   it('excludes ignored files from hierarchical aggregation', () => {
     const isIgnored = (path: string) => path === 'src/b.ts'
-    const { result } = renderHook(() => useFileTree(files, isIgnored, {}))
+    const { result } = renderHook(() =>
+      useFileTree(files, isIgnored, () => false, {})
+    )
     expect(result.current.tokenWeight).toBe(1)
   })
 })

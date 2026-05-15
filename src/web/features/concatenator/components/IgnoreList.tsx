@@ -173,7 +173,12 @@ export const IgnoreList: React.FC<IgnoreListProps> = ({
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.8 }}
                       transition={{ duration: 0.15 }}
-                      className="flex items-center gap-1.5 px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-[11px] font-medium group border border-slate-200 dark:border-slate-700 hover:border-brand-300 dark:hover:border-brand-700 transition-colors"
+                      className={cn(
+                        'flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-medium group border transition-colors',
+                        item.startsWith('!')
+                          ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 hover:border-emerald-300'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-brand-300 dark:hover:border-brand-700'
+                      )}
                       data-testid={`ignore-item-${item}`}
                     >
                       <span className="truncate max-w-[120px]" title={item}>

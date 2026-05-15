@@ -34,6 +34,7 @@ test.describe('Concatenate Mode', () => {
       localStorage.removeItem('concat_view')
       localStorage.removeItem('concat_sidebar')
       localStorage.setItem('concat_auto_save_ignore', 'true')
+      localStorage.setItem('concat_show_ignored', 'true')
 
       // Set sidebar to true for desktop (>=1024px), false for mobile to avoid obscuring content
       const isMobile = window.innerWidth < 1024

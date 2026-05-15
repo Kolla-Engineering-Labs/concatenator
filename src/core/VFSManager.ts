@@ -6,7 +6,7 @@
 import * as fsDefault from 'node:fs'
 import { join, resolve } from 'node:path'
 import micromatch from 'micromatch'
-import { DEFAULT_IGNORE_LIST } from './constants.js'
+import { DEFAULT_IGNORE_LIST, BINARY_EXTENSIONS } from './constants.js'
 
 export interface VFSFileSystem {
   lstatSync: typeof fsDefault.lstatSync
@@ -21,6 +21,7 @@ export interface VFSNode {
   size?: number
   isIgnored: boolean
   isNegated: boolean
+  reason?: string
   children?: VFSNode[]
 }
 
@@ -31,18 +32,7 @@ export class VFSManager {
   private negationPatterns: string[]
   private maxFiles: number
 
-  private static HARD_IGNORED_EXTENSIONS = [
-    '.png',
-    '.jpg',
-    '.jpeg',
-    '.gif',
-    '.webp',
-    '.ico',
-    '.pdf',
-    '.zip',
-    '.exe',
-    '.dll',
-  ]
+  private static HARD_IGNORED_EXTENSIONS = BINARY_EXTENSIONS
 
   constructor(
     baseDir: string,
@@ -85,12 +75,16 @@ export class VFSManager {
   private checkNodeIgnoreState(
     relPath: string,
     name: string
-  ): { isIgnored: boolean; isNegated: boolean } {
+  ): { isIgnored: boolean; isNegated: boolean; reason?: string } {
     if (!relPath || relPath === '.')
       return { isIgnored: false, isNegated: false }
 
     if (this.isHardIgnored(name)) {
-      return { isIgnored: true, isNegated: false }
+      return {
+        isIgnored: true,
+        isNegated: false,
+        reason: 'Binary File Detected',
+      }
     }
 
     const matchesRegex = this.ignoreRegexes.some(
@@ -113,7 +107,24 @@ export class VFSManager {
           return { isIgnored: false, isNegated: true }
         }
       }
-      return { isIgnored: true, isNegated: false }
+
+      // Try to find which pattern matched for the reason
+      let reason = 'Matched ignore pattern'
+      if (matchesRegex) {
+        const matchingRegex = this.ignoreRegexes.find(
+          (r) => r.test(relPath) || r.test(name)
+        )
+        if (matchingRegex) reason = `Matched regex ${matchingRegex.toString()}`
+      } else {
+        const matchingGlob = this.ignorePatterns.find(
+          (p) =>
+            micromatch.isMatch(relPath, p, { matchBase: true, dot: true }) ||
+            relPath.startsWith(p + '/')
+        )
+        if (matchingGlob) reason = `Matched glob ${matchingGlob}`
+      }
+
+      return { isIgnored: true, isNegated: false, reason }
     }
 
     // Not ignored — check if it explicitly matches a negation pattern
@@ -148,7 +159,10 @@ export class VFSManager {
           ? this.baseDir.split(/[/\\]/).pop() || 'root'
           : currentPath.split(/[/\\]/).pop() || ''
 
-      const { isIgnored, isNegated } = this.checkNodeIgnoreState(relPath, name)
+      const { isIgnored, isNegated, reason } = this.checkNodeIgnoreState(
+        relPath,
+        name
+      )
 
       let kind: 'file' | 'directory'
       let size = 0
@@ -211,6 +225,7 @@ export class VFSManager {
         children: kind === 'directory' ? children : undefined,
         isIgnored,
         isNegated,
+        reason,
       }
     }
 

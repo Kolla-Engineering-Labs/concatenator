@@ -20,4 +20,7 @@ export interface WorkbenchState {
   tokenBudget: number
   autoSaveIgnore: boolean
   isInitialized: boolean
+  showIgnored: boolean
+  isExplicitlyNegated: (path: string) => boolean
+  shouldRecurse: (path: string) => boolean
 }

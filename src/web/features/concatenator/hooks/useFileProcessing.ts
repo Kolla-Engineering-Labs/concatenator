@@ -64,9 +64,11 @@ const isReservedWindowsFilename = (name: string) => {
 interface UseFileProcessingProps {
   appMode: AppMode
   isIgnored: (path: string) => boolean
+  isExplicitlyNegated?: (path: string) => boolean
   maxFileLimit: number
   isIgnoreListLoading: boolean
   setVirtualFileSystem: (vfs: Record<string, string>) => void
+  shouldRecurse: (path: string) => boolean
 }
 
 /**
@@ -75,9 +77,11 @@ interface UseFileProcessingProps {
 export const useFileProcessing = ({
   appMode,
   isIgnored,
+  isExplicitlyNegated = () => false,
   maxFileLimit,
   isIgnoreListLoading,
   setVirtualFileSystem,
+  shouldRecurse,
 }: UseFileProcessingProps) => {
   const [files, setFiles] = useState<FileItem[]>([])
   // filesRef mirrors files on every render so async callbacks always read
@@ -284,7 +288,10 @@ export const useFileProcessing = ({
           const item = uploadedFiles[i]
           let fileItem: FileItem
 
-          if ('kind' in item && item.kind === 'file') {
+          if (
+            'kind' in item &&
+            (item.kind === 'file' || item.kind === 'directory')
+          ) {
             // Already processed (e.g. from handleDrop)
             fileItem = item
           } else {
@@ -294,9 +301,10 @@ export const useFileProcessing = ({
               (file as { webkitRelativePath?: string }).webkitRelativePath ||
               file.name
 
-            const content = await readFileContent(file)
+            const ignored = isIgnored(path)
+            const content = ignored ? '' : await readFileContent(file)
 
-            if (content === null || cancelImportRef.current) {
+            if (content === null && !ignored && !cancelImportRef.current) {
               const now = Date.now()
               if (now - lastRenderTime > 50 || i === uploadedFiles.length - 1) {
                 setImportProgress((prev) => ({ ...prev, current: i + 1 }))
@@ -309,9 +317,13 @@ export const useFileProcessing = ({
               name: file.name,
               path: path,
               kind: 'file',
-              content,
+              content: ignored ? undefined : content || '',
               size: file.size,
-              tokens: estimateTokenCount(content, file.size),
+              isIgnored: ignored,
+              tokens: ignored
+                ? 0
+                : estimateTokenCount(content || '', file.size),
+              handle: file,
             }
           }
 
@@ -439,6 +451,15 @@ export const useFileProcessing = ({
             }
 
             setFiles(reconciledFiles)
+
+            if (
+              reconciledFiles.filter((f) => f.kind === 'file').length === 0 &&
+              appMode === AppMode.CONCATENATE
+            ) {
+              setImportError(
+                'No files were imported. This might be because all files matched your ignore list (check if any Regex is overly broad) or the folder was empty.'
+              )
+            }
           }
         }
 
@@ -455,6 +476,7 @@ export const useFileProcessing = ({
       }
     },
     [
+      isIgnored,
       appMode,
       setIsProcessing,
       setVirtualFileSystem,
@@ -569,6 +591,106 @@ export const useFileProcessing = ({
     [setIsProcessing, setImportProgress, setFiles, setImportError]
   )
 
+  // Auto-reload files that were un-ignored but are empty
+  React.useEffect(() => {
+    let mounted = true
+    const reloadUnignored = async () => {
+      // Only auto-reload if we are not already processing a large batch
+      if (appMode !== AppMode.CONCATENATE) return
+
+      const targets = files.filter((f) => {
+        const currentlyIgnored = isIgnored(f.path)
+        return f.kind === 'file' && !currentlyIgnored && f.content === undefined
+      })
+
+      if (targets.length === 0) return
+
+      // Use a small delay to debounce multiple rapid ignore changes
+      await new Promise((resolve) => setTimeout(resolve, 100))
+      if (!mounted) return
+
+      console.log(
+        `[useFileProcessing] Auto-reloading ${targets.length} un-ignored files`
+      )
+
+      // isProcessingRef is not used as a guard here to allow un-ignore reloads
+      // even if other background tasks are running.
+      setIsProcessing(true)
+      let updates: Record<string, Partial<FileItem>> = {}
+
+      try {
+        for (let i = 0; i < targets.length; i++) {
+          if (!mounted) break
+          const file = targets[i]
+
+          try {
+            let content: string | ArrayBuffer | null = null
+            let size = file.size || 0
+
+            if (file.handle) {
+              content = await readFileContent(file.handle)
+              size = file.handle.size
+            } else {
+              try {
+                const blob = await ApiClient.getFileBlob(file.path)
+                content = await new Promise((resolve) => {
+                  const reader = new FileReader()
+                  reader.onload = () => resolve(reader.result as string)
+                  reader.onerror = () => resolve(null)
+                  reader.readAsText(blob)
+                })
+                size = blob.size
+              } catch {
+                // Not available
+              }
+            }
+
+            if (content !== null) {
+              updates[file.path] = {
+                content,
+                size,
+                tokens: estimateTokenCount(content, size),
+                isIgnored: false,
+                isNegated: isExplicitlyNegated(file.path),
+              }
+            }
+
+            // Update in batches of 10 or at the end
+            if ((i + 1) % 10 === 0 || i === targets.length - 1) {
+              if (Object.keys(updates).length > 0) {
+                const batchUpdates = { ...updates }
+                setFiles((prev) =>
+                  prev.map((f) =>
+                    batchUpdates[f.path] ? { ...f, ...batchUpdates[f.path] } : f
+                  )
+                )
+                updates = {} // Reset for next batch
+              }
+              // Yield
+              await new Promise((resolve) => setTimeout(resolve, 0))
+            }
+          } catch (err) {
+            logger.error(`Failed to reload un-ignored file ${file.path}:`, err)
+          }
+        }
+      } finally {
+        if (mounted) setIsProcessing(false)
+      }
+    }
+
+    reloadUnignored()
+    return () => {
+      mounted = false
+    }
+  }, [
+    files,
+    isIgnored,
+    isExplicitlyNegated,
+    appMode,
+    readFileContent,
+    setIsProcessing,
+  ])
+
   const handleFileUpload = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (isProcessingRef.current) {
@@ -658,13 +780,40 @@ export const useFileProcessing = ({
 
             const fullPath = path + entry.name
 
-            // Skip directories (root or nested) that are explicitly blocked by ignore list
-            if (entry.isDirectory && isIgnored(fullPath)) {
+            const ignored = isIgnored(fullPath)
+
+            // Optimization: If a directory is ignored and contains no negations, skip traversal.
+            // This maintains standard .gitignore behavior while allowing explicit un-ignores.
+            if (entry.isDirectory && !shouldRecurse(fullPath)) {
+              // Still push the directory itself so it can be seen in the tree if "Show Ignored" is on
+              droppedFiles.push({
+                name: entry.name,
+                path: fullPath,
+                kind: 'directory',
+                isIgnored: true,
+              } as FileItem)
               return
             }
 
-            // Skip files that are explicitly blocked by ignore list
-            if (entry.isFile && isIgnored(fullPath)) {
+            // Include ignored files as shallow entries
+            if (entry.isFile && ignored) {
+              const file = await new Promise<File>((resolve, reject) => {
+                const fileEntry = entry as FileSystemFileEntry
+                fileEntry.file(
+                  (f: File) => resolve(f),
+                  (err: Error) => reject(err)
+                )
+              })
+              droppedFiles.push({
+                name: entry.name,
+                path: fullPath,
+                kind: 'file',
+                content: undefined,
+                size: file.size,
+                tokens: 0,
+                isIgnored: true,
+                handle: file,
+              })
               return
             }
 
@@ -702,8 +851,17 @@ export const useFileProcessing = ({
                 content,
                 size: file.size,
                 tokens: estimateTokenCount(content, file.size),
+                handle: file,
               })
             } else if (entry.isDirectory && 'createReader' in entry) {
+              // Push the directory itself to the discovery list
+              droppedFiles.push({
+                name: entry.name,
+                path: fullPath,
+                kind: 'directory',
+                isIgnored: ignored,
+              } as FileItem)
+
               let reader
               try {
                 reader = (entry as FileSystemDirectoryEntry).createReader()
@@ -749,10 +907,14 @@ export const useFileProcessing = ({
                 }
               )
 
-              // Parallelize discovery of children with concurrency limit
-              const concurrencyLimit = 20
-              for (let i = 0; i < entriesBatch.length; i += concurrencyLimit) {
-                const batch = entriesBatch.slice(i, i + concurrencyLimit)
+              // Parallelize discovery of children with concurrency limit (scoped to this level)
+              const levelConcurrencyLimit = 5
+              for (
+                let i = 0;
+                i < entriesBatch.length;
+                i += levelConcurrencyLimit
+              ) {
+                const batch = entriesBatch.slice(i, i + levelConcurrencyLimit)
                 await Promise.all(
                   batch.map((childEntry) =>
                     traverseEntry(childEntry, fullPath + '/')
@@ -805,6 +967,7 @@ export const useFileProcessing = ({
       setIsProcessing,
       maxFileLimit,
       isIgnored,
+      shouldRecurse,
       isIgnoreListLoading,
       readFileContent,
     ]

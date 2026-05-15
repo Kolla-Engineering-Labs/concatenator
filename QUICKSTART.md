@@ -61,7 +61,7 @@ Choose your preferred interface:
 - **Drag & Drop**: Drop your project folder onto the upload zone.
 - **Analyze**: Review file sizes and **Precise Token Counts** in real-time. Toggle between **Tree** and **List** views to inspect your project structure. The Tree View automatically prunes redundant levels to start at the **Minimum Common Root**.
 - **Quick Look**: Click the preview icon next to any file to instantly inspect its content (Code, PDF, or SVG) without leaving the app.
-- **Filter**: Use the **Ignore List** to filter out unwanted noise (e.g., `node_modules`, `.git`).
+- **Filter**: Use the **Ignore List** to filter out unwanted noise (e.g., `node_modules`, `.git`). The UI provides **Ignored**, **Negated**, and **Inherited** badges to help you visualize exactly why a file is excluded or included. **Negations are recursive**: a negated pattern like `!core` will force the app to find matching files even inside ignored directories like `tests/`.
 - **Export**: Choose your format and click **"Concatenate & Download."**
   - **Select `.txt`**: Best for Claude, GPT-4o, and general data recovery.
   - **Select `.pdf`**: Recommended for **Google Gemini** or archiving.

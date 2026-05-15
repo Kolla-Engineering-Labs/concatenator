@@ -80,9 +80,10 @@ export const test = baseTest.extend<TestFixtures>({
       })
     })
 
-    // Enable autoSaveIgnore guard-rail by default for E2E tests
+    // Enable autoSaveIgnore guard-rail and showIgnored transparency by default for E2E tests
     await page.addInitScript(() => {
       window.localStorage.setItem('concat_auto_save_ignore', 'true')
+      window.localStorage.setItem('concat_show_ignored', 'true')
     })
 
     await use(page)

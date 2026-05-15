@@ -3,6 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+export type FileStatus = 'included' | 'ignored' | 'rejected'
+
+export interface FileDiagnostic {
+  path: string
+  status: FileStatus
+  reason?: string
+}
+
 export interface FileItem {
   name: string
   path: string
@@ -13,6 +21,9 @@ export interface FileItem {
   isPrecise?: boolean
   isIgnored?: boolean
   isNegated?: boolean
+  status?: FileStatus
+  reason?: string
+  handle?: File
 }
 
 export interface TreeItem {
@@ -22,6 +33,7 @@ export interface TreeItem {
   children?: TreeItem[]
   isIgnored?: boolean
   isNegated?: boolean
+  reason?: string
   file?: FileItem
   tokenWeight?: number
   isPrecise?: boolean

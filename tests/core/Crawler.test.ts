@@ -69,8 +69,9 @@ describe('UnifiedCrawler', () => {
     })
     const results = crawler.collect()
 
-    expect(results).toHaveLength(1)
-    expect(results[0].name).toBe('file1.txt')
+    expect(results).toHaveLength(2)
+    expect(results.find((e) => e.name === 'file1.txt')?.status).toBe('included')
+    expect(results.find((e) => e.name === 'file2.tmp')?.status).toBe('ignored')
   })
 
   it('should prevent directory traversal attacks', () => {

@@ -197,20 +197,25 @@ export function collectFiles(
     const relativePath = relative(baseDir, fullPath)
 
     // Check if path is ignored
-    if (ignoreEngine.isIgnored(relativePath)) {
-      continue
-    }
+    const isPathIgnored = ignoreEngine.isIgnored(relativePath)
 
     if (entry.isDirectory()) {
-      const subResult = collectFiles(
-        fullPath,
-        baseDir,
-        ignoreEngine,
-        verbose,
-        files
-      )
-      dirTokens += subResult.totalTokens
+      // Even if the directory itself is ignored, we might need to recurse
+      // to find negated sub-items (e.g. !core inside an ignored tests/ folder)
+      if (!isPathIgnored || ignoreEngine.shouldRecurse(relativePath)) {
+        const subResult = collectFiles(
+          fullPath,
+          baseDir,
+          ignoreEngine,
+          verbose,
+          files
+        )
+        dirTokens += subResult.totalTokens
+      }
     } else if (entry.isFile()) {
+      if (isPathIgnored) {
+        continue
+      }
       try {
         const stats = statSync(fullPath)
         const content = readFileSync(fullPath, 'utf-8')

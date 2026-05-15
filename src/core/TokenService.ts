@@ -75,7 +75,7 @@ export class TokenService {
         // Dynamic import ensures the main thread remains unblocked and bundle stays lean.
         // o200k_base is the standard for gpt-4o.
         const { getEncoding } = await import('js-tiktoken')
-        const encoder = getEncoding('o200k_base')
+        const encoder = getEncoding('cl100k_base')
         this.strategy = new PrecisionStrategy(encoder)
         this._isPrecise = true
       } catch {

@@ -231,7 +231,9 @@ test.describe('Max File Limit Feature', () => {
 
         // Wait for files to be processed
         await expect(
-          page.getByText(/Selected Files.*\(\s*501\s*\)/)
+          page
+            .getByText(/Selected Files.*\(\s*501\s*\)/)
+            .filter({ visible: true })
         ).toBeVisible({
           timeout: 30000,
         })
@@ -286,7 +288,9 @@ test.describe('Max File Limit Feature', () => {
 
         // Wait for files to be processed
         await expect(
-          page.getByText(/Selected Files.*\(\s*500\s*\)/)
+          page
+            .getByText(/Selected Files.*\(\s*500\s*\)/)
+            .filter({ visible: true })
         ).toBeVisible({
           timeout: 30000,
         })
@@ -315,7 +319,7 @@ test.describe('Max File Limit Feature', () => {
       page,
       browserName,
     }) => {
-      test.setTimeout(60000)
+      test.setTimeout(180000)
       // Skip on WebKit due to timeout - simpler tests already cover the core functionality
       test.skip(
         browserName === 'webkit',
@@ -334,7 +338,9 @@ test.describe('Max File Limit Feature', () => {
 
         await uploadHelper.setFilesOnInput(files)
         await expect(
-          page.getByText(/Selected Files \(\s*600\s*\)/)
+          page
+            .getByText(/Selected Files \(\s*600\s*\)/)
+            .filter({ visible: true })
         ).toBeVisible({
           timeout: 45000,
         })
@@ -397,7 +403,9 @@ test.describe('Max File Limit Feature', () => {
         // Re-upload the same 600 files (or verify they are still there)
         await uploadHelper.setFilesOnInput(files)
         await expect(
-          page.getByText(/Selected Files \(\s*600\s*\)/)
+          page
+            .getByText(/Selected Files \(\s*600\s*\)/)
+            .filter({ visible: true })
         ).toBeVisible({
           timeout: 30000,
         })

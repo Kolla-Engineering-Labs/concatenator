@@ -60,7 +60,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   return (
     <div className="min-h-10 py-2 sm:py-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between px-4 z-[60] text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider shrink-0 gap-3 sm:gap-6 lg:pl-[19rem]">
       {/* Left Side: Stats */}
-      <div className="flex items-center gap-4 sm:gap-6 w-full sm:w-auto justify-center sm:justify-start">
+      <div className="flex items-center gap-4 sm:gap-6 w-full sm:w-auto justify-center sm:justify-start shrink-0">
         {/* Version */}
         <div
           className="flex items-center gap-1.5 shrink-0 px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700"
@@ -95,14 +95,14 @@ export const StatusBar: React.FC<StatusBarProps> = ({
           }
         >
           {isConnected === null && (
-            <span className="block h-2 w-2 rounded-full bg-slate-400 animate-pulse" />
+            <span className="block h-2 w-2 min-w-[8px] min-h-[8px] rounded-full bg-slate-400 animate-pulse shrink-0" />
           )}
           {isConnected === true && (
-            <span className="block h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="block h-2 w-2 min-w-[8px] min-h-[8px] rounded-full bg-emerald-500 animate-pulse shrink-0" />
           )}
           {isConnected === false && (
             <span
-              className="block h-2 w-2 rounded-full bg-amber-500"
+              className="block h-2 w-2 min-w-[8px] min-h-[8px] rounded-full bg-amber-500 shrink-0"
               data-testid="heartbeat-dot-amber"
             />
           )}

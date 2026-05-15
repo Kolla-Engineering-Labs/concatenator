@@ -11,9 +11,9 @@ import {
   Eye,
   EyeOff,
   ExternalLink,
-  X,
+  X as XIcon,
 } from 'lucide-react'
-import { motion, AnimatePresence } from 'motion/react'
+// motion and AnimatePresence removed as they are currently unused
 import { cn, formatFileSize } from '../../../../lib/utils'
 import { TreeItem, FileItem } from '../../../../core/types'
 import { getFileIcon } from '../../../../lib/fileIcons'
@@ -41,10 +41,11 @@ export const TreeNode: React.FC<TreeNodeProps> = ({
   onRemoveFile,
   inheritedIgnored = false,
 }) => {
-  const { addIgnorePattern, removeIgnorePattern } = useWorkbench()
+  const { addIgnorePattern, removeIgnorePattern, ignoreList } = useWorkbench()
   const isExpanded = expandedPaths.has(node.path)
   const hasChildren = node.children && node.children.length > 0
-  const effectivelyIgnored = node.isIgnored || inheritedIgnored
+  const effectivelyIgnored =
+    (node.isIgnored || inheritedIgnored) && !node.isNegated
 
   const toggleExpand = () => {
     const next = new Set(expandedPaths)
@@ -55,22 +56,40 @@ export const TreeNode: React.FC<TreeNodeProps> = ({
 
   const handleIgnoreToggle = (e: React.MouseEvent) => {
     e.stopPropagation()
-    const pattern = node.kind === 'directory' ? `${node.path}/**` : node.path
-    if (node.isIgnored) {
-      removeIgnorePattern(pattern)
+    const path = node.path
+    const pattern = node.kind === 'directory' ? `${path}/**` : path
+    const negationPattern = `!${pattern}`
+
+    if (effectivelyIgnored) {
+      // If it's ignored but the exact pattern is NOT in the list,
+      // it's inherited. Add a negation pattern to override.
+      if (!(ignoreList || []).includes(pattern)) {
+        addIgnorePattern(negationPattern)
+      } else {
+        removeIgnorePattern(pattern)
+      }
     } else {
-      addIgnorePattern(pattern)
+      // If it's NOT ignored, check if it's because of a negation pattern
+      if ((ignoreList || []).includes(negationPattern)) {
+        removeIgnorePattern(negationPattern)
+      } else {
+        addIgnorePattern(pattern)
+      }
     }
   }
-
   return (
     <div className="select-none">
       <div
         className={cn(
           'flex items-center py-1 px-2 rounded-md cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors group/node',
           depth === 0 && 'font-semibold text-slate-500',
-          effectivelyIgnored && 'opacity-30 grayscale italic select-none'
+          effectivelyIgnored && 'opacity-40 grayscale italic'
         )}
+        title={
+          effectivelyIgnored
+            ? `Ignored: ${node.reason || 'Matches ignore pattern'}`
+            : undefined
+        }
         style={{ paddingLeft: `${depth * 1.25 + 0.5}rem` }}
         onClick={hasChildren ? toggleExpand : undefined}
         data-testid={`tree-node-${node.path || 'root'}`}
@@ -106,8 +125,8 @@ export const TreeNode: React.FC<TreeNodeProps> = ({
             <div className="truncate">
               {node.name}
               {node.kind === 'directory' && node.name !== 'Root' ? '/' : ''}
-              {node.isIgnored && (
-                <span className="ml-2 text-[10px] bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded uppercase tracking-tighter font-bold opacity-60 inline-block align-middle">
+              {node.isIgnored && !node.isNegated && (
+                <span className="ml-2 text-[10px] bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded uppercase tracking-tighter font-bold opacity-60 inline-block align-middle border border-slate-300 dark:border-slate-700">
                   Ignored
                 </span>
               )}
@@ -124,7 +143,7 @@ export const TreeNode: React.FC<TreeNodeProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-1 opacity-0 group-hover/node:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 opacity-0 group-hover/node:opacity-100 transition-opacity pointer-events-auto">
             {(node.kind === 'file' ||
               (node.tokenWeight !== undefined && node.tokenWeight > 0)) && (
               <div className="flex items-center gap-2 mr-2 text-[10px] font-mono whitespace-nowrap border-r border-slate-200 dark:border-slate-700 pr-2 h-4 flex-shrink-0">
@@ -191,39 +210,37 @@ export const TreeNode: React.FC<TreeNodeProps> = ({
                   }
                   onRemoveFile(fileToDelete as FileItem)
                 }}
-                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-all"
-                title={`Remove ${node.name}`}
+                disabled={effectivelyIgnored}
+                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-all disabled:opacity-20"
+                title={
+                  effectivelyIgnored
+                    ? 'Ignored files cannot be removed manually'
+                    : `Remove ${node.name}`
+                }
               >
-                <X className="w-3.5 h-3.5" />
+                <XIcon className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
         </div>
       </div>
 
-      <AnimatePresence>
-        {isExpanded && hasChildren && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
-          >
-            {node.children?.map((child, index) => (
-              <TreeNode
-                key={`${depth + 1}-${child.path}-${index}`}
-                node={child}
-                depth={depth + 1}
-                expandedPaths={expandedPaths}
-                setExpandedPaths={setExpandedPaths}
-                onQuickLook={onQuickLook}
-                onRemoveFile={onRemoveFile}
-                inheritedIgnored={effectivelyIgnored}
-              />
-            ))}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {isExpanded && hasChildren && (
+        <div className="overflow-hidden">
+          {node.children?.map((child, index) => (
+            <TreeNode
+              key={`${depth + 1}-${child.path}-${index}`}
+              node={child}
+              depth={depth + 1}
+              expandedPaths={expandedPaths}
+              setExpandedPaths={setExpandedPaths}
+              onQuickLook={onQuickLook}
+              onRemoveFile={onRemoveFile}
+              inheritedIgnored={effectivelyIgnored}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

@@ -14,6 +14,7 @@ const EMPTY_MAP = {}
 export const useFileTree = (
   filteredFiles: FileItem[],
   isIgnored: (path: string) => boolean,
+  isExplicitlyNegated: (path: string) => boolean,
   tokenMap: Record<string, { tokens: number; isPrecise: boolean }> = EMPTY_MAP
 ) => {
   const fileTree = useMemo(() => {
@@ -26,7 +27,8 @@ export const useFileTree = (
     }
 
     filteredFiles.forEach((file) => {
-      const parts = file.path.split('/').filter((p) => p !== '')
+      const normalizedPath = file.path.replace(/\\/g, '/')
+      const parts = normalizedPath.split('/').filter((p) => p !== '')
       let current = root
 
       parts.forEach((part, index) => {
@@ -41,7 +43,10 @@ export const useFileTree = (
             path: currentPath,
             kind: isLast ? file.kind : 'directory',
             children: isLast && file.kind === 'file' ? undefined : [],
-            isIgnored: file.isIgnored ?? isIgnored(currentPath),
+            isIgnored: isIgnored(currentPath),
+            isNegated: isLast
+              ? (file as FileItem).isNegated
+              : isExplicitlyNegated(currentPath),
             file: isLast ? file : undefined,
           }
           current.children?.push(existing)
@@ -101,19 +106,17 @@ export const useFileTree = (
     }
     sortTree(root)
 
-    // Path Normalization: Recursively prune single-child directories
-    // to ensure the tree starts at the Minimum Common Root.
-    let displayRoot = root
+    // Promote single root directory if it's the only child
+    let promotedRoot = root
     while (
-      displayRoot.children &&
-      displayRoot.children.length === 1 &&
-      displayRoot.children[0].kind === 'directory'
+      promotedRoot.children?.length === 1 &&
+      promotedRoot.children[0].kind === 'directory'
     ) {
-      displayRoot = displayRoot.children[0]
+      promotedRoot = promotedRoot.children[0]
     }
 
-    return displayRoot
-  }, [filteredFiles, isIgnored, tokenMap])
+    return promotedRoot
+  }, [filteredFiles, isIgnored, isExplicitlyNegated, tokenMap])
 
   return fileTree
 }

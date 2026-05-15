@@ -7,6 +7,8 @@ import * as fs from 'node:fs'
 import { join, resolve, relative } from 'node:path'
 import { IgnoreEngine } from './ignore/IgnoreEngine.js'
 import { SecurityViolation } from './errors.js'
+import { BINARY_EXTENSIONS, MAX_FILE_SIZE } from './constants.js'
+import { FileStatus } from './types.js'
 
 export interface CrawlerOptions {
   rootPath: string
@@ -20,6 +22,8 @@ export interface CrawlerEntry {
   fullPath: string
   kind: 'file' | 'directory'
   size: number
+  status: FileStatus
+  reason?: string
 }
 
 /**
@@ -76,9 +80,14 @@ export class UnifiedCrawler {
           '/'
         )
 
+        let status: FileStatus = 'included'
+        let reason: string | undefined = undefined
+
         // Check if path is ignored
-        if (this.ignoreEngine.isIgnored(relativePath)) {
-          continue
+        const ignoreResult = this.ignoreEngine.getIgnoreResult(relativePath)
+        if (ignoreResult.ignored) {
+          status = 'ignored'
+          reason = `Matches ${ignoreResult.reason}`
         }
 
         let kind: 'file' | 'directory'
@@ -103,6 +112,21 @@ export class UnifiedCrawler {
             kind = 'directory'
           } else if (stats.isFile()) {
             kind = 'file'
+
+            // Further checks for files
+            if (status === 'included') {
+              // Binary Check
+              const ext = entry.name
+                .toLowerCase()
+                .substring(entry.name.lastIndexOf('.'))
+              if (BINARY_EXTENSIONS.includes(ext)) {
+                status = 'rejected'
+                reason = 'Binary File Detected'
+              } else if (stats.size > MAX_FILE_SIZE) {
+                status = 'rejected'
+                reason = `Size Exceeds ${MAX_FILE_SIZE / (1024 * 1024)}MB Limit`
+              }
+            }
           } else {
             // Skip other types (sockets, pipes, etc.)
             continue
@@ -114,6 +138,8 @@ export class UnifiedCrawler {
             fullPath,
             kind,
             size: stats.size,
+            status,
+            reason,
           }
 
           if (onEntry) {
@@ -121,7 +147,10 @@ export class UnifiedCrawler {
           }
           results.push(crawlerEntry)
 
-          if (kind === 'directory') {
+          if (
+            kind === 'directory' &&
+            this.ignoreEngine.shouldRecurse(relativePath)
+          ) {
             walk(fullPath)
           }
         } catch (error: unknown) {

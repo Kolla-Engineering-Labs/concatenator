@@ -28,7 +28,9 @@ vi.mock('../src/web/hooks/useWorkbench', () => ({
     addIgnorePattern: mockAddIgnorePattern,
     removeIgnorePattern: mockRemoveIgnorePattern,
     isIgnored: (path: string) =>
-      path.includes('ignored') || path === 'src/b.txt', // Match test data
+      path.includes('ignored') || path === 'src/b.txt',
+    ignoreList: ['src/b.txt'],
+    isExplicitlyNegated: () => false,
   }),
 }))
 
