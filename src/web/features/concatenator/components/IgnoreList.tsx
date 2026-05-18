@@ -120,7 +120,10 @@ export const IgnoreList: React.FC<IgnoreListProps> = ({
                 />
                 <button
                   type="button"
-                  onClick={addIgnoreItem}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    addIgnoreItem()
+                  }}
                   disabled={!newIgnoreItem}
                   className="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 text-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 disabled:text-slate-300 dark:disabled:text-slate-600 rounded-md transition-colors"
                   title="Add ignore pattern"
@@ -185,7 +188,11 @@ export const IgnoreList: React.FC<IgnoreListProps> = ({
                         {item}
                       </span>
                       <button
-                        onClick={() => removeIgnoreItem(item)}
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault()
+                          removeIgnoreItem(item)
+                        }}
                         className="p-0.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md text-slate-400 hover:text-red-500 transition-colors"
                         title={`Remove ${item}`}
                       >

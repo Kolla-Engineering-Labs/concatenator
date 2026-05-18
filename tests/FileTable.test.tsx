@@ -191,4 +191,50 @@ describe('FileTable', () => {
       expect.objectContaining({ path: 'src/a.txt' })
     )
   })
+
+  describe('Mobile View', () => {
+    it('renders mobile cards and handles actions', () => {
+      render(
+        <FileTable
+          files={mockFiles}
+          onRemoveFile={mockOnRemoveFile}
+          onQuickLook={mockOnQuickLook}
+        />
+      )
+
+      // Mobile view uses text instead of just icons for some buttons
+      // and has different layout structure.
+      // We look for 'Ignore' text which is only in mobile buttons (desktop uses title)
+      const ignoreButtons = screen.getAllByText('Ignore')
+      expect(ignoreButtons.length).toBeGreaterThan(0)
+
+      fireEvent.click(ignoreButtons[0])
+      // Default sort is path: a.txt, b.txt, c.txt. So index 0 is a.txt
+      expect(mockAddIgnorePattern).toHaveBeenCalledWith('src/a.txt')
+
+      const quickLookButtons = screen.getAllByTestId('quick-look-button')
+      // There are 3 desktop + 3 mobile = 6 buttons
+      fireEvent.click(quickLookButtons[3]) // first mobile one
+      expect(mockOnQuickLook).toHaveBeenCalled()
+
+      const removeButtons = screen.getAllByTestId('remove-file-button')
+      fireEvent.click(removeButtons[3]) // first mobile one
+      expect(mockOnRemoveFile).toHaveBeenCalled()
+    })
+
+    it('handles un-ignore in mobile view', () => {
+      const ignoredFiles = [{ ...mockFiles[0], isIgnored: true }]
+      render(
+        <FileTable
+          files={ignoredFiles}
+          onRemoveFile={mockOnRemoveFile}
+          onQuickLook={mockOnQuickLook}
+        />
+      )
+
+      const unignoreButton = screen.getByText('Un-ignore')
+      fireEvent.click(unignoreButton)
+      expect(mockRemoveIgnorePattern).toHaveBeenCalledWith('src/b.txt')
+    })
+  })
 })

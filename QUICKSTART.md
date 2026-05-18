@@ -59,9 +59,9 @@ Choose your preferred interface:
 #### 1. Concatenate Files
 
 - **Drag & Drop**: Drop your project folder onto the upload zone.
-- **Analyze**: Review file sizes and **Precise Token Counts** in real-time. Toggle between **Tree** and **List** views to inspect your project structure. The Tree View automatically prunes redundant levels to start at the **Minimum Common Root**.
+- **Analyze**: Review file sizes and **Precise Token Counts** in real-time. Toggle between **Tree** and **List** views to inspect your project structure. The Tree View automatically prunes redundant levels to start at the **Minimum Common Root**. (Note: Large files over 500KB and binary files like images, PDFs, or zip archives bypass CPU-heavy Tiktoken Web Worker BPE encoding, falling back to a fast, non-blocking `character count / 4` heuristic to protect UI thread responsiveness).
 - **Quick Look**: Click the preview icon next to any file to instantly inspect its content (Code, PDF, or SVG) without leaving the app.
-- **Filter**: Use the **Ignore List** to filter out unwanted noise (e.g., `node_modules`, `.git`). The UI provides **Ignored**, **Negated**, and **Inherited** badges to help you visualize exactly why a file is excluded or included. **Negations are recursive**: a negated pattern like `!core` will force the app to find matching files even inside ignored directories like `tests/`.
+- **Filter**: Use the **Ignore List** to filter out unwanted noise (e.g., `node_modules`, `.git`). The UI provides **Ignored**, **Negated**, and **Inherited** badges to help you visualize exactly why a file is excluded or included. **Negations are recursive**: a negated pattern like `!core` will force the app to find matching files even inside ignored directories like `tests/`. _Performance Hardening_: To prevent massive traversal slowdowns, unanchored negations (like `!core`) are NOT processed inside heavy system directories like `node_modules`, `venv`, `.git`, etc. To override rules within these folders, use an anchored negated pattern (e.g., `!node_modules/core`).
 - **Export**: Choose your format and click **"Concatenate & Download."**
   - **Select `.txt`**: Best for Claude, GPT-4o, and general data recovery.
   - **Select `.pdf`**: Recommended for **Google Gemini** or archiving.

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef, useCallback } from 'react'
+import React, { useState, useRef, useCallback, useEffect } from 'react'
 import JSZip from 'jszip'
 import { FileItem, OutputFormat } from '../../../../core/types'
 import { AppMode } from '../../../types/workbench'
@@ -99,6 +99,14 @@ export const useFileProcessing = ({
   const cancelImportRef = useRef(false)
   // Track all active readers to allow comprehensive cancellation
   const activeReadersRef = useRef<Set<FileReader>>(new Set())
+
+  // Reactive refs for ignore logic to allow mid-crawl cancellation/skipping
+  const isIgnoredRef = useRef(isIgnored)
+  const shouldRecurseRef = useRef(shouldRecurse)
+  useEffect(() => {
+    isIgnoredRef.current = isIgnored
+    shouldRecurseRef.current = shouldRecurse
+  }, [isIgnored, shouldRecurse])
   const setIsProcessing = useCallback((processing: boolean) => {
     isProcessingRef.current = processing
     setIsProcessingState(processing)
@@ -125,6 +133,15 @@ export const useFileProcessing = ({
 
   const readFileContent = useCallback(
     async (file: File): Promise<string | ArrayBuffer | null> => {
+      // Skip reading files larger than 30MB to prevent catastrophic main thread freezes
+      // from V8 string allocation during readAsText.
+      if (file.size > 30 * 1024 * 1024) {
+        logger.warn(
+          `File ${file.name} exceeds 30MB limit. Skipping content read to prevent memory crash.`
+        )
+        return null
+      }
+
       // Acquire semaphore slot
       if (ioSemaphore.current.active >= MAX_CONCURRENT_READS) {
         await new Promise<void>((resolve) =>
@@ -270,17 +287,32 @@ export const useFileProcessing = ({
   const processUploadedFiles = useCallback(
     async (uploadedFiles: (File | FileItem)[]) => {
       try {
+        const perfStart = performance.now()
+        logger.info(
+          `[FileProcessing] Starting processUploadedFiles with ${uploadedFiles.length} items`
+        )
+
         setIsProcessing(true)
         setImportError(null)
         cancelImportRef.current = false
         activeReadersRef.current.clear()
         setImportProgress({ current: 0, total: uploadedFiles.length })
 
+        // Sort files by size (smallest first).
+        // If the user adds an ignore rule mid-import, large files (processed last)
+        // will pick up the new rule and skip their expensive text-reads entirely.
+        uploadedFiles.sort((a, b) => {
+          const sizeA = 'size' in a ? a.size || 0 : 0
+          const sizeB = 'size' in b ? b.size || 0 : 0
+          return sizeA - sizeB
+        })
+
         await new Promise((resolve) => setTimeout(resolve, 50))
 
         const newFiles: FileItem[] = []
         const newDirPaths = new Set<string>() // O(1) dedup for directory entries
         let lastRenderTime = Date.now()
+        let fileReadTimeMs = 0
 
         for (let i = 0; i < uploadedFiles.length; i++) {
           if (cancelImportRef.current) break
@@ -298,17 +330,23 @@ export const useFileProcessing = ({
             // Raw File object (e.g. from handleFileUpload)
             const file = item as File
             const path =
+              (file as { path?: string }).path ||
               (file as { webkitRelativePath?: string }).webkitRelativePath ||
               file.name
 
             const ignored = isIgnored(path)
+
+            const readStart = performance.now()
             const content = ignored ? '' : await readFileContent(file)
+            fileReadTimeMs += performance.now() - readStart
 
             if (content === null && !ignored && !cancelImportRef.current) {
               const now = Date.now()
-              if (now - lastRenderTime > 50 || i === uploadedFiles.length - 1) {
+              if (now - lastRenderTime > 30 || i === uploadedFiles.length - 1) {
                 setImportProgress((prev) => ({ ...prev, current: i + 1 }))
                 lastRenderTime = now
+                // Yield aggressively to keep typing smooth
+                await new Promise((resolve) => setTimeout(resolve, 0))
               }
               continue
             }
@@ -335,24 +373,36 @@ export const useFileProcessing = ({
             const dirPath = parts.slice(0, j).join('/')
             if (!newDirPaths.has(dirPath)) {
               newDirPaths.add(dirPath)
-              newFiles.push({
-                name: parts[j - 1],
-                path: dirPath,
-                kind: 'directory',
-              })
+
+              // ONLY add to newFiles if it doesn't exist in the current state.
+              const existingDir = filesRef.current.find(
+                (f) => f.path === dirPath && f.kind === 'directory'
+              )
+
+              if (!existingDir) {
+                newFiles.push({
+                  name: parts[j - 1],
+                  path: dirPath,
+                  kind: 'directory',
+                  isIgnored: isIgnoredRef.current(dirPath),
+                })
+              }
             }
           }
 
           const now = Date.now()
-          if (now - lastRenderTime > 50 || i === uploadedFiles.length - 1) {
+          // Yield aggressively every 30ms so typing in the ignore field isn't blocked
+          if (now - lastRenderTime > 30 || i === uploadedFiles.length - 1) {
             setImportProgress((prev) => ({ ...prev, current: i + 1 }))
             lastRenderTime = now
-          }
-
-          if (i % 10 === 0) {
             await new Promise((resolve) => setTimeout(resolve, 0))
           }
         }
+
+        const loopEnd = performance.now()
+        logger.info(
+          `[FileProcessing] Loop completed in ${(loopEnd - perfStart).toFixed(2)}ms (File I/O wait: ${fileReadTimeMs.toFixed(2)}ms)`
+        )
 
         if (!cancelImportRef.current) {
           if (appMode === AppMode.DECONCATENATE) {
@@ -448,6 +498,14 @@ export const useFileProcessing = ({
 
             if (absorptions.length > 0) {
               setPendingAbsorptions(absorptions)
+            }
+
+            // Final safety sweep: apply the absolutely latest ignore rules to all files
+            // just in case the user added a pattern mid-import.
+            for (let k = 0; k < reconciledFiles.length; k++) {
+              reconciledFiles[k].isIgnored = isIgnoredRef.current(
+                reconciledFiles[k].path
+              )
             }
 
             setFiles(reconciledFiles)
@@ -591,17 +649,36 @@ export const useFileProcessing = ({
     [setIsProcessing, setImportProgress, setFiles, setImportError]
   )
 
-  // Auto-reload files that were un-ignored but are empty
+  // Auto-reload files or crawl directories that were un-ignored
   React.useEffect(() => {
     let mounted = true
     const reloadUnignored = async () => {
-      // Only auto-reload if we are not already processing a large batch
       if (appMode !== AppMode.CONCATENATE) return
 
       const targets = files.filter((f) => {
-        const currentlyIgnored = isIgnored(f.path)
-        return f.kind === 'file' && !currentlyIgnored && f.content === undefined
+        const normalizedParentPath = f.path.replace(/\\/g, '/')
+        const parentPrefix = normalizedParentPath.endsWith('/')
+          ? normalizedParentPath
+          : normalizedParentPath + '/'
+
+        const hasChildren = files.some((child) => {
+          const normalizedChildPath = child.path.replace(/\\/g, '/')
+          return normalizedChildPath.startsWith(parentPrefix)
+        })
+
+        return (
+          !f.isIgnored &&
+          ((f.kind === 'file' && f.content === undefined) ||
+            (f.kind === 'directory' && !hasChildren))
+        )
       })
+
+      if (targets.length > 0) {
+        logger.info(
+          `[useFileProcessing] Found ${targets.length} un-ignored targets to refresh:`,
+          targets.map((t) => t.path)
+        )
+      }
 
       if (targets.length === 0) return
 
@@ -609,70 +686,175 @@ export const useFileProcessing = ({
       await new Promise((resolve) => setTimeout(resolve, 100))
       if (!mounted) return
 
-      console.log(
-        `[useFileProcessing] Auto-reloading ${targets.length} un-ignored files`
+      logger.info(
+        `[useFileProcessing] Auto-reloading/crawling ${targets.length} un-ignored items`
       )
 
-      // isProcessingRef is not used as a guard here to allow un-ignore reloads
-      // even if other background tasks are running.
       setIsProcessing(true)
-      let updates: Record<string, Partial<FileItem>> = {}
+      const allDiscovered: (File | FileItem)[] = []
 
       try {
         for (let i = 0; i < targets.length; i++) {
           if (!mounted) break
-          const file = targets[i]
+          const item = targets[i]
 
-          try {
-            let content: string | ArrayBuffer | null = null
-            let size = file.size || 0
+          if (item.kind === 'file') {
+            try {
+              let content: string | ArrayBuffer | null = null
+              let size = item.size || 0
 
-            if (file.handle) {
-              content = await readFileContent(file.handle)
-              size = file.handle.size
-            } else {
-              try {
-                const blob = await ApiClient.getFileBlob(file.path)
-                content = await new Promise((resolve) => {
-                  const reader = new FileReader()
-                  reader.onload = () => resolve(reader.result as string)
-                  reader.onerror = () => resolve(null)
-                  reader.readAsText(blob)
-                })
-                size = blob.size
-              } catch {
-                // Not available
+              if (item.handle) {
+                content = await readFileContent(item.handle as File)
+                size = item.handle instanceof File ? item.handle.size : size
+              } else {
+                try {
+                  const blob = await ApiClient.getFileBlob(item.path)
+                  content = await new Promise((resolve) => {
+                    const reader = new FileReader()
+                    reader.onload = () => resolve(reader.result as string)
+                    reader.onerror = () => resolve(null)
+                    reader.readAsText(blob)
+                  })
+                  size = blob.size
+                } catch {
+                  // Not available
+                }
               }
-            }
 
-            if (content !== null) {
-              updates[file.path] = {
-                content,
-                size,
-                tokens: estimateTokenCount(content, size),
-                isIgnored: false,
-                isNegated: isExplicitlyNegated(file.path),
-              }
-            }
-
-            // Update in batches of 10 or at the end
-            if ((i + 1) % 10 === 0 || i === targets.length - 1) {
-              if (Object.keys(updates).length > 0) {
-                const batchUpdates = { ...updates }
+              if (content !== null) {
                 setFiles((prev) =>
                   prev.map((f) =>
-                    batchUpdates[f.path] ? { ...f, ...batchUpdates[f.path] } : f
+                    f.path === item.path
+                      ? {
+                          ...f,
+                          content,
+                          size,
+                          tokens: estimateTokenCount(content as string, size),
+                          isIgnored: false,
+                          isNegated: isExplicitlyNegated(item.path),
+                        }
+                      : f
                   )
                 )
-                updates = {} // Reset for next batch
               }
-              // Yield
-              await new Promise((resolve) => setTimeout(resolve, 0))
+            } catch (err) {
+              logger.error(
+                `Failed to reload un-ignored file ${item.path}:`,
+                err
+              )
             }
-          } catch (err) {
-            logger.error(`Failed to reload un-ignored file ${file.path}:`, err)
+          } else if (item.kind === 'directory') {
+            // Lazy crawl directory if we have a handle
+            if (
+              item.handle &&
+              typeof item.handle === 'object' &&
+              'createReader' in (item.handle as FileSystemDirectoryEntry)
+            ) {
+              try {
+                const dirEntry = item.handle as FileSystemDirectoryEntry
+
+                const traverse = async (
+                  entry: FileSystemEntry,
+                  _currentPath: string
+                ) => {
+                  if (entry.isFile) {
+                    if (!mounted) return
+                    const file = await new Promise<File>((resolve, reject) =>
+                      (entry as FileSystemFileEntry).file(resolve, reject)
+                    )
+                    ;(file as File & { path: string }).path = _currentPath
+                    allDiscovered.push(file)
+                  } else if (entry.isDirectory) {
+                    if (!mounted) return
+                    const reader = (
+                      entry as FileSystemDirectoryEntry
+                    ).createReader()
+
+                    const entries = await new Promise<FileSystemEntry[]>(
+                      (resolve) => {
+                        const batch: FileSystemEntry[] = []
+                        const read = () => {
+                          reader.readEntries(
+                            (results) => {
+                              if (results.length === 0) resolve(batch)
+                              else {
+                                batch.push(...results)
+                                read()
+                              }
+                            },
+                            () => resolve(batch)
+                          )
+                        }
+                        read()
+                      }
+                    )
+
+                    for (const child of entries) {
+                      const nextPath = _currentPath.endsWith('/')
+                        ? _currentPath + child.name
+                        : _currentPath + '/' + child.name
+                      await traverse(child, nextPath)
+                    }
+                  }
+                }
+
+                const reader = dirEntry.createReader()
+                const entries = await new Promise<FileSystemEntry[]>(
+                  (resolve) => {
+                    const batch: FileSystemEntry[] = []
+                    const read = () => {
+                      reader.readEntries(
+                        (results) => {
+                          logger.debug(
+                            `[useFileProcessing] readEntries found ${results.length} results for ${item.path}`
+                          )
+                          if (results.length === 0) resolve(batch)
+                          else {
+                            batch.push(...results)
+                            read()
+                          }
+                        },
+                        (err) => {
+                          logger.error(
+                            `[useFileProcessing] Error reading entries for ${item.path}:`,
+                            err
+                          )
+                          resolve(batch)
+                        }
+                      )
+                    }
+                    read()
+                  }
+                )
+
+                logger.info(
+                  `[useFileProcessing] Lazy crawling ${entries.length} top-level entries in ${item.path}`
+                )
+                for (const entry of entries) {
+                  const nextPath = item.path.endsWith('/')
+                    ? item.path + entry.name
+                    : item.path + '/' + entry.name
+                  await traverse(entry, nextPath)
+                }
+              } catch (err) {
+                logger.error(`Failed to crawl directory ${item.path}:`, err)
+              }
+            }
           }
         }
+
+        if (allDiscovered.length > 0 && mounted) {
+          logger.info(
+            `[useFileProcessing] Processing ${allDiscovered.length} discovered files...`
+          )
+          await processUploadedFiles(allDiscovered)
+        } else if (mounted) {
+          logger.info(
+            '[useFileProcessing] Lazy crawl completed but no new files were found.'
+          )
+        }
+      } catch (err) {
+        logger.error('[useFileProcessing] Error in reloadUnignored:', err)
       } finally {
         if (mounted) setIsProcessing(false)
       }
@@ -681,14 +863,16 @@ export const useFileProcessing = ({
     reloadUnignored()
     return () => {
       mounted = false
+      setIsProcessing(false) // Reset processing state if effect is interrupted
     }
   }, [
     files,
     isIgnored,
-    isExplicitlyNegated,
     appMode,
-    readFileContent,
+    processUploadedFiles,
+    isExplicitlyNegated,
     setIsProcessing,
+    readFileContent,
   ])
 
   const handleFileUpload = useCallback(
@@ -768,9 +952,18 @@ export const useFileProcessing = ({
 
         const droppedFiles: (File | FileItem)[] = []
 
+        let lastYieldTime = Date.now()
+        let lastProgressUpdate = Date.now()
         const traverseEntry = async (entry: FileSystemEntry, path = '') => {
           try {
             if (cancelImportRef.current) return
+
+            // Yield aggressively based on time (30 FPS minimum responsiveness)
+            const now = Date.now()
+            if (now - lastYieldTime > 30) {
+              lastYieldTime = now
+              await new Promise((resolve) => setTimeout(resolve, 0))
+            }
 
             // Skip reserved Windows names (Bug fix: prevents InvalidStateError on NUL, etc.)
             if (isReservedWindowsFilename(entry.name)) {
@@ -779,18 +972,19 @@ export const useFileProcessing = ({
             }
 
             const fullPath = path + entry.name
-
-            const ignored = isIgnored(fullPath)
+            const ignored = isIgnoredRef.current(fullPath)
 
             // Optimization: If a directory is ignored and contains no negations, skip traversal.
-            // This maintains standard .gitignore behavior while allowing explicit un-ignores.
-            if (entry.isDirectory && !shouldRecurse(fullPath)) {
+            // We use the ref here so that if the user adds an ignore pattern MID-CRAWL,
+            // we stop immediately instead of finishing the massive folder.
+            if (entry.isDirectory && !shouldRecurseRef.current(fullPath)) {
               // Still push the directory itself so it can be seen in the tree if "Show Ignored" is on
               droppedFiles.push({
                 name: entry.name,
                 path: fullPath,
                 kind: 'directory',
                 isIgnored: true,
+                handle: entry,
               } as FileItem)
               return
             }
@@ -830,7 +1024,16 @@ export const useFileProcessing = ({
                 return
               }
 
-              setImportProgress((prev) => ({ ...prev, total: prev.total + 1 }))
+              // Throttle progress updates to prevent UI lockup
+              const now = Date.now()
+              if (now - lastProgressUpdate > 100) {
+                setImportProgress({
+                  current: 0,
+                  total: droppedFiles.length + 1,
+                })
+                lastProgressUpdate = now
+              }
+
               const file = await new Promise<File>((resolve, reject) => {
                 const fileEntry = entry as FileSystemFileEntry
                 fileEntry.file(
@@ -853,13 +1056,22 @@ export const useFileProcessing = ({
                 tokens: estimateTokenCount(content, file.size),
                 handle: file,
               })
+
+              // Fail early if we exceed the limit DURING the crawl to prevent browser crash
+              if (droppedFiles.length > maxFileLimit) {
+                setImportError(
+                  `Project too large: found over ${maxFileLimit} files. Please ignore massive directories before dropping.`
+                )
+                cancelImportRef.current = true
+                return
+              }
             } else if (entry.isDirectory && 'createReader' in entry) {
-              // Push the directory itself to the discovery list
               droppedFiles.push({
                 name: entry.name,
                 path: fullPath,
                 kind: 'directory',
                 isIgnored: ignored,
+                handle: entry,
               } as FileItem)
 
               let reader
@@ -966,8 +1178,6 @@ export const useFileProcessing = ({
       processUploadedFiles,
       setIsProcessing,
       maxFileLimit,
-      isIgnored,
-      shouldRecurse,
       isIgnoreListLoading,
       readFileContent,
     ]

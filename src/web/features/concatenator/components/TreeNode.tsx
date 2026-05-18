@@ -57,23 +57,33 @@ export const TreeNode: React.FC<TreeNodeProps> = ({
   const handleIgnoreToggle = (e: React.MouseEvent) => {
     e.stopPropagation()
     const path = node.path
-    const pattern = node.kind === 'directory' ? `${path}/**` : path
-    const negationPattern = `!${pattern}`
+    const variants = [path, `${path}/`, `${path}/**`]
+    const negationPattern = `!${path}`
+    const list = ignoreList || []
 
     if (effectivelyIgnored) {
-      // If it's ignored but the exact pattern is NOT in the list,
-      // it's inherited. Add a negation pattern to override.
-      if (!(ignoreList || []).includes(pattern)) {
-        addIgnorePattern(negationPattern)
+      // Try to find the specific rule that is ignoring this node
+      const result = node.reason || ''
+      const matchedVariant = variants.find((v) => list.includes(v))
+
+      // If the reason matches an exact item in our list, remove it
+      if (list.includes(result)) {
+        removeIgnorePattern(result)
+      } else if (matchedVariant) {
+        removeIgnorePattern(matchedVariant)
       } else {
-        removeIgnorePattern(pattern)
+        // Otherwise, add a negation pattern
+        addIgnorePattern(negationPattern)
       }
     } else {
-      // If it's NOT ignored, check if it's because of a negation pattern
-      if ((ignoreList || []).includes(negationPattern)) {
-        removeIgnorePattern(negationPattern)
+      // If not ignored, check if it was because of a negation
+      const existingNegation = list.find(
+        (v) => v === negationPattern || v === `!${path}/` || v === `!${path}/**`
+      )
+      if (existingNegation) {
+        removeIgnorePattern(existingNegation)
       } else {
-        addIgnorePattern(pattern)
+        addIgnorePattern(node.kind === 'directory' ? `${path}/**` : path)
       }
     }
   }
@@ -87,7 +97,7 @@ export const TreeNode: React.FC<TreeNodeProps> = ({
         )}
         title={
           effectivelyIgnored
-            ? `Ignored: ${node.reason || 'Matches ignore pattern'}`
+            ? `Ignored by: ${node.reason || 'Inherited/Other'}`
             : undefined
         }
         style={{ paddingLeft: `${depth * 1.25 + 0.5}rem` }}

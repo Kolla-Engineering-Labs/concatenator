@@ -14,6 +14,7 @@ posthog.init(import.meta.env.VITE_PUBLIC_POSTHOG_KEY, {
     maskAllInputs: true,
     maskTextSelector: '.ph-no-capture',
   },
+  debug: false,
 })
 
 // if (import.meta.env.DEV) {

@@ -20,6 +20,7 @@ smoke-test-sandbox/
 test-symlink-behavior/
 tests/symlink-test/
 tests/smoke-sandbox/
+scratch
 
 # Worker-specific ignore files (parallel testing)
 .concatenate-ignore-worker-*

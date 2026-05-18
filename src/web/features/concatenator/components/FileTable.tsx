@@ -182,19 +182,33 @@ export const FileTable: React.FC<FileTableProps> = ({
                     </button>
                     <button
                       onClick={() => {
-                        const pattern = file.path
-                        const negationPattern = `!${pattern}`
-                        if (isIgnored(file.path)) {
-                          if (!(ignoreList || []).includes(pattern)) {
-                            addIgnorePattern(negationPattern)
+                        const path = file.path
+                        const variants = [path, `${path}/`, `${path}/**`]
+                        const negationPattern = `!${path}`
+                        const list = ignoreList || []
+
+                        if (isIgnored(path)) {
+                          // Try to find if any variant is explicitly in the list
+                          const existingPattern = variants.find((v) =>
+                            list.includes(v)
+                          )
+                          if (existingPattern) {
+                            removeIgnorePattern(existingPattern)
                           } else {
-                            removeIgnorePattern(pattern)
+                            addIgnorePattern(negationPattern)
                           }
                         } else {
-                          if ((ignoreList || []).includes(negationPattern)) {
-                            removeIgnorePattern(negationPattern)
+                          // If not ignored, check if it was because of a negation
+                          const existingNegation = list.find(
+                            (v) =>
+                              v === negationPattern ||
+                              v === `!${path}/` ||
+                              v === `!${path}/**`
+                          )
+                          if (existingNegation) {
+                            removeIgnorePattern(existingNegation)
                           } else {
-                            addIgnorePattern(pattern)
+                            addIgnorePattern(path)
                           }
                         }
                       }}

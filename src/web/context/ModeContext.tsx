@@ -208,7 +208,13 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const removeIgnorePattern = useCallback(
     (pattern: string) => {
-      setIgnoreList((prev) => prev.filter((p) => p !== pattern))
+      setIgnoreList((prev) => {
+        // Try exact match, or match without trailing slash
+        const cleanPattern = pattern.replace(/\/$/, '')
+        return prev.filter(
+          (p) => p !== pattern && p.replace(/\/$/, '') !== cleanPattern
+        )
+      })
     },
     [setIgnoreList]
   )
@@ -268,6 +274,7 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
         setShowIgnored,
         isExplicitlyNegated,
         shouldRecurse: (path: string) => ignoreEngine.shouldRecurse(path),
+        getIgnoreResult: (path: string) => ignoreEngine.getIgnoreResult(path),
       }}
     >
       {children}

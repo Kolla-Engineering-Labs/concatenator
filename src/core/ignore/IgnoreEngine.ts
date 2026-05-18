@@ -15,6 +15,8 @@ interface CompiledPattern {
   negated: boolean
   anchored: boolean
   rootAnchored: boolean
+  patterns?: RegExp[]
+  unanchoredPatterns?: RegExp[]
 }
 
 /**
@@ -33,13 +35,52 @@ export class IgnoreEngine {
   private rules: CompiledPattern[]
 
   constructor(patterns: string[]) {
-    this.rules = patterns.map((rawPattern) => {
-      const negated = rawPattern.startsWith('!')
-      const clean = negated ? rawPattern.slice(1) : rawPattern
-      const rootAnchored = clean.startsWith('/')
-      const anchored = rootAnchored || clean.includes('/', 1)
-      return { match: this.compile(clean), negated, anchored, rootAnchored }
-    })
+    this.rules = patterns
+      .map((rawPattern) => rawPattern.trim())
+      .filter(
+        (rawPattern) => rawPattern.length > 0 && !rawPattern.startsWith('#')
+      )
+      .map((rawPattern) => {
+        const negated = rawPattern.startsWith('!')
+        const clean = negated ? rawPattern.slice(1) : rawPattern
+        const rootAnchored = clean.startsWith('/')
+
+        // A pattern is anchored if it starts with a slash,
+        // or if it contains a slash in the middle (not at the very end).
+        // e.g. "dist/" is NOT anchored, but "dist/bin" IS anchored.
+        const hasInternalSlash = clean.slice(0, -1).includes('/')
+        const anchored = rootAnchored || hasInternalSlash
+
+        const match = this.compile(clean)
+        let compiledPatterns: RegExp[] | undefined = undefined
+        let compiledUnanchored: RegExp[] | undefined = undefined
+
+        if (typeof match === 'string') {
+          const ignoreStr = match.replace(/\/$/, '')
+          const rawPatterns = [ignoreStr, `${ignoreStr}/**`]
+          const rawUnanchored = [
+            ...rawPatterns,
+            ...rawPatterns.map((p) => `**/${p}`),
+            ...rawPatterns.map((p) => `**/${p}/**`),
+            ...rawPatterns.map((p) => `${p}/**`),
+          ]
+          compiledPatterns = rawPatterns
+            .map((p) => micromatch.makeRe(p, { dot: true }))
+            .filter(Boolean) as RegExp[]
+          compiledUnanchored = rawUnanchored
+            .map((p) => micromatch.makeRe(p, { dot: true }))
+            .filter(Boolean) as RegExp[]
+        }
+
+        return {
+          match,
+          negated,
+          anchored,
+          rootAnchored,
+          patterns: compiledPatterns,
+          unanchoredPatterns: compiledUnanchored,
+        }
+      })
   }
 
   // ─── Compilation ────────────────────────────────────────────────────────────
@@ -100,6 +141,7 @@ export class IgnoreEngine {
         ignored = !rule.negated
       }
     }
+
     return ignored
   }
 
@@ -137,8 +179,25 @@ export class IgnoreEngine {
     if (!path || path === '.') return true
     if (!this.isIgnored(path)) return true
 
-    const { normalizedPath } = this.normalizePath(path)
+    const { normalizedPath, segments } = this.normalizePath(path)
     const prefix = normalizedPath + '/'
+
+    const heavyDirs = [
+      'node_modules',
+      '.git',
+      '.next',
+      '.expo',
+      '.gradle',
+      '.terraform',
+      '.vagrant',
+      'bower_components',
+      'playwright-report',
+      'test-results',
+      'venv',
+      'vendor',
+    ]
+
+    const isHeavy = segments.some((s) => heavyDirs.includes(s))
 
     return this.rules.some((rule) => {
       if (!rule.negated) return false
@@ -147,6 +206,9 @@ export class IgnoreEngine {
       if (rule.match instanceof RegExp) return true
 
       const pattern = rule.match as string
+
+      // If this is a heavy system directory, do not recurse for unanchored negated patterns.
+      if (isHeavy && !rule.anchored) return false
 
       // Unanchored negated patterns can match anywhere inside the ignored directory.
       if (!rule.anchored) return true
@@ -225,38 +287,26 @@ export class IgnoreEngine {
 
     // Determine anchoring from the compiled metadata
     const isAnchored = rule.anchored
-    const ignoreStr = (pattern as string).replace(/\/$/, '')
 
-    // Patterns to check
-    const patterns = [ignoreStr, `${ignoreStr}/**`]
+    if (!rule.patterns || !rule.unanchoredPatterns) return false
 
     // 1. Check direct match (anchored)
-    if (micromatch.isMatch(normalizedPath, patterns, { dot: true })) {
+    if (rule.patterns.some((re) => re.test(normalizedPath))) {
       return true
     }
 
     // 2. Check unanchored match (anywhere in the tree)
     if (!isAnchored) {
       // Matches the filename directly
-      if (micromatch.isMatch(fileName, patterns, { dot: true })) {
+      if (rule.patterns.some((re) => re.test(fileName))) {
         return true
       }
       // Matches any segment of the path
-      if (
-        segments.some((s) => micromatch.isMatch(s, patterns, { dot: true }))
-      ) {
+      if (segments.some((s) => rule.patterns!.some((re) => re.test(s)))) {
         return true
       }
       // Matches the path via unanchored globs
-      const unanchoredPatterns = [
-        ...patterns,
-        ...patterns.map((p) => `**/${p}`),
-        ...patterns.map((p) => `**/${p}/**`),
-        ...patterns.map((p) => `${p}/**`),
-      ]
-      if (
-        micromatch.isMatch(normalizedPath, unanchoredPatterns, { dot: true })
-      ) {
+      if (rule.unanchoredPatterns.some((re) => re.test(normalizedPath))) {
         return true
       }
     }
@@ -283,13 +333,14 @@ export class IgnoreEngine {
         'assets',
       ]
       if (!commonFolders.includes(firstSegment)) {
-        if (micromatch.isMatch(subPath, patterns, { dot: true })) {
+        if (rule.patterns.some((re) => re.test(subPath))) {
           return true
         }
       }
     }
 
     // 4. Special case for '/**' suffix (anchored match for the directory itself)
+    const ignoreStr = (pattern as string).replace(/\/$/, '')
     if (ignoreStr.endsWith('/**')) {
       const parentPath = ignoreStr.slice(0, -3)
       if (normalizedPath === parentPath) return true

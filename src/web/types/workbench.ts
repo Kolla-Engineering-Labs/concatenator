@@ -23,4 +23,5 @@ export interface WorkbenchState {
   showIgnored: boolean
   isExplicitlyNegated: (path: string) => boolean
   shouldRecurse: (path: string) => boolean
+  getIgnoreResult: (path: string) => { ignored: boolean; reason?: string }
 }

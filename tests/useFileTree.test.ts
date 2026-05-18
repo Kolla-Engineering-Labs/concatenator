@@ -9,6 +9,7 @@ describe('useFileTree', () => {
       useFileTree(
         [],
         () => false,
+        () => ({ ignored: false }),
         () => false
       )
     )
@@ -28,6 +29,7 @@ describe('useFileTree', () => {
       useFileTree(
         files,
         () => false,
+        () => ({ ignored: false }),
         () => false
       )
     )
@@ -60,6 +62,7 @@ describe('useFileTree', () => {
       useFileTree(
         files,
         () => false,
+        () => ({ ignored: false }),
         () => false
       )
     )
@@ -96,6 +99,7 @@ describe('useFileTree', () => {
       useFileTree(
         files,
         () => false,
+        () => ({ ignored: false }),
         () => false
       )
     )
@@ -123,6 +127,7 @@ describe('useFileTree', () => {
       useFileTree(
         [...files, { name: 'testdir', path: 'testdir', kind: 'directory' }],
         () => false,
+        () => ({ ignored: false }),
         () => false
       )
     )
@@ -143,6 +148,7 @@ describe('useFileTree', () => {
       useFileTree(
         files,
         () => false,
+        () => ({ ignored: false }),
         () => false
       )
     )
@@ -173,6 +179,7 @@ describe('useFileTree', () => {
       useFileTree(
         files,
         () => false,
+        () => ({ ignored: false }),
         () => false
       )
     )
@@ -191,6 +198,7 @@ describe('useFileTree', () => {
       useFileTree(
         files,
         () => false,
+        () => ({ ignored: false }),
         () => false
       )
     )
@@ -210,6 +218,7 @@ describe('useFileTree', () => {
       useFileTree(
         files,
         () => false,
+        () => ({ ignored: false }),
         () => false
       )
     )
@@ -230,6 +239,7 @@ describe('useFileTree', () => {
       useFileTree(
         files,
         () => false,
+        () => ({ ignored: false }),
         () => false
       )
     )
@@ -248,6 +258,7 @@ describe('useFileTree', () => {
       useFileTree(
         files,
         () => false,
+        () => ({ ignored: false }),
         () => false
       )
     )
@@ -266,6 +277,7 @@ describe('useFileTree', () => {
       useFileTree(
         files,
         () => false,
+        () => ({ ignored: false }),
         () => false
       )
     )
@@ -282,9 +294,10 @@ describe('useFileTree', () => {
     ]
     const isIgnored = () => false
     const isNegated = () => false
+    const getIgnoreResult = () => ({ ignored: false })
 
     const { result, rerender } = renderHook(
-      ({ files }) => useFileTree(files, isIgnored, isNegated),
+      ({ files }) => useFileTree(files, isIgnored, getIgnoreResult, isNegated),
       {
         initialProps: { files },
       }
@@ -313,6 +326,7 @@ describe('useFileTree', () => {
         useFileTree(
           files,
           () => false,
+          () => ({ ignored: false }),
           () => false
         ),
       {
@@ -342,6 +356,7 @@ describe('useFileTree', () => {
       useFileTree(
         files,
         () => false,
+        () => ({ ignored: false }),
         () => false
       )
     )
@@ -369,6 +384,7 @@ describe('useFileTree', () => {
       useFileTree(
         files,
         () => false,
+        () => ({ ignored: false }),
         () => false
       )
     )

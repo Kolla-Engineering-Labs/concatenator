@@ -9,7 +9,7 @@ vi.mock('child_process', () => ({
 }))
 
 // Mock logger to avoid cluttering test output
-vi.mock('../src/lib/logger.js', () => ({
+vi.mock('../../src/lib/logger.js', () => ({
   logger: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -20,7 +20,7 @@ vi.mock('../src/lib/logger.js', () => ({
   },
 }))
 
-import { checkQuarantine } from '../src/cli/cli-utils.js'
+import { checkQuarantine } from '../../src/cli/cli-utils.js'
 
 describe('CLI Quarantine Logic', () => {
   beforeEach(() => {

@@ -36,12 +36,12 @@ const mockLogger = {
   raw: vi.fn((msg) => console.log(msg)),
   rawError: vi.fn((msg) => console.error(msg)),
 }
-vi.doMock('../src/lib/logger.js', () => ({
+vi.doMock('../../src/lib/logger.js', () => ({
   logger: mockLogger,
 }))
 
 // Mock TokenService and IgnoreEngine if needed, but they are relatively safe to use or mock lightly
-vi.doMock('../src/core/TokenService.js', () => ({
+vi.doMock('../../src/core/TokenService.js', () => ({
   TokenService: {
     getTokenEstimate: vi.fn().mockReturnValue(10),
     getTokenCount: vi.fn().mockReturnValue(10),
@@ -49,14 +49,14 @@ vi.doMock('../src/core/TokenService.js', () => ({
 }))
 
 // Mock UIServer to avoid starting a real server
-vi.doMock('../src/core/UIServer.js', () => ({
+vi.doMock('../../src/core/UIServer.js', () => ({
   UIServer: class {
     start = vi.fn().mockResolvedValue(1234)
   },
 }))
 
 // Mock IgnoreEngine
-vi.doMock('../src/core/ignore/IgnoreEngine.js', () => {
+vi.doMock('../../src/core/ignore/IgnoreEngine.js', () => {
   const parseIgnoreFile = vi
     .fn()
     .mockImplementation((content) => content.split('\n'))
@@ -71,12 +71,12 @@ vi.doMock('../src/core/ignore/IgnoreEngine.js', () => {
 })
 
 // Mock web-assets
-vi.doMock('../src/cli/web-assets.js', () => ({
+vi.doMock('../../src/cli/web-assets.js', () => ({
   webAssets: {},
 }))
 
 // Mock engine
-vi.doMock('../src/core/engine.js', () => ({
+vi.doMock('../../src/core/engine.js', () => ({
   generateSessionId: vi.fn().mockReturnValue('mock-session'),
 }))
 
@@ -84,7 +84,7 @@ vi.doMock('../src/core/engine.js', () => ({
 const mockFsUtils = {
   isDirectoryTainted: vi.fn().mockReturnValue(false),
 }
-vi.doMock('../src/core/utils/fs-utils.js', () => mockFsUtils)
+vi.doMock('../../src/core/utils/fs-utils.js', () => mockFsUtils)
 
 // Mock fetch
 global.fetch = vi.fn()
@@ -94,7 +94,7 @@ describe('cli-utils', () => {
 
   beforeAll(async () => {
     // We need to import after mocks are set
-    cliUtils = await import('../src/cli/cli-utils.js')
+    cliUtils = await import('../../src/cli/cli-utils.js')
   })
 
   beforeEach(() => {
@@ -420,7 +420,7 @@ describe('cli-utils', () => {
 
       // Real IgnoreEngine to test the logic I just fixed
       const { IgnoreEngine } = await vi.importActual<any>(
-        '../src/core/ignore/IgnoreEngine.js'
+        '../../src/core/ignore/IgnoreEngine.js'
       )
       const engine = new IgnoreEngine(['tests', '!core'])
 

@@ -59,6 +59,8 @@ graph LR
 - **Smart Ignore System**:
   - Exclude common noise (e.g., `node_modules`, `.git`, `package-lock.json`) using simple string matches or powerful Regular Expressions.
   - **Discovery-First Traversal**: The core engine now prioritizes negations (e.g., `!core`). Files matching a negation pattern are discovered and included even if they reside within an ignored directory (e.g., `tests/`), ensuring complete visibility for "exception" files.
+  - **Heavy Directory Traversal Hardening**: To prevent catastrophic traversal times and event-loop lockups when scanning enormous dependency or build folders, unanchored negated patterns (e.g., `!core`) are **explicitly bypassed** inside heavy common directories (including `node_modules`, `.git`, `.next`, `.expo`, `.gradle`, `.terraform`, `.vagrant`, `bower_components`, `playwright-report`, `test-results`, `venv`, and `vendor`).
+  - **Anchored Negation Exceptions**: If you explicitly need to target and discover an exception file/folder inside a heavy ignored folder, you must use an **anchored negated pattern** (e.g., `!node_modules/core`), which allows the recursive engine to directly target the folder without wasting resources scanning the entire parent tree.
   - **Auto-Discovery**: CLI automatically respects `.concatignore` or `.gitignore` in your current working directory.
   - **CLI Persistence**: Use `-i, --ignore-file <path>` to leverage existing project configurations for both bundling and extraction.
   - **Web Auto-Save**: Toggle the **"Auto-Save to .concatenate-ignore"** option in the UI to keep your local workspace in sync with your project's ignore configuration automatically.
@@ -73,7 +75,12 @@ graph LR
   - **Input Pruning (CLI)**: Normalizes and filters overlapping command-line arguments. If both `./src` and `./src/components` are passed, the redundant sub-path is automatically pruned.
 - **High-Velocity Directory Ingestion**:
   - **Concurrency Throttling**: Intelligent parallel discovery (batches of 20) ensures rapid folder scanning without overwhelming the browser's file handle pool.
-  - **Incremental Reading**: Eagerly consumes file content during traversal to prevent handle staleness and `InvalidStateError` during massive 1,000+ file imports.
+  - **Incremental & Eager Reading**: Eagerly consumes file content immediately during traversal to prevent handle staleness and `InvalidStateError` during massive 1,000+ file imports on Windows systems.
+  - **Aggressive Time-Based Yielding**: During folder drops and processing, the ingestion engine yields control back to the browser's main thread every 30ms (targeting a 30 FPS responsiveness rate). This keeps the UI, text entry, and page layouts fluid and responsive even during massive multi-thousand file crawls.
+  - **Throttled Progress UI Updates**: React state updates for the import progress are throttled to 100ms intervals, avoiding React re-rendering bottlenecks.
+  - **Incremental Size-Sorted Processing**: Files are sorted by size (smallest first) during import. When ignore rules are edited mid-import, the largest files (processed last) pick up the new rule, bypassing expensive reading entirely.
+  - **Memory Safety Guardrails**: Hard limits are enforced during live scans (default: 10,000 files). Exceeding this limit immediately aborts the crawl early to prevent browser memory exhaustion.
+  - **Deduplicated Directory Appends**: Prevents redundant folder entry nodes by validating directory existence against the active Virtual File System prior to insertion.
   - **Reserved Name Safety**: Automatically skips reserved Windows system filenames (`NUL`, `CON`, `PRN`, etc.) to guarantee a crash-free experience on all platforms.
   - **Isolated Error Recovery**: Each file operation is self-contained; if one file fails due to OS-level locks, the import continues for the rest of the tree.
 - **Root Pruning & Absorption Toast**:
@@ -81,9 +88,14 @@ graph LR
   - **Absorption Toast**: A non-blocking notification appears whenever files are merged or absorbed, providing clear feedback on how your workbench was reorganized.
   - **Minimum Common Root**: The Tree View automatically collapses single-child intermediate directories to ensure the displayed root always begins at the deepest common ancestor.
 - **Precise Token Analytics**:
-  - Real-time token counting using the **Tiktoken (BPE)** standard (`o200k_base`), matching GPT-4o and modern coding assistants.
+  - **Modern BPE Standard**: Real-time token counting using the **Tiktoken (BPE)** standard (`o200k_base`), matching GPT-4o and modern coding assistants, with automatic fallback to `cl100k_base` if unavailable.
+  - **Performance-Optimized Hybrid Tokenization**:
+    - **CPU Exhaustion Prevention & Bypassing**: Binary files (detected via extensions like `.zip`, `.tar`, `.exe`, `.so`, `.png`, `.jpg`, `.pdf`, etc.) and files larger than 500KB completely bypass the Web Worker BPE Tiktoken parser.
+    - **Fast Heuristic Mode**: These bypassed files fall back to an instantaneous, non-blocking heuristic (`Math.ceil(char count / 4)`). This provides highly accurate estimates for log dumps, database files, and media, without freezing the browser or Web Worker CPU.
+    - **Atomic 500ms Response Batching**: Web Worker results are batched every 500ms before React state commits, preventing high-frequency tree-rebuilding cycles from locking the UI thread.
+    - **Backtracking Protection**: The Web Worker tokenization divides large text inputs into 50KB chunks, preventing the Tiktoken RegExp engine from encountering catastrophic backtracking and lowering peak memory usage.
+    - **O(1) Sampled Content Hashing**: The cache system uses a sampling approach for strings exceeding 3,000 characters (hashing only the first, middle, and last 1000 characters) to keep cache-key creation extremely fast ($O(1)$) and prevent main-thread freeze-ups.
   - **Efficiency Metrics**: Automatically calculates "Context Gained" through BPE boundary optimization during concatenation.
-  - Aggregate token reporting for the entire bundle to help stay within context windows.
   - **Budget Guard**: Set token budgets in the CLI to receive warnings when bundles exceed target limits.
 - **Workbench Context & Quick Look**:
   - Switch between **List View** for flat file management and **Tree View** for hierarchical directory inspection.

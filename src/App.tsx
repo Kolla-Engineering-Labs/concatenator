@@ -156,14 +156,16 @@ export default function App() {
     return files
   }, [appMode, virtualFileSystem, files])
 
-  const { tokenMap } = useTokenAggregation(baseFiles)
+  const { tokenMap } = useTokenAggregation(baseFiles, isIgnored)
 
   const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set(['']))
 
   const displayFiles = useMemo(() => {
     return baseFiles.map((f) => {
-      const ignored = isIgnored(f.path)
-      const negated = isExplicitlyNegated(f.path)
+      // Use the pre-computed flags that are synced by the background effect
+      // This prevents running the regex engine 20,000 times on every token update
+      const ignored = f.isIgnored || false
+      const negated = f.isNegated || false
       const meta = tokenMap[f.path] || {
         tokens: f.tokens || 0,
         isPrecise: f.isPrecise || ignored || false,
@@ -176,7 +178,7 @@ export default function App() {
         isNegated: negated,
       }
     })
-  }, [baseFiles, isIgnored, isExplicitlyNegated, tokenMap])
+  }, [baseFiles, tokenMap])
 
   const { totalTokens, tokensSaved, isPrecise } = useMemo(() => {
     return displayFiles.reduce(
@@ -203,19 +205,86 @@ export default function App() {
     )
   }, [displayFiles, showIgnored, filterText])
 
+  const { getIgnoreResult } = useWorkbench()
   const fileTree = useFileTree(
     filteredForTree,
     isIgnored,
+    getIgnoreResult,
     isExplicitlyNegated,
     tokenMap
   )
 
-  // Clear files and VFS when switching modes to avoid state bleed
+  // Sync isIgnored property on all files when the ignore engine updates.
+  // We use a batched approach with yielding to avoid blocking the main thread for large projects.
   useEffect(() => {
-    setFiles([])
-    setVirtualFileSystem({})
-    setImportError(null)
-    clearValidation()
+    if (!isInitialized || files.length === 0) return
+
+    let mounted = true
+    const syncIgnores = async () => {
+      const currentFiles = [...files]
+      if (currentFiles.length === 0) return
+
+      const perfStart = performance.now()
+      logger.info(
+        `[App.tsx] syncIgnores triggered for ${currentFiles.length} files`
+      )
+
+      const processBatch = async (index: number, filesToUpdate: FileItem[]) => {
+        if (!mounted) {
+          logger.info(`[App.tsx] syncIgnores aborted - unmounted`)
+          return
+        }
+
+        let batchChanged = false
+        let i = index
+
+        for (; i < filesToUpdate.length; i++) {
+          try {
+            const f = filesToUpdate[i]
+            const currentIgnored = isIgnored(f.path)
+            if (f.isIgnored !== currentIgnored) {
+              filesToUpdate[i] = { ...f, isIgnored: currentIgnored }
+              batchChanged = true
+            }
+          } catch (err) {
+            logger.error(
+              `[App.tsx] Fatal error during syncIgnores for file ${filesToUpdate[i]?.path}:`,
+              err
+            )
+          }
+        }
+
+        if (mounted && batchChanged) {
+          setFiles([...filesToUpdate])
+        }
+
+        logger.info(
+          `[App.tsx] syncIgnores completed synchronously in ${(performance.now() - perfStart).toFixed(2)}ms`
+        )
+      }
+
+      processBatch(0, currentFiles)
+    }
+
+    syncIgnores()
+    return () => {
+      mounted = false
+    }
+  }, [isIgnored, isInitialized, files, setFiles])
+
+  const lastModeRef = useRef(appMode)
+  // Clear files and VFS ONLY when switching modes to avoid state bleed
+  useEffect(() => {
+    if (lastModeRef.current !== appMode) {
+      logger.info(
+        `[App] Mode switch detected: ${lastModeRef.current} -> ${appMode}. Resetting workbench...`
+      )
+      setFiles([])
+      setVirtualFileSystem({})
+      setImportError(null)
+      clearValidation()
+      lastModeRef.current = appMode
+    }
   }, [appMode, setFiles, setVirtualFileSystem, setImportError, clearValidation])
 
   // Fetch VFS tree and Config from backend on mount

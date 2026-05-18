@@ -314,6 +314,15 @@ program
         if (options.pulse) {
           startPulseMirror()
         }
+        // Security Boundary: Reject explicit path traversal in input arguments
+        for (const p of paths) {
+          if (p.includes('..')) {
+            throw new UserError(
+              `Security Violation: Path traversal detected in input path: "${p}". Traversal segments (../) are forbidden for security reasons.`
+            )
+          }
+        }
+
         // Path Normalization & Pruning
         const absolutePaths = paths.map((p) => resolve(p))
         const { pruned, remaining } = prunePaths(absolutePaths)

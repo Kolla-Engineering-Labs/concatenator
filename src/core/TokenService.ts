@@ -75,7 +75,7 @@ export class TokenService {
         // Dynamic import ensures the main thread remains unblocked and bundle stays lean.
         // o200k_base is the standard for gpt-4o.
         const { getEncoding } = await import('js-tiktoken')
-        const encoder = getEncoding('cl100k_base')
+        const encoder = getEncoding('o200k_base')
         this.strategy = new PrecisionStrategy(encoder)
         this._isPrecise = true
       } catch {
@@ -119,13 +119,25 @@ export class TokenService {
    * Create a simple non-crypto hash for content caching
    */
   static hashContent(content: string): string {
+    const len = content.length
+    if (len === 0) return 'empty'
+
+    // O(1) hashing for massive strings: sample start, middle, and end rather than the entire file.
+    // This prevents main thread lockups on gigabyte-sized log/db files.
+    const sample =
+      len > 3000
+        ? content.slice(0, 1000) +
+          content.slice(Math.floor(len / 2), Math.floor(len / 2) + 1000) +
+          content.slice(-1000)
+        : content
+
     let hash = 0
-    for (let i = 0; i < content.length; i++) {
-      const char = content.charCodeAt(i)
+    for (let i = 0; i < sample.length; i++) {
+      const char = sample.charCodeAt(i)
       hash = (hash << 5) - hash + char
       hash |= 0 // Convert to 32bit integer
     }
-    return hash.toString(36) + content.length.toString(36)
+    return hash.toString(36) + ':' + len.toString(36)
   }
 
   /**

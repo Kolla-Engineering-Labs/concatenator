@@ -14,6 +14,7 @@ const EMPTY_MAP = {}
 export const useFileTree = (
   filteredFiles: FileItem[],
   isIgnored: (path: string) => boolean,
+  getIgnoreResult: (path: string) => { ignored: boolean; reason?: string },
   isExplicitlyNegated: (path: string) => boolean,
   tokenMap: Record<string, { tokens: number; isPrecise: boolean }> = EMPTY_MAP
 ) => {
@@ -26,6 +27,9 @@ export const useFileTree = (
       isIgnored: false,
     }
 
+    const pathCache = new Map<string, { ignored: boolean; reason?: string }>()
+    const negatedCache = new Map<string, boolean>()
+
     filteredFiles.forEach((file) => {
       const normalizedPath = file.path.replace(/\\/g, '/')
       const parts = normalizedPath.split('/').filter((p) => p !== '')
@@ -35,6 +39,20 @@ export const useFileTree = (
         const isLast = index === parts.length - 1
         const currentPath = parts.slice(0, index + 1).join('/')
 
+        let ignoreResult = pathCache.get(currentPath)
+        if (!ignoreResult) {
+          ignoreResult = getIgnoreResult
+            ? getIgnoreResult(currentPath)
+            : { ignored: isIgnored(currentPath) }
+          pathCache.set(currentPath, ignoreResult)
+        }
+
+        let isNegatedResult = negatedCache.get(currentPath)
+        if (isNegatedResult === undefined) {
+          isNegatedResult = isExplicitlyNegated(currentPath)
+          negatedCache.set(currentPath, isNegatedResult)
+        }
+
         let existing = current.children?.find((c) => c.name === part)
 
         if (!existing) {
@@ -43,10 +61,9 @@ export const useFileTree = (
             path: currentPath,
             kind: isLast ? file.kind : 'directory',
             children: isLast && file.kind === 'file' ? undefined : [],
-            isIgnored: isIgnored(currentPath),
-            isNegated: isLast
-              ? (file as FileItem).isNegated
-              : isExplicitlyNegated(currentPath),
+            isIgnored: ignoreResult.ignored,
+            reason: ignoreResult.reason,
+            isNegated: isLast ? (file as FileItem).isNegated : isNegatedResult,
             file: isLast ? file : undefined,
           }
           current.children?.push(existing)
@@ -106,17 +123,16 @@ export const useFileTree = (
     }
     sortTree(root)
 
-    // Promote single root directory if it's the only child
     let promotedRoot = root
     while (
-      promotedRoot.children?.length === 1 &&
+      promotedRoot.children &&
+      promotedRoot.children.length === 1 &&
       promotedRoot.children[0].kind === 'directory'
     ) {
       promotedRoot = promotedRoot.children[0]
     }
-
     return promotedRoot
-  }, [filteredFiles, isIgnored, isExplicitlyNegated, tokenMap])
+  }, [filteredFiles, isIgnored, getIgnoreResult, isExplicitlyNegated, tokenMap])
 
   return fileTree
 }

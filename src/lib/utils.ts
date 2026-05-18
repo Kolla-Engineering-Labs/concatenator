@@ -44,3 +44,28 @@ export function isImageFile(fileName: string): boolean {
 export function isPdfFile(fileName: string): boolean {
   return fileName.toLowerCase().endsWith('.pdf')
 }
+
+export function isBinaryFile(fileName: string): boolean {
+  const binaryExtensions = [
+    '.zip',
+    '.tar',
+    '.gz',
+    '.rar',
+    '.7z',
+    '.db',
+    '.sqlite',
+    '.exe',
+    '.dll',
+    '.so',
+    '.dylib',
+    '.bin',
+    '.png',
+    '.jpg',
+    '.jpeg',
+    '.webp',
+    '.gif',
+    '.pdf',
+  ]
+  const lowerName = fileName.toLowerCase()
+  return binaryExtensions.some((ext) => lowerName.endsWith(ext))
+}

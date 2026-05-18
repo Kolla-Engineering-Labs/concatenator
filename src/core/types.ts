@@ -23,7 +23,7 @@ export interface FileItem {
   isNegated?: boolean
   status?: FileStatus
   reason?: string
-  handle?: File
+  handle?: unknown
 }
 
 export interface TreeItem {
