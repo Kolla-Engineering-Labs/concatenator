@@ -26,19 +26,19 @@ describe('TokenService', () => {
 
   describe('getTokenCount', () => {
     it('should return 0 for empty content', () => {
-      expect(TokenService.getTokenCount('')).toBe(0)
-    })
-
-    it('should calculate tokens using current strategy', () => {
-      // By default it uses HeuristicStrategy (chars / 4)
-      expect(TokenService.getTokenCount('1234')).toBe(1)
+      expect(TokenService.getTokenCount('').count).toBe(0)
+      // Default heuristic: Math.ceil(length / 4)
+      // '1234' is length 4 => 1
+      // '12345' is length 5 => 2
+      // Using precise: 1234 is 1 token in cl100k
+      expect(TokenService.getTokenCount('1234').count).toBe(1)
     })
   })
 
   describe('Strategy Pattern', () => {
     it('HeuristicStrategy calculates tokens correctly', () => {
       const strategy = new HeuristicStrategy()
-      expect(strategy.calculate('Hello World')).toBe(3) // 11 chars / 4 = 2.75 -> 3
+      expect(strategy.calculate('Hello World').count).toBe(3) // 11 chars / 4 = ceil(2.75) = 3
     })
 
     it('PrecisionStrategy uses the provided encoder', () => {
@@ -46,7 +46,7 @@ describe('TokenService', () => {
         encode: (text: string) => new Uint32Array(text.split(' ').length),
       }
       const strategy = new PrecisionStrategy(mockEncoder)
-      expect(strategy.calculate('Hello World from Vitest')).toBe(4)
+      expect(strategy.calculate('Hello World from Vitest').count).toBe(4)
     })
   })
 
@@ -57,9 +57,9 @@ describe('TokenService', () => {
 
       expect(TokenService.isPrecise()).toBe(true)
       // cl100k_base for "hello" is 1 token
-      expect(TokenService.getTokenCount('hello')).toBe(1)
+      expect(TokenService.getTokenCount('hello').count).toBe(1)
       // "Concatenator" is 3 tokens in cl100k_base (Conc + at + enator)
-      expect(TokenService.getTokenCount('Concatenator')).toBe(3)
+      expect(TokenService.getTokenCount('Concatenator').count).toBe(3)
     })
   })
 

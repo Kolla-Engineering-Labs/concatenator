@@ -1316,11 +1316,11 @@ export const useFileProcessing = ({
           (acc, f) =>
             acc +
             (typeof f.content === 'string'
-              ? TokenService.getTokenCount(f.content)
+              ? TokenService.getTokenCount(f.content).count
               : 0),
           0
         )
-        const finalOutputTokens = TokenService.getTokenCount(result)
+        const finalOutputTokens = TokenService.getTokenCount(result).count
         const tokensSaved = Math.max(0, totalRawTokens - finalOutputTokens)
         const savedPercent =
           totalRawTokens > 0

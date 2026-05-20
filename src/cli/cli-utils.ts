@@ -219,7 +219,7 @@ export function collectFiles(
       try {
         const stats = statSync(fullPath)
         const content = readFileSync(fullPath, 'utf-8')
-        const tokens = TokenService.getTokenCount(content)
+        const tokens = TokenService.getTokenCount(content).count
 
         files.push({
           path: relativePath,

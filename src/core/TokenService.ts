@@ -11,7 +11,7 @@ import { logger } from '../lib/logger.js'
  * Strategy interface for token calculation.
  */
 export interface ITokenStrategy {
-  calculate(text: string): number
+  calculate(text: string): { count: number; model: string }
 }
 
 /**
@@ -19,9 +19,9 @@ export interface ITokenStrategy {
  * $1 token ≈ 4 characters$.
  */
 export class HeuristicStrategy implements ITokenStrategy {
-  calculate(text: string): number {
-    if (!text) return 0
-    return Math.ceil(text.length / 4)
+  calculate(text: string): { count: number; model: string } {
+    if (!text) return { count: 0, model: 'heuristic' }
+    return { count: Math.ceil(text.length / 4), model: 'heuristic' }
   }
 }
 
@@ -34,21 +34,23 @@ export interface ITiktokenEncoder {
  */
 export class PrecisionStrategy implements ITokenStrategy {
   private encoder: ITiktokenEncoder
+  private model: string
 
-  constructor(encoder: ITiktokenEncoder) {
+  constructor(encoder: ITiktokenEncoder, model: string = 'o200k_base') {
     this.encoder = encoder
+    this.model = model
   }
 
-  calculate(text: string): number {
-    if (!text) return 0
+  calculate(text: string): { count: number; model: string } {
+    if (!text) return { count: 0, model: this.model }
     try {
-      return this.encoder.encode(text).length
+      return { count: this.encoder.encode(text).length, model: this.model }
     } catch (err) {
       logger.warn(
         '[PrecisionStrategy] Tokenization failed, using heuristic.',
         err
       )
-      return Math.ceil(text.length / 4)
+      return { count: Math.ceil(text.length / 4), model: 'heuristic' }
     }
   }
 }
@@ -76,7 +78,7 @@ export class TokenService {
         // o200k_base is the standard for gpt-4o.
         const { getEncoding } = await import('js-tiktoken')
         const encoder = getEncoding('o200k_base')
-        this.strategy = new PrecisionStrategy(encoder)
+        this.strategy = new PrecisionStrategy(encoder, 'o200k_base')
         this._isPrecise = true
       } catch {
         this.strategy = new HeuristicStrategy()
@@ -90,7 +92,7 @@ export class TokenService {
   /**
    * Calculate tokens using the current active strategy.
    */
-  static getTokenCount(text: string): number {
+  static getTokenCount(text: string): { count: number; model: string } {
     return this.strategy.calculate(text)
   }
 
@@ -98,14 +100,14 @@ export class TokenService {
    * Legacy alias for getTokenCount.
    */
   static getPreciseTokenCount(text: string): number {
-    return this.getTokenCount(text)
+    return this.getTokenCount(text).count
   }
 
   /**
    * Heuristic estimate (exposed for cases where precision isn't needed or available).
    */
   static getTokenEstimate(text: string): number {
-    return new HeuristicStrategy().calculate(text)
+    return new HeuristicStrategy().calculate(text).count
   }
 
   /**
@@ -152,7 +154,7 @@ export class TokenService {
 
     for (const [path, content] of Object.entries(fileMap)) {
       if (!ignoreEngine.isIgnored(path)) {
-        totalTokens += this.getTokenCount(content)
+        totalTokens += this.getTokenCount(content).count
       }
     }
 
@@ -181,7 +183,7 @@ export class TokenService {
           node.file?.tokens !== undefined
             ? node.file.tokens
             : typeof node.file?.content === 'string'
-              ? this.getTokenCount(node.file.content)
+              ? this.getTokenCount(node.file.content).count
               : 0,
         isPrecise:
           node.file?.isPrecise ??

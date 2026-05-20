@@ -40,8 +40,7 @@ test.describe('Max File Limit Feature', () => {
     // Uses worker-specific ignore file via X-Worker-Id header from apiContext fixture.
     await resetIgnoreList(apiContext)
 
-    // Use 'load' for more stable Firefox hydration, or increase timeout
-    await page.goto('/', { waitUntil: 'load', timeout: 30000 })
+    await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 30000 })
 
     // Ensure sidebar is open to access controls
     await ensureSidebarOpen(page)
@@ -153,7 +152,7 @@ test.describe('Max File Limit Feature', () => {
         localStorage.removeItem('concatenator-max-files')
       })
       await page.waitForTimeout(500)
-      await page.reload({ waitUntil: 'load', timeout: 30000 })
+      await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 })
 
       const maxFileLimitSelect = page.locator('select#max-file-limit')
       await expect(maxFileLimitSelect).toBeVisible({ timeout: 10000 })
@@ -197,7 +196,7 @@ test.describe('Max File Limit Feature', () => {
       })
       await page.waitForTimeout(500)
       // Reload the page
-      await page.reload({ waitUntil: 'load', timeout: 30000 })
+      await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 })
 
       // Check that the value is restored from localStorage
       const restoredSelect = page.locator('select#max-file-limit')

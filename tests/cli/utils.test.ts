@@ -44,7 +44,7 @@ vi.doMock('../../src/lib/logger.js', () => ({
 vi.doMock('../../src/core/TokenService.js', () => ({
   TokenService: {
     getTokenEstimate: vi.fn().mockReturnValue(10),
-    getTokenCount: vi.fn().mockReturnValue(10),
+    getTokenCount: vi.fn().mockReturnValue({ count: 10, model: 'heuristic' }),
   },
 }))
 

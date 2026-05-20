@@ -371,7 +371,7 @@ program
             if (entry.status === 'ignored' || entry.status === 'rejected') {
               if (options.showIgnored) {
                 process.stderr.write(
-                  `[${entry.status}] ${entry.path} - ${entry.reason}\n`
+                  `[-] skipped ${entry.path} (${entry.reason})\n`
                 )
               }
               continue
@@ -379,7 +379,7 @@ program
 
             try {
               const content = readFileSync(entry.fullPath, 'utf-8')
-              const tokens = TokenService.getTokenCount(content)
+              const tokens = TokenService.getTokenCount(content).count
 
               allFiles.push({
                 path: entry.path,
@@ -458,7 +458,8 @@ program
           // Check for directory collision before writing
           checkOutputPath(options.output, options.force, 'file')
           writeFileSync(options.output, result)
-          const finalOutputTokens = TokenService.getTokenCount(result)
+          const finalTokenResult = TokenService.getTokenCount(result)
+          const finalOutputTokens = finalTokenResult.count
           const tokensSaved = Math.max(0, totalTokens - finalOutputTokens)
           const savedPercent =
             totalTokens > 0
@@ -467,7 +468,7 @@ program
 
           const isPrecise = TokenService.isPrecise()
           logger.info(
-            `✔ Created ${options.output} (${formatFileSize(bundleSize)} | Total Tokens (cl100k): ${finalOutputTokens.toLocaleString()}${isPrecise ? '' : ' [Heuristic Estimation]'}).`
+            `✔ Created ${options.output} (${formatFileSize(bundleSize)} | Total Tokens (${finalTokenResult.model}): ${finalOutputTokens.toLocaleString()}${isPrecise ? '' : ' [Heuristic Estimation]'}).`
           )
           if (tokensSaved > 0) {
             logger.info(
