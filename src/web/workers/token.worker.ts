@@ -7,17 +7,27 @@ import { getEncoding, type Tiktoken } from 'js-tiktoken'
 import { logger } from '../../lib/logger'
 
 let encoder: Tiktoken | null = null
+let currentModel: string | null = null
 
 self.onmessage = async (e: MessageEvent) => {
-  const { files } = e.data as { files: Array<{ id: string; content: string }> }
+  const { files, model } = e.data as {
+    files: Array<{ id: string; content: string }>
+    model?: string
+  }
   try {
-    if (!encoder) {
+    const requestedModel = model || 'o200k_base'
+    if (requestedModel !== currentModel) {
       try {
-        // o200k_base is the standard for GPT-4o
-        encoder = getEncoding('o200k_base')
+        encoder = getEncoding(requestedModel as any)
+        currentModel = requestedModel
       } catch {
-        // Fallback to cl100k_base if o200k_base is unavailable or fails
-        encoder = getEncoding('cl100k_base')
+        try {
+          encoder = getEncoding('o200k_base')
+          currentModel = 'o200k_base'
+        } catch {
+          encoder = getEncoding('cl100k_base')
+          currentModel = 'cl100k_base'
+        }
       }
     }
 

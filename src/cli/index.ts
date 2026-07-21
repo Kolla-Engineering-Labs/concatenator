@@ -115,8 +115,14 @@ program
     'Path to binary to verify, or "self" for the current executable',
     'self'
   )
-  .description('Verify the integrity of a binary against a GPG-signed manifest')
+  .summary('Cryptographically verify a standalone binary')
+  .description(
+    'Verify the integrity of a binary by checking its SHA256 hash against the GPG-signed SHA256SUMS.asc manifest.\n\n' +
+      'Example for deep cryptographic debugging:\n' +
+      '  $ npx @kolla/concatenator verify ./concatenator-windows-x64.exe --verbose'
+  )
   .option('-m, --manifest <path>', 'Explicit path to SHA256SUMS.asc')
+  .option('-v, --verbose', 'Show deeper cryptographic debugging output')
   .action(async (target, options) => {
     const { calculateFileHash } = await import('./cli-utils.js')
     const { OFFICIAL_MANIFEST_URL, ARCHITECT_PGP_FINGERPRINT } =
@@ -223,6 +229,11 @@ program
           logger.raw(
             '🛡️  Signature valid (manually verified via GPG keychain).'
           )
+        if (options.verbose) {
+          logger.raw(
+            `\n[DEBUG] Cryptographic details:\n  Target: ${targetPath}\n  Manifest: ${manifestPath}\n  Hash: ${manifestHash}`
+          )
+        }
       } else {
         logger.rawError('\n❌ Integrity: COMPROMISED')
         logger.rawError(

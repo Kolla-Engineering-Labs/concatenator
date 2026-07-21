@@ -459,7 +459,8 @@ export function concatenate(
   files: ConcatenateInputFile[],
   timestamp?: string,
   sessionId?: string,
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void,
+  tokenBudget?: number
 ): string {
   const ts = timestamp || new Date().toLocaleString()
   const sid = sessionId || generateCollisionFreeSessionId(files)
@@ -473,7 +474,11 @@ export function concatenate(
 
   // Manifest header with session ID
   let result = `${MANIFEST_PREFIX}${sid}${MANIFEST_SUFFIX}\n`
-  result += `Concatenated on: ${ts}\n\n`
+  result += `Concatenated on: ${ts}\n`
+  if (tokenBudget) {
+    result += `Budget: ${tokenBudget.toLocaleString()}\n`
+  }
+  result += `\n`
 
   const totalFiles = files.length
   for (let i = 0; i < totalFiles; i++) {

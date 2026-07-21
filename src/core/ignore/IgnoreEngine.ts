@@ -4,6 +4,9 @@
  */
 
 import micromatch from 'micromatch'
+import { IgnoreSource } from '../types.js'
+
+export type PatternInput = string | { pattern: string; source: IgnoreSource }
 
 /**
  * Internal representation of a compiled ignore rule.
@@ -15,6 +18,7 @@ interface CompiledPattern {
   negated: boolean
   anchored: boolean
   rootAnchored: boolean
+  source: IgnoreSource
   patterns?: RegExp[]
   unanchoredPatterns?: RegExp[]
 }
@@ -34,13 +38,18 @@ interface CompiledPattern {
 export class IgnoreEngine {
   private rules: CompiledPattern[]
 
-  constructor(patterns: string[]) {
+  constructor(patterns: PatternInput[], defaultSource: IgnoreSource = IgnoreSource.DEFAULT) {
     this.rules = patterns
-      .map((rawPattern) => rawPattern.trim())
+      .map((entry) => {
+        if (typeof entry === 'object' && entry !== null) {
+          return { rawPattern: entry.pattern.trim(), source: entry.source }
+        }
+        return { rawPattern: String(entry).trim(), source: defaultSource }
+      })
       .filter(
-        (rawPattern) => rawPattern.length > 0 && !rawPattern.startsWith('#')
+        ({ rawPattern }) => rawPattern.length > 0 && !rawPattern.startsWith('#')
       )
-      .map((rawPattern) => {
+      .map(({ rawPattern, source }) => {
         const negated = rawPattern.startsWith('!')
         const clean = negated ? rawPattern.slice(1) : rawPattern
         const rootAnchored = clean.startsWith('/')
@@ -77,6 +86,7 @@ export class IgnoreEngine {
           negated,
           anchored,
           rootAnchored,
+          source,
           patterns: compiledPatterns,
           unanchoredPatterns: compiledUnanchored,
         }
@@ -221,23 +231,32 @@ export class IgnoreEngine {
   }
 
   /**
-   * Detailed ignore result including the reason.
+   * Detailed ignore result including the reason, negation status, and source.
    */
-  getIgnoreResult(path: string): { ignored: boolean; reason?: string } {
-    if (!path) return { ignored: false }
+  getIgnoreResult(path: string): {
+    ignored: boolean
+    negated: boolean
+    reason?: string
+    source?: IgnoreSource
+  } {
+    if (!path) return { ignored: false, negated: false }
     const { normalizedPath, fileName, segments } = this.normalizePath(path)
 
     let ignored = false
+    let negated = false
     let reason: string | undefined = undefined
+    let source: IgnoreSource | undefined = undefined
 
     for (const rule of this.rules) {
       if (this.isMatch(rule, normalizedPath, fileName, segments)) {
         ignored = !rule.negated
+        negated = rule.negated
         reason = rule.negated ? undefined : String(rule.match)
+        source = rule.source
       }
     }
 
-    return { ignored, reason }
+    return { ignored, negated, reason, source }
   }
 
   /**

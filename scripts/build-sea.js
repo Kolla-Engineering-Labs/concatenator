@@ -4,6 +4,7 @@
  * Requires Node.js 22+
  */
 
+import { createHash } from 'crypto'
 import { execSync } from 'child_process'
 import {
   writeFileSync,
@@ -50,13 +51,13 @@ function resolveNodePath() {
     // Parse major version (v22.0.0 -> 22)
     const majorVersion = parseInt(versionOutput.replace(/^v/, '').split('.')[0])
 
-    if (isNaN(majorVersion) || majorVersion < 22) {
-      throw new Error(`Node.js 22+ required, found ${versionOutput}`)
+    if (isNaN(majorVersion) || majorVersion < 22 || majorVersion > 24) {
+      throw new Error(`Node.js 22-24 required, found ${versionOutput}`)
     }
 
     return nodePath
   } catch (error) {
-    const isVersionError = error.message.includes('Node.js 22+ required')
+    const isVersionError = error.message.includes('Node.js 22-24 required')
     const baseError = isVersionError
       ? error.message
       : `Unreachable or invalid Node.js binary at "${nodePath}"`
@@ -64,7 +65,7 @@ function resolveNodePath() {
     throw new Error(
       `❌ ${baseError}\n\n` +
         `💡 To resolve this:\n` +
-        `   - Ensure Node.js 22 or newer is installed.\n` +
+        `   - Ensure Node.js 22 to 24 is installed.\n` +
         `   - You can override the path by setting the CONCATENATOR_NODE_EXE environment variable.\n` +
         `   - Current resolution: ${nodePath}`
     )
@@ -101,9 +102,18 @@ const isUnsigned = platform === 'darwin' && !isSigningEnabled(platform)
 
 try {
   const pkg = JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf-8'))
+  const lockfileContent = readFileSync(
+    join(rootDir, 'package-lock.json'),
+    'utf-8'
+  )
+  const lockfileHash = createHash('sha256')
+    .update(lockfileContent)
+    .digest('hex')
+
   const defineArgs = [
     `--define:PROCESS_IS_UNSIGNED=${isUnsigned}`,
     `--define:PROCESS_VERSION=${JSON.stringify(pkg.version).replace(/"/g, '\\"')}`,
+    `--define:LOCKFILE_HASH=${JSON.stringify(lockfileHash)}`,
   ]
 
   execSync(
@@ -182,8 +192,10 @@ const seaConfig = {
   main: 'dist/sea/concatenator.js',
   output: 'dist/sea/concatenator.blob',
   disableExperimentalSEAWarning: true,
+  // useSnapshot: false - disabled because V8 startup snapshots embed heap state that varies per build environment
   useSnapshot: false,
-  useCodeCache: false, // Disabled for bit-for-bit determinism
+  // useCodeCache: false - disabled to guarantee bit-for-bit deterministic builds across platforms
+  useCodeCache: false,
   assets: sortObjectKeys(assets), // Deterministic VFS sorting
 }
 

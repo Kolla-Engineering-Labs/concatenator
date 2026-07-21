@@ -20,6 +20,10 @@ jobs:
       matrix:
         node-version: [22]
         os: ${{ fromJSON(github.event_name == 'pull_request' && github.base_ref == 'main' && '["ubuntu-latest", "windows-latest", "macos-latest"]' || '["ubuntu-latest"]') }}
+        include:
+          - node-version: 24
+            os: ubuntu-latest
+            experimental: true
 
     steps:
       - uses: actions/checkout@v4
@@ -49,6 +53,7 @@ jobs:
 
       - name: Run Unit Tests (Vitest)
         run: npm run test:coverage
+        continue-on-error: ${{ matrix.experimental == true }}
 
       - name: Archive coverage results
         if: matrix.os == 'ubuntu-latest' && !cancelled()

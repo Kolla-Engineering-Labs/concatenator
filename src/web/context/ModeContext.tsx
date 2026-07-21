@@ -238,6 +238,11 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
     128000
   )
 
+  const [tokenModel, setTokenModel] = useLocalStorage<string>(
+    'concat_token_model',
+    'o200k_base'
+  )
+
   const handleModeChange = (newMode: AppMode) => {
     if (newMode !== mode) {
       resetWorkbench()
@@ -257,6 +262,7 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
         forceMode,
         virtualFileSystem,
         tokenBudget,
+        tokenModel,
         autoSaveIgnore,
         setMode: handleModeChange,
         setView,
@@ -267,6 +273,7 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
         setForceMode,
         setVirtualFileSystem,
         setTokenBudget,
+        setTokenModel,
         setAutoSaveIgnore,
         resetWorkbench,
         isInitialized,

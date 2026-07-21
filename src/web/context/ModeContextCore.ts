@@ -9,6 +9,7 @@ export interface ModeContextType extends WorkbenchState {
   setForceMode: Dispatch<SetStateAction<boolean>>
   setVirtualFileSystem: Dispatch<SetStateAction<Record<string, string>>>
   setTokenBudget: (budget: number) => void
+  setTokenModel: (model: string) => void
   addIgnorePattern: (pattern: string) => void
   removeIgnorePattern: (pattern: string) => void
   resetWorkbench: () => void

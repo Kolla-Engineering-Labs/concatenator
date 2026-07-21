@@ -24,6 +24,14 @@ async function verifyRelease() {
   console.log('\n🔍 Starting Release Candidate Audit...')
   console.log('====================================')
 
+  const majorVersion = parseInt(process.versions.node.split('.')[0])
+  if (majorVersion < 22) {
+    console.error(
+      `${FAIL} Audit failed: Node.js 22+ required, current is v${process.versions.node}`
+    )
+    process.exit(1)
+  }
+
   if (!existsSync(manifestPath)) {
     console.error(`${FAIL} Manifest not found: ${manifestPath}`)
     console.log('   Run "npm run build:manifest" and sign it first.')

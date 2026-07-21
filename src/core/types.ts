@@ -3,6 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+export enum IgnoreSource {
+  DEFAULT = 'default',
+  FILE = 'file',
+  SESSION = 'session',
+}
+
 export type FileStatus = 'included' | 'ignored' | 'rejected'
 
 export interface FileDiagnostic {
@@ -23,6 +29,7 @@ export interface FileItem {
   isNegated?: boolean
   status?: FileStatus
   reason?: string
+  ignoreSource?: IgnoreSource
   handle?: unknown
 }
 
@@ -34,6 +41,7 @@ export interface TreeItem {
   isIgnored?: boolean
   isNegated?: boolean
   reason?: string
+  ignoreSource?: IgnoreSource
   file?: FileItem
   tokenWeight?: number
   isPrecise?: boolean
