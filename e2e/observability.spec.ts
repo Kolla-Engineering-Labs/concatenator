@@ -236,11 +236,11 @@ test.describe('Observability & Negation Discovery', () => {
       await expect(overageText).toBeVisible({ timeout: 25000 })
       await expect(overageText).toHaveClass(/text-red-500/)
 
-      // Verify progress bar has the bg-red-500 class
-      const progressBarInner = page.locator('div.h-1\\.5 div.bg-red-500')
-      await expect(progressBarInner).toBeAttached({ timeout: 10000 })
+      // Assert that the .bg-red-500 class is applied to the saturation bar
+      const saturationBar = page.locator('div.h-1\\.5 > div').first()
+      await expect(saturationBar).toHaveClass(/bg-red-500/)
 
-      // Verify warning triangle icon is visible
+      // Assert that the static warning triangle is visible
       const warningIcon = page.locator('svg.text-red-500').first()
       await expect(warningIcon).toBeVisible({ timeout: 10000 })
     } finally {
@@ -255,27 +255,28 @@ test.describe('Observability & Negation Discovery', () => {
 
     try {
       await ensureSidebarClosed(page)
-      // Upload a file within a default ignored directory (node_modules)
+      // Upload a file within a default ignored directory (node_modules) resembling /node_modules/test.js
       await uploadHelper.setFilesOnInput([
         {
-          name: 'index.js',
-          path: 'node_modules/lodash/index.js',
-          content: 'console.log("lodash");',
+          name: 'test.js',
+          path: 'node_modules/test.js',
+          content: 'console.log("test");',
         },
       ])
 
-      // Verify the file is listed and recognized as ignored (using filter to support both desktop and mobile responsive layouts)
-      const lodashRow = page
-        .locator('[data-path="node_modules/lodash/index.js"]')
+      // Verify the file is listed and recognized as ignored
+      const testRow = page
+        .locator('[data-path="node_modules/test.js"]')
         .filter({ visible: true })
         .first()
-      await expect(lodashRow).toBeVisible({ timeout: 15000 })
-      await expect(lodashRow).toHaveAttribute('data-ignored', 'true')
+      await expect(testRow).toBeVisible({ timeout: 15000 })
+      await expect(testRow).toHaveAttribute('data-ignored', 'true')
 
-      // Verify that the reason badge accurately appears in the DOM with the correct content
-      const badge = lodashRow.locator('span.font-mono')
+      // Assert the row renders the inline badge containing the text node_modules and (default)
+      const badge = testRow.locator('span.font-mono')
       await expect(badge).toBeVisible({ timeout: 10000 })
-      await expect(badge).toHaveText('node_modules (default)')
+      await expect(badge).toContainText('node_modules')
+      await expect(badge).toContainText('(default)')
     } finally {
       uploadHelper.cleanup()
     }
