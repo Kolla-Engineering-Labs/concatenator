@@ -202,4 +202,82 @@ test.describe('Observability & Negation Discovery', () => {
       uploadHelper.cleanup()
     }
   })
+
+  test('should display red Gas Gauge overage state when token budget is exceeded', async ({
+    page,
+  }) => {
+    const uploadHelper = new FileUploadHelper(page)
+
+    try {
+      // 1. Select the lowest budget preset (GPT-4o at 128,000 tokens)
+      const budgetSelect = page
+        .locator('select')
+        .filter({ has: page.locator('option[value="128000"]') })
+      await expect(budgetSelect).toBeVisible({ timeout: 10000 })
+      await budgetSelect.selectOption('128000')
+
+      // 2. Generate a synthetic payload in memory and upload it to exceed 128k budget
+      const heavyPayload = 'hello '.repeat(150000) // approx 150k tokens
+      await ensureSidebarClosed(page)
+      await uploadHelper.setFilesOnInput([
+        {
+          name: 'synthetic-overload.txt',
+          path: 'synthetic-overload.txt',
+          content: heavyPayload,
+        },
+      ])
+
+      // 3. Verify the Gas Gauge transition to red overage state
+      // Wait for the overage text to show the correct layout (e.g. "X / 128,000" where X > 128,000)
+      const overageText = page
+        .locator('div.tabular-nums')
+        .filter({ hasText: /^\d[\d,]*\s*\/\s*128,000$/ })
+        .first()
+      await expect(overageText).toBeVisible({ timeout: 25000 })
+      await expect(overageText).toHaveClass(/text-red-500/)
+
+      // Verify progress bar has the bg-red-500 class
+      const progressBarInner = page.locator('div.h-1\\.5 div.bg-red-500')
+      await expect(progressBarInner).toBeAttached({ timeout: 10000 })
+
+      // Verify warning triangle icon is visible
+      const warningIcon = page.locator('svg.text-red-500').first()
+      await expect(warningIcon).toBeVisible({ timeout: 10000 })
+    } finally {
+      uploadHelper.cleanup()
+    }
+  })
+
+  test('should display reason badge for default ignored directories like node_modules', async ({
+    page,
+  }) => {
+    const uploadHelper = new FileUploadHelper(page)
+
+    try {
+      await ensureSidebarClosed(page)
+      // Upload a file within a default ignored directory (node_modules)
+      await uploadHelper.setFilesOnInput([
+        {
+          name: 'index.js',
+          path: 'node_modules/lodash/index.js',
+          content: 'console.log("lodash");',
+        },
+      ])
+
+      // Verify the file is listed and recognized as ignored (using filter to support both desktop and mobile responsive layouts)
+      const lodashRow = page
+        .locator('[data-path="node_modules/lodash/index.js"]')
+        .filter({ visible: true })
+        .first()
+      await expect(lodashRow).toBeVisible({ timeout: 15000 })
+      await expect(lodashRow).toHaveAttribute('data-ignored', 'true')
+
+      // Verify that the reason badge accurately appears in the DOM with the correct content
+      const badge = lodashRow.locator('span.font-mono')
+      await expect(badge).toBeVisible({ timeout: 10000 })
+      await expect(badge).toHaveText('node_modules (default)')
+    } finally {
+      uploadHelper.cleanup()
+    }
+  })
 })
