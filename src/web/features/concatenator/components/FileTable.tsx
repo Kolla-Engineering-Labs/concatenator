@@ -143,10 +143,10 @@ export const FileTable: React.FC<FileTableProps> = ({
                         <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 text-[8px] font-bold uppercase tracking-wider border border-slate-200 dark:border-slate-700 ml-2">
                           Ignored
                         </span>
-                        {file.reason && (
-                          <span className="text-[8px] font-mono bg-slate-50 dark:bg-slate-800/50 text-slate-400 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 ml-1.5">
-                            {file.reason}{' '}
-                            {file.ignoreSource && `(${file.ignoreSource})`}
+                        {(file.reason || file.ignoreSource) && (
+                          <span className="text-[8px] font-mono text-slate-400 bg-slate-800/50 px-1.5 py-0.5 rounded ml-1.5 inline-block align-middle">
+                            {file.reason || 'Ignored'}
+                            {file.ignoreSource && ` (${file.ignoreSource})`}
                           </span>
                         )}
                       </>
@@ -279,14 +279,27 @@ export const FileTable: React.FC<FileTableProps> = ({
                   {getFileIcon(file.name, file.kind)}
                 </div>
                 <div className="min-w-0">
-                  <p
-                    className={cn(
-                      'text-sm font-bold truncate ph-no-capture',
-                      file.isIgnored && 'line-through decoration-slate-400/50'
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span
+                      className={cn(
+                        'text-sm font-bold truncate ph-no-capture',
+                        file.isIgnored && 'line-through decoration-slate-400/50'
+                      )}
+                    >
+                      {file.name}
+                    </span>
+                    {file.isIgnored && (
+                      <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 text-[8px] font-bold uppercase tracking-wider border border-slate-200 dark:border-slate-700 shrink-0">
+                        Ignored
+                      </span>
                     )}
-                  >
-                    {file.name}
-                  </p>
+                    {file.isIgnored && (file.reason || file.ignoreSource) && (
+                      <span className="text-[8px] font-mono text-slate-400 bg-slate-800/50 px-1.5 py-0.5 rounded shrink-0">
+                        {file.reason || 'Ignored'}
+                        {file.ignoreSource && ` (${file.ignoreSource})`}
+                      </span>
+                    )}
+                  </div>
                   <p
                     className="text-[10px] text-slate-400 truncate ph-no-capture"
                     title={file.path}

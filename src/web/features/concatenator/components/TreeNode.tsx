@@ -140,14 +140,10 @@ export const TreeNode: React.FC<TreeNodeProps> = ({
                   <span className="ml-2 text-[10px] bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded uppercase tracking-tighter font-bold opacity-60 inline-block align-middle border border-slate-300 dark:border-slate-700">
                     Ignored
                   </span>
-                  {node.reason && (
-                    <span className="hidden group-hover/node:inline-block ml-1.5 text-[9px] font-mono text-slate-400 dark:text-slate-500 align-middle">
-                      Matched: {node.reason}{' '}
-                      {node.ignoreSource && (
-                        <span className="opacity-60">
-                          ({node.ignoreSource})
-                        </span>
-                      )}
+                  {(node.reason || node.ignoreSource) && (
+                    <span className="inline-block ml-1.5 text-[8px] font-mono text-slate-400 bg-slate-800/50 px-1.5 py-0.5 rounded align-middle">
+                      {node.reason || 'Ignored'}
+                      {node.ignoreSource && ` (${node.ignoreSource})`}
                     </span>
                   )}
                 </>

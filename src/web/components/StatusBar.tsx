@@ -42,9 +42,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   const textColorClass = useMemo(() => {
     if (saturation < 70) return 'text-emerald-600 dark:text-emerald-400'
     if (saturation < 90) return 'text-amber-600 dark:text-amber-400'
-    return isOverBudget
-      ? 'text-red-600 dark:text-red-500'
-      : 'text-rose-600 dark:text-rose-400'
+    return isOverBudget ? 'text-red-500' : 'text-rose-600 dark:text-rose-400'
   }, [saturation, isOverBudget])
 
   const [isEditingCustom, setIsEditingCustom] = React.useState(false)
@@ -169,12 +167,20 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         )}
         <div className="flex-1 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden relative">
           <div
-            className={`absolute top-0 left-0 h-full transition-all duration-500 ease-out ${colorClass}`}
-            style={{ width: `${Math.min(saturation, 100)}%` }}
+            className={`absolute top-0 left-0 h-full ${
+              isOverBudget
+                ? 'bg-red-500'
+                : `transition-all duration-500 ease-out ${colorClass}`
+            }`}
+            style={{
+              width: isOverBudget ? '100%' : `${Math.min(saturation, 100)}%`,
+            }}
           />
         </div>
         <div
-          className={`whitespace-nowrap min-w-10 sm:min-w-12 text-right font-bold tabular-nums ${textColorClass}`}
+          className={`whitespace-nowrap min-w-10 sm:min-w-12 text-right font-bold tabular-nums ${
+            isOverBudget ? 'text-red-500' : textColorClass
+          }`}
         >
           {isOverBudget
             ? `${totalTokens.toLocaleString()} / ${tokenBudget.toLocaleString()}`

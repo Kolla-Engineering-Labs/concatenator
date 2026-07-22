@@ -947,6 +947,7 @@ export const useFileProcessing = ({
     isExplicitlyNegated,
     setIsProcessing,
     readFileContent,
+    setFiles,
   ])
 
   const handleFileUpload = useCallback(

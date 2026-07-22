@@ -186,4 +186,26 @@ describe('TreeNode', () => {
     )
     expect(screen.getByText('Inherited')).toBeDefined()
   })
+
+  it('renders inline reason and ignoreSource badge when node is ignored', () => {
+    const ignoredNode = {
+      ...mockNode.children![0],
+      isIgnored: true,
+      reason: 'git-ignore-pattern',
+      ignoreSource: '.gitignore',
+    }
+    render(
+      <TreeNode
+        node={ignoredNode}
+        expandedPaths={new Set()}
+        setExpandedPaths={mockSetExpandedPaths}
+        onQuickLook={mockOnQuickLook}
+        onRemoveFile={mockOnRemoveFile}
+      />
+    )
+    const badge = screen.getByText(/git-ignore-pattern\s+\(\.gitignore\)/)
+    expect(badge).toBeDefined()
+    expect(badge.className).toContain('text-[8px]')
+    expect(badge.className).toContain('bg-slate-800/50')
+  })
 })

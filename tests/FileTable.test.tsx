@@ -236,5 +236,27 @@ describe('FileTable', () => {
       fireEvent.click(unignoreButton)
       expect(mockRemoveIgnorePattern).toHaveBeenCalledWith('src/b.txt')
     })
+
+    it('renders inline reason and ignoreSource when ignored', () => {
+      const ignoredFiles = [
+        {
+          ...mockFiles[0],
+          isIgnored: true,
+          reason: 'PatternMatch',
+          ignoreSource: '.gitignore',
+        },
+      ]
+      render(
+        <FileTable
+          files={ignoredFiles}
+          onRemoveFile={mockOnRemoveFile}
+          onQuickLook={mockOnQuickLook}
+        />
+      )
+      const badges = screen.getAllByText(/PatternMatch\s+\(\.gitignore\)/)
+      expect(badges.length).toBeGreaterThan(0)
+      expect(badges[0].className).toContain('text-[8px]')
+      expect(badges[0].className).toContain('bg-slate-800/50')
+    })
   })
 })
