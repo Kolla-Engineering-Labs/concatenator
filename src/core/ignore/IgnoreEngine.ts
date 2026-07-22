@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import micromatch from 'micromatch'
+import picomatch from 'picomatch'
 import { IgnoreSource } from '../types.js'
 
 export type PatternInput = string | { pattern: string; source: IgnoreSource }
@@ -38,7 +38,10 @@ interface CompiledPattern {
 export class IgnoreEngine {
   private rules: CompiledPattern[]
 
-  constructor(patterns: PatternInput[], defaultSource: IgnoreSource = IgnoreSource.DEFAULT) {
+  constructor(
+    patterns: PatternInput[],
+    defaultSource: IgnoreSource = IgnoreSource.DEFAULT
+  ) {
     this.rules = patterns
       .map((entry) => {
         if (typeof entry === 'object' && entry !== null) {
@@ -74,10 +77,10 @@ export class IgnoreEngine {
             ...rawPatterns.map((p) => `${p}/**`),
           ]
           compiledPatterns = rawPatterns
-            .map((p) => micromatch.makeRe(p, { dot: true }))
+            .map((p) => picomatch.makeRe(p, { dot: true }))
             .filter(Boolean) as RegExp[]
           compiledUnanchored = rawUnanchored
-            .map((p) => micromatch.makeRe(p, { dot: true }))
+            .map((p) => picomatch.makeRe(p, { dot: true }))
             .filter(Boolean) as RegExp[]
         }
 

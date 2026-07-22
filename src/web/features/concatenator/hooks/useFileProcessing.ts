@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef, useCallback, useEffect } from 'react'
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import JSZip from 'jszip'
 import { FileItem, OutputFormat } from '../../../../core/types'
+import { HydratedFile } from '../../../../core/VFSHydrator'
 import { AppMode } from '../../../types/workbench'
 import {
   START_DELIMITER,
@@ -63,7 +64,8 @@ const isReservedWindowsFilename = (name: string) => {
 
 interface UseFileProcessingProps {
   appMode: AppMode
-  isIgnored: (path: string) => boolean
+  hydrateFiles?: (paths: string[]) => Map<string, HydratedFile>
+  isIgnored?: (path: string) => boolean
   isExplicitlyNegated?: (path: string) => boolean
   maxFileLimit: number
   isIgnoreListLoading: boolean
@@ -76,6 +78,7 @@ interface UseFileProcessingProps {
  */
 export const useFileProcessing = ({
   appMode,
+  hydrateFiles,
   isIgnored,
   isExplicitlyNegated = () => false,
   maxFileLimit,
@@ -83,11 +86,51 @@ export const useFileProcessing = ({
   setVirtualFileSystem,
   shouldRecurse,
 }: UseFileProcessingProps) => {
-  const [files, setFiles] = useState<FileItem[]>([])
-  // filesRef mirrors files on every render so async callbacks always read
+  const [rawFiles, setRawFiles] = useState<FileItem[]>([])
+  // filesRef mirrors rawFiles/resolvedFiles so async callbacks always read
   // the latest value without needing files in their useCallback dep arrays.
   const filesRef = useRef<FileItem[]>([])
-  filesRef.current = files
+
+  // Fallback / compatibility: construct hydrateFiles from isIgnored if not provided
+  const resolvedHydrateFiles = useCallback(
+    (paths: string[]) => {
+      if (hydrateFiles) return hydrateFiles(paths)
+      const map = new Map<string, HydratedFile>()
+      for (const path of paths) {
+        const ignored = isIgnored ? isIgnored(path) : false
+        map.set(path, { isIgnored: ignored, isNegated: false })
+      }
+      return map
+    },
+    [hydrateFiles, isIgnored]
+  )
+
+  const resolvedFiles = useMemo(() => {
+    if (!resolvedHydrateFiles || rawFiles.length === 0) return rawFiles
+
+    // $O(1) hydration map lookup
+    const hydrationMap = resolvedHydrateFiles(rawFiles.map((f) => f.path))
+
+    return rawFiles.map((file) => {
+      const verdict = hydrationMap.get(file.path)
+      return {
+        ...file,
+        isIgnored: verdict?.isIgnored ?? false,
+        isNegated: verdict?.isNegated ?? false,
+        reason: verdict?.reason,
+        ignoreSource: verdict?.ignoreSource,
+      }
+    })
+  }, [rawFiles, resolvedHydrateFiles])
+
+  const files = resolvedFiles
+  const setFiles = setRawFiles
+
+  // Sync the imperative ref for the drag-and-drop handler
+  useEffect(() => {
+    filesRef.current = resolvedFiles
+  }, [resolvedFiles])
+
   const [isProcessing, setIsProcessingState] = useState(false)
   const isProcessingRef = useRef(false)
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0 })
@@ -101,12 +144,12 @@ export const useFileProcessing = ({
   const activeReadersRef = useRef<Set<FileReader>>(new Set())
 
   // Reactive refs for ignore logic to allow mid-crawl cancellation/skipping
-  const isIgnoredRef = useRef(isIgnored)
+  const hydrateFilesRef = useRef(resolvedHydrateFiles)
   const shouldRecurseRef = useRef(shouldRecurse)
   useEffect(() => {
-    isIgnoredRef.current = isIgnored
+    hydrateFilesRef.current = resolvedHydrateFiles
     shouldRecurseRef.current = shouldRecurse
-  }, [isIgnored, shouldRecurse])
+  }, [resolvedHydrateFiles, shouldRecurse])
   const setIsProcessing = useCallback((processing: boolean) => {
     isProcessingRef.current = processing
     setIsProcessingState(processing)
@@ -307,6 +350,23 @@ export const useFileProcessing = ({
           return sizeA - sizeB
         })
 
+        // Extract all paths to batch-hydrate before the processing loop
+        const pathsToHydrate: string[] = []
+        for (const item of uploadedFiles) {
+          const path =
+            'path' in item
+              ? item.path
+              : (item as { path?: string }).path ||
+                (item as { webkitRelativePath?: string }).webkitRelativePath ||
+                item.name
+          pathsToHydrate.push(path)
+          const parts = path.split(/[/\\]/).filter(Boolean)
+          for (let j = 1; j < parts.length; j++) {
+            pathsToHydrate.push(parts.slice(0, j).join('/'))
+          }
+        }
+        const hydrationMap = hydrateFilesRef.current(pathsToHydrate)
+
         await new Promise((resolve) => setTimeout(resolve, 50))
 
         const newFiles: FileItem[] = []
@@ -334,7 +394,11 @@ export const useFileProcessing = ({
               (file as { webkitRelativePath?: string }).webkitRelativePath ||
               file.name
 
-            const ignored = isIgnored(path)
+            const verdict = hydrationMap.get(path)
+            const ignored = verdict?.isIgnored ?? false
+            const isNegated = verdict?.isNegated ?? false
+            const reason = verdict?.reason
+            const ignoreSource = verdict?.ignoreSource
 
             const readStart = performance.now()
             const content = ignored ? '' : await readFileContent(file)
@@ -358,6 +422,9 @@ export const useFileProcessing = ({
               content: ignored ? undefined : content || '',
               size: file.size,
               isIgnored: ignored,
+              isNegated,
+              reason,
+              ignoreSource,
               tokens: ignored
                 ? 0
                 : estimateTokenCount(content || '', file.size),
@@ -380,11 +447,15 @@ export const useFileProcessing = ({
               )
 
               if (!existingDir) {
+                const dirVerdict = hydrationMap.get(dirPath)
                 newFiles.push({
                   name: parts[j - 1],
                   path: dirPath,
                   kind: 'directory',
-                  isIgnored: isIgnoredRef.current(dirPath),
+                  isIgnored: dirVerdict?.isIgnored ?? false,
+                  isNegated: dirVerdict?.isNegated ?? false,
+                  reason: dirVerdict?.reason,
+                  ignoreSource: dirVerdict?.ignoreSource,
                 })
               }
             }
@@ -502,10 +573,14 @@ export const useFileProcessing = ({
 
             // Final safety sweep: apply the absolutely latest ignore rules to all files
             // just in case the user added a pattern mid-import.
+            const finalPaths = reconciledFiles.map((f) => f.path)
+            const finalHydration = hydrateFilesRef.current(finalPaths)
             for (let k = 0; k < reconciledFiles.length; k++) {
-              reconciledFiles[k].isIgnored = isIgnoredRef.current(
-                reconciledFiles[k].path
-              )
+              const verdict = finalHydration.get(reconciledFiles[k].path)
+              reconciledFiles[k].isIgnored = verdict?.isIgnored ?? false
+              reconciledFiles[k].isNegated = verdict?.isNegated ?? false
+              reconciledFiles[k].reason = verdict?.reason
+              reconciledFiles[k].ignoreSource = verdict?.ignoreSource
             }
 
             setFiles(reconciledFiles)
@@ -534,7 +609,6 @@ export const useFileProcessing = ({
       }
     },
     [
-      isIgnored,
       appMode,
       setIsProcessing,
       setVirtualFileSystem,
@@ -950,7 +1024,12 @@ export const useFileProcessing = ({
 
         await new Promise((resolve) => setTimeout(resolve, 100))
 
-        const droppedFiles: (File | FileItem)[] = []
+        const rawDroppedFiles: Array<{
+          name: string
+          path: string
+          kind: 'file' | 'directory'
+          handle: FileSystemEntry
+        }> = []
 
         let lastYieldTime = Date.now()
         let lastProgressUpdate = Date.now()
@@ -972,41 +1051,17 @@ export const useFileProcessing = ({
             }
 
             const fullPath = path + entry.name
-            const ignored = isIgnoredRef.current(fullPath)
 
             // Optimization: If a directory is ignored and contains no negations, skip traversal.
             // We use the ref here so that if the user adds an ignore pattern MID-CRAWL,
             // we stop immediately instead of finishing the massive folder.
             if (entry.isDirectory && !shouldRecurseRef.current(fullPath)) {
               // Still push the directory itself so it can be seen in the tree if "Show Ignored" is on
-              droppedFiles.push({
+              rawDroppedFiles.push({
                 name: entry.name,
                 path: fullPath,
                 kind: 'directory',
-                isIgnored: true,
                 handle: entry,
-              } as FileItem)
-              return
-            }
-
-            // Include ignored files as shallow entries
-            if (entry.isFile && ignored) {
-              const file = await new Promise<File>((resolve, reject) => {
-                const fileEntry = entry as FileSystemFileEntry
-                fileEntry.file(
-                  (f: File) => resolve(f),
-                  (err: Error) => reject(err)
-                )
-              })
-              droppedFiles.push({
-                name: entry.name,
-                path: fullPath,
-                kind: 'file',
-                content: undefined,
-                size: file.size,
-                tokens: 0,
-                isIgnored: true,
-                handle: file,
               })
               return
             }
@@ -1016,7 +1071,7 @@ export const useFileProcessing = ({
 
             if (entry.isFile && 'file' in entry) {
               // Check max file limit before adding (halt immediately when exceeded)
-              if (droppedFiles.length >= maxFileLimit) {
+              if (rawDroppedFiles.length >= maxFileLimit) {
                 setImportError(
                   `Import halted: The folder contains more than ${maxFileLimit} files. Please increase the Max Files limit or select a folder with fewer files.`
                 )
@@ -1029,36 +1084,20 @@ export const useFileProcessing = ({
               if (now - lastProgressUpdate > 100) {
                 setImportProgress({
                   current: 0,
-                  total: droppedFiles.length + 1,
+                  total: rawDroppedFiles.length + 1,
                 })
                 lastProgressUpdate = now
               }
 
-              const file = await new Promise<File>((resolve, reject) => {
-                const fileEntry = entry as FileSystemFileEntry
-                fileEntry.file(
-                  (f: File) => resolve(f),
-                  (err: Error) => reject(err)
-                )
-              })
-              if (cancelImportRef.current) return
-
-              // Read content immediately to avoid InvalidStateError (stale handle)
-              const content = await readFileContent(file)
-              if (content === null || cancelImportRef.current) return
-
-              droppedFiles.push({
-                name: file.name,
+              rawDroppedFiles.push({
+                name: entry.name,
                 path: fullPath,
                 kind: 'file',
-                content,
-                size: file.size,
-                tokens: estimateTokenCount(content, file.size),
-                handle: file,
+                handle: entry,
               })
 
               // Fail early if we exceed the limit DURING the crawl to prevent browser crash
-              if (droppedFiles.length > maxFileLimit) {
+              if (rawDroppedFiles.length > maxFileLimit) {
                 setImportError(
                   `Project too large: found over ${maxFileLimit} files. Please ignore massive directories before dropping.`
                 )
@@ -1066,13 +1105,12 @@ export const useFileProcessing = ({
                 return
               }
             } else if (entry.isDirectory && 'createReader' in entry) {
-              droppedFiles.push({
+              rawDroppedFiles.push({
                 name: entry.name,
                 path: fullPath,
                 kind: 'directory',
-                isIgnored: ignored,
                 handle: entry,
-              } as FileItem)
+              })
 
               let reader
               try {
@@ -1156,8 +1194,96 @@ export const useFileProcessing = ({
           return
         }
 
-        if (droppedFiles.length > 0) {
-          await processUploadedFiles(droppedFiles)
+        if (rawDroppedFiles.length > 0) {
+          // batch path hydration
+          const paths = rawDroppedFiles.map((f) => f.path)
+          const hydrationMap = hydrateFilesRef.current(paths)
+
+          const droppedFiles: FileItem[] = []
+          for (let i = 0; i < rawDroppedFiles.length; i++) {
+            if (cancelImportRef.current) break
+
+            const item = rawDroppedFiles[i]
+            const verdict = hydrationMap.get(item.path)
+            const isIgnored = verdict?.isIgnored ?? false
+            const isNegated = verdict?.isNegated ?? false
+            const reason = verdict?.reason
+            const ignoreSource = verdict?.ignoreSource
+
+            if (item.kind === 'directory') {
+              droppedFiles.push({
+                name: item.name,
+                path: item.path,
+                kind: 'directory',
+                isIgnored,
+                isNegated,
+                reason,
+                ignoreSource,
+                handle: item.handle,
+              } as FileItem)
+            } else {
+              const fileEntry = item.handle as FileSystemFileEntry
+              const file = await new Promise<File>((resolve, reject) => {
+                fileEntry.file(
+                  (f) => resolve(f),
+                  (err) => reject(err)
+                )
+              })
+
+              if (isIgnored) {
+                droppedFiles.push({
+                  name: item.name,
+                  path: item.path,
+                  kind: 'file',
+                  content: undefined,
+                  size: file.size,
+                  tokens: 0,
+                  isIgnored,
+                  isNegated,
+                  reason,
+                  ignoreSource,
+                  handle: file,
+                })
+              } else {
+                const content = await readFileContent(file)
+                if (content !== null && !cancelImportRef.current) {
+                  droppedFiles.push({
+                    name: item.name,
+                    path: item.path,
+                    kind: 'file',
+                    content,
+                    size: file.size,
+                    tokens: estimateTokenCount(content, file.size),
+                    isIgnored,
+                    isNegated,
+                    reason,
+                    ignoreSource,
+                    handle: file,
+                  })
+                }
+              }
+            }
+
+            // Progress reporting
+            const now = Date.now()
+            if (
+              now - lastProgressUpdate > 100 ||
+              i === rawDroppedFiles.length - 1
+            ) {
+              setImportProgress({
+                current: i + 1,
+                total: rawDroppedFiles.length,
+              })
+              lastProgressUpdate = now
+              await new Promise((resolve) => setTimeout(resolve, 0))
+            }
+          }
+
+          if (!cancelImportRef.current && droppedFiles.length > 0) {
+            await processUploadedFiles(droppedFiles)
+          } else {
+            setIsProcessing(false)
+          }
         } else {
           setIsProcessing(false)
           if (!cancelImportRef.current) {
@@ -1358,7 +1484,7 @@ export const useFileProcessing = ({
 
         // Add files to ZIP
         for (const f of fileList) {
-          if (isIgnored(f.path)) {
+          if (f.isIgnored) {
             logger.info(
               `Skipping ignored file during ZIP generation: ${f.path}`
             )
@@ -1389,7 +1515,7 @@ export const useFileProcessing = ({
         setIsProcessing(false)
       }
     },
-    [setIsProcessing, appMode, isIgnored]
+    [setIsProcessing, appMode]
   )
 
   /**
@@ -1422,7 +1548,13 @@ export const useFileProcessing = ({
     handleConcatenate,
     handleDeconcatenate,
     handleDownloadAsZip,
-    isIgnored,
+    isIgnored: useCallback(
+      (path: string) => {
+        if (isIgnored) return isIgnored(path)
+        return resolvedHydrateFiles([path]).get(path)?.isIgnored ?? false
+      },
+      [isIgnored, resolvedHydrateFiles]
+    ),
     validationResult,
     validateContent,
     clearValidation,

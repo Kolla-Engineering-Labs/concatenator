@@ -10,6 +10,12 @@ vi.mock('../src/web/services/ApiClient', () => ({
   },
 }))
 
+const mockHydrateFalse = (paths: string[]) => {
+  const map = new Map()
+  paths.forEach((p) => map.set(p, { isIgnored: false, isNegated: false }))
+  return map
+}
+
 describe('useFileProcessing Coverage Booster', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -17,7 +23,11 @@ describe('useFileProcessing Coverage Booster', () => {
   })
 
   it('covers reloadUnignored (lines 612-677)', async () => {
-    const mockIsIgnored = vi.fn().mockReturnValue(false)
+    const mockHydrateFiles = vi.fn().mockImplementation((paths: string[]) => {
+      const map = new Map()
+      paths.forEach((p) => map.set(p, { isIgnored: false, isNegated: false }))
+      return map
+    })
 
     // Initial files: one file that is NOT ignored but has undefined content (needs reload)
     const initialFiles = [
@@ -33,7 +43,7 @@ describe('useFileProcessing Coverage Booster', () => {
     const { result } = renderHook(() =>
       useFileProcessing({
         appMode: AppMode.CONCATENATE,
-        isIgnored: mockIsIgnored,
+        hydrateFiles: mockHydrateFiles,
         isExplicitlyNegated: () => false,
         maxFileLimit: 1000,
         isIgnoreListLoading: false,
@@ -64,7 +74,7 @@ describe('useFileProcessing Coverage Booster', () => {
     const { result } = renderHook(() =>
       useFileProcessing({
         appMode: AppMode.CONCATENATE,
-        isIgnored: () => false,
+        hydrateFiles: mockHydrateFalse,
         isExplicitlyNegated: () => false,
         maxFileLimit: 1000,
         isIgnoreListLoading: false,
@@ -85,7 +95,7 @@ describe('useFileProcessing Coverage Booster', () => {
     const { result } = renderHook(() =>
       useFileProcessing({
         appMode: AppMode.CONCATENATE,
-        isIgnored: () => false,
+        hydrateFiles: mockHydrateFalse,
         isExplicitlyNegated: () => false,
         maxFileLimit: 1000,
         isIgnoreListLoading: false,
@@ -113,7 +123,7 @@ describe('useFileProcessing Coverage Booster', () => {
     const { result } = renderHook(() =>
       useFileProcessing({
         appMode: AppMode.CONCATENATE,
-        isIgnored: () => false,
+        hydrateFiles: mockHydrateFalse,
         isExplicitlyNegated: () => false,
         maxFileLimit: 1000,
         isIgnoreListLoading: false,
@@ -141,7 +151,7 @@ describe('useFileProcessing Coverage Booster', () => {
     const { result } = renderHook(() =>
       useFileProcessing({
         appMode: AppMode.CONCATENATE,
-        isIgnored: () => false,
+        hydrateFiles: mockHydrateFalse,
         isExplicitlyNegated: () => false,
         maxFileLimit: 1000,
         isIgnoreListLoading: false,

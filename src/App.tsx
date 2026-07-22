@@ -69,6 +69,7 @@ export default function App() {
     setShowIgnored,
     isExplicitlyNegated,
     shouldRecurse,
+    hydrateFiles,
   } = useWorkbench()
 
   const {
@@ -90,7 +91,7 @@ export default function App() {
     clearAbsorptions,
   } = useFileProcessing({
     appMode,
-    isIgnored,
+    hydrateFiles,
     isExplicitlyNegated,
     maxFileLimit,
     isIgnoreListLoading: !isInitialized,
@@ -151,6 +152,11 @@ export default function App() {
         path,
         content,
         kind: 'file' as const,
+        // DECONCATENATE Guard: Extracted payloads bypass the IgnoreEngine entirely
+        isIgnored: false,
+        isNegated: false,
+        reason: undefined,
+        ignoreSource: undefined,
       }))
     }
     return files
@@ -214,64 +220,6 @@ export default function App() {
     tokenMap
   )
 
-  // Sync isIgnored property on all files when the ignore engine updates.
-  // We use a batched approach with yielding to avoid blocking the main thread for large projects.
-  useEffect(() => {
-    if (!isInitialized || files.length === 0) return
-
-    let mounted = true
-    const syncIgnores = async () => {
-      const currentFiles = [...files]
-      if (currentFiles.length === 0) return
-
-      const perfStart = performance.now()
-      logger.info(
-        `[App.tsx] syncIgnores triggered for ${currentFiles.length} files`
-      )
-
-      const processBatch = async (index: number, filesToUpdate: FileItem[]) => {
-        if (!mounted) {
-          logger.info(`[App.tsx] syncIgnores aborted - unmounted`)
-          return
-        }
-
-        let batchChanged = false
-        let i = index
-
-        for (; i < filesToUpdate.length; i++) {
-          try {
-            const f = filesToUpdate[i]
-            const currentIgnored = isIgnored(f.path)
-            if (f.isIgnored !== currentIgnored) {
-              filesToUpdate[i] = { ...f, isIgnored: currentIgnored }
-              batchChanged = true
-            }
-          } catch (err) {
-            logger.error(
-              `[App.tsx] Fatal error during syncIgnores for file ${filesToUpdate[i]?.path}:`,
-              err
-            )
-          }
-        }
-
-        if (mounted && batchChanged) {
-          setFiles([...filesToUpdate])
-        }
-
-        logger.info(
-          `[App.tsx] syncIgnores completed synchronously in ${(performance.now() - perfStart).toFixed(2)}ms`
-        )
-      }
-
-      processBatch(0, currentFiles)
-    }
-
-    syncIgnores()
-    return () => {
-      mounted = false
-    }
-  }, [isIgnored, isInitialized, files, setFiles])
-
   const lastModeRef = useRef(appMode)
   // Clear files and VFS ONLY when switching modes to avoid state bleed
   useEffect(() => {
@@ -324,6 +272,8 @@ export default function App() {
               content: undefined, // content isn't loaded yet
               isIgnored: node.isIgnored,
               isNegated: node.isNegated,
+              reason: node.reason,
+              ignoreSource: node.ignoreSource,
             })
             if (node.children) node.children.forEach(flatten)
           }

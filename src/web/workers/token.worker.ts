@@ -18,7 +18,9 @@ self.onmessage = async (e: MessageEvent) => {
     const requestedModel = model || 'o200k_base'
     if (requestedModel !== currentModel) {
       try {
-        encoder = getEncoding(requestedModel as any)
+        encoder = getEncoding(
+          requestedModel as Parameters<typeof getEncoding>[0]
+        )
         currentModel = requestedModel
       } catch {
         try {

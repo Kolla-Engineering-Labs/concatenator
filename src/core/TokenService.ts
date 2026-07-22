@@ -69,24 +69,21 @@ export class TokenService {
    * Initializes the precision strategy.
    * In Web UI, this is typically called via dynamic import to keep initial bundle lean.
    */
-  static async loadPrecisionStrategy(): Promise<void> {
-    if (this.loadingPromise) return this.loadingPromise
-
-    this.loadingPromise = (async () => {
-      try {
-        // Dynamic import ensures the main thread remains unblocked and bundle stays lean.
-        // o200k_base is the standard for gpt-4o.
-        const { getEncoding } = await import('js-tiktoken')
-        const encoder = getEncoding('o200k_base')
-        this.strategy = new PrecisionStrategy(encoder, 'o200k_base')
-        this._isPrecise = true
-      } catch {
-        this.strategy = new HeuristicStrategy()
-        this._isPrecise = false
-      }
-    })()
-
-    return this.loadingPromise
+  /**
+   * Initializes the precision strategy if an encoder instance is provided.
+   * Prevents bundling of BPE dictionaries on the main thread.
+   */
+  static async loadPrecisionStrategy(
+    encoder?: ITiktokenEncoder,
+    model: string = 'o200k_base'
+  ): Promise<void> {
+    if (encoder) {
+      this.strategy = new PrecisionStrategy(encoder, model)
+      this._isPrecise = true
+    } else {
+      this.strategy = new HeuristicStrategy()
+      this._isPrecise = false
+    }
   }
 
   /**

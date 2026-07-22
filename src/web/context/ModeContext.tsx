@@ -4,6 +4,7 @@ import { AppMode, ViewPreference } from '../types/workbench'
 import { ModeContext } from './ModeContextCore'
 import { DEFAULT_IGNORE_LIST } from '../../core/constants'
 import { IgnoreEngine } from '../../core/ignore/IgnoreEngine'
+import { hydrateVFS } from '../../core/VFSHydrator'
 import { ApiClient } from '../services/ApiClient'
 import { logger } from '../../lib/logger'
 
@@ -243,6 +244,11 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
     'o200k_base'
   )
 
+  const hydrateFiles = useCallback(
+    (paths: string[]) => hydrateVFS(paths, ignoreEngine),
+    [ignoreEngine]
+  )
+
   const handleModeChange = (newMode: AppMode) => {
     if (newMode !== mode) {
       resetWorkbench()
@@ -282,6 +288,7 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
         isExplicitlyNegated,
         shouldRecurse: (path: string) => ignoreEngine.shouldRecurse(path),
         getIgnoreResult: (path: string) => ignoreEngine.getIgnoreResult(path),
+        hydrateFiles,
       }}
     >
       {children}

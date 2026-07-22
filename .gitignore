@@ -8,6 +8,9 @@ coverage/
 .env*
 !.env.example
 .secrets
+.antigravityrules
+.cursorrules
+.windsurfrules
 
 # Test artifacts
 playwright-report/

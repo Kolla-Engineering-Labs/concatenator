@@ -136,9 +136,21 @@ export const TreeNode: React.FC<TreeNodeProps> = ({
               {node.name}
               {node.kind === 'directory' && node.name !== 'Root' ? '/' : ''}
               {node.isIgnored && !node.isNegated && (
-                <span className="ml-2 text-[10px] bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded uppercase tracking-tighter font-bold opacity-60 inline-block align-middle border border-slate-300 dark:border-slate-700">
-                  Ignored
-                </span>
+                <>
+                  <span className="ml-2 text-[10px] bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded uppercase tracking-tighter font-bold opacity-60 inline-block align-middle border border-slate-300 dark:border-slate-700">
+                    Ignored
+                  </span>
+                  {node.reason && (
+                    <span className="hidden group-hover/node:inline-block ml-1.5 text-[9px] font-mono text-slate-400 dark:text-slate-500 align-middle">
+                      Matched: {node.reason}{' '}
+                      {node.ignoreSource && (
+                        <span className="opacity-60">
+                          ({node.ignoreSource})
+                        </span>
+                      )}
+                    </span>
+                  )}
+                </>
               )}
               {node.isNegated && (
                 <span className="ml-2 text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 px-1.5 py-0.5 rounded uppercase tracking-tighter font-bold inline-block align-middle">

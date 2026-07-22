@@ -21,8 +21,22 @@ import { IgnoreEngine } from '../core/ignore/IgnoreEngine.js'
 import { TokenService } from '../core/TokenService.js'
 import { formatFileSize } from '../lib/utils.js'
 
+import { getEncoding } from 'js-tiktoken'
+
+const loadCliPrecision = async () => {
+  try {
+    await TokenService.loadPrecisionStrategy(getEncoding('o200k_base'))
+  } catch {
+    try {
+      await TokenService.loadPrecisionStrategy(getEncoding('cl100k_base'))
+    } catch {
+      await TokenService.loadPrecisionStrategy()
+    }
+  }
+}
+
 // Initialize TokenService precision strategy in background for immediate CLI use
-TokenService.loadPrecisionStrategy().catch(() => {})
+loadCliPrecision().catch(() => {})
 import { UnifiedCrawler } from '../core/Crawler.js'
 import { PulseEmitter } from '../core/PulseEmitter.js'
 import {
@@ -317,7 +331,7 @@ program
       }
     ) => {
       // Ensure high-precision BPE strategy is loaded before execution
-      await TokenService.loadPrecisionStrategy()
+      await loadCliPrecision()
       try {
         if (options.quiet) {
           logger._setLevel('error')
@@ -553,7 +567,7 @@ program
       }
     ) => {
       // Ensure high-precision BPE strategy is loaded before execution
-      await TokenService.loadPrecisionStrategy()
+      await loadCliPrecision()
       try {
         if (options.quiet) {
           logger._setLevel('error')
@@ -715,7 +729,7 @@ program
       }
     ) => {
       // Ensure high-precision BPE strategy is loaded before execution
-      await TokenService.loadPrecisionStrategy()
+      await loadCliPrecision()
       try {
         if (options.quiet) {
           logger._setLevel('error')

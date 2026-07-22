@@ -139,9 +139,17 @@ export const FileTable: React.FC<FileTableProps> = ({
                       {file.name}
                     </span>
                     {file.isIgnored && (
-                      <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 text-[8px] font-bold uppercase tracking-wider border border-slate-200 dark:border-slate-700 ml-2">
-                        Ignored
-                      </span>
+                      <>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 text-[8px] font-bold uppercase tracking-wider border border-slate-200 dark:border-slate-700 ml-2">
+                          Ignored
+                        </span>
+                        {file.reason && (
+                          <span className="text-[8px] font-mono bg-slate-50 dark:bg-slate-800/50 text-slate-400 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 ml-1.5">
+                            {file.reason}{' '}
+                            {file.ignoreSource && `(${file.ignoreSource})`}
+                          </span>
+                        )}
+                      </>
                     )}
                     {file.isNegated && (
                       <span className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 px-1.5 py-0.5 rounded uppercase tracking-tighter font-bold inline-block align-middle ml-2">

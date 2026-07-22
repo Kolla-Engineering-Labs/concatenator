@@ -59,6 +59,7 @@ Beyond OS-level signing, we provide a **GPG-signed manifest** for every official
 - **Architect PGP Fingerprint**: `4A21 4627 3B7B 0A35 4C41  4753 5B22 4C5F 51E6 10EF`
 
 #### Verification via NPM (Recommended)
+
 You can run our verification command directly from the npm/source layer. This allows you to establish trust in the standalone binary using the distributed npm package before executing it:
 
 ```bash
@@ -66,11 +67,13 @@ npx @kolla/concatenator verify ./concatenator-windows-x64.exe
 ```
 
 For deeper cryptographic debugging, append the `--verbose` flag:
+
 ```bash
 npx @kolla/concatenator verify ./concatenator-windows-x64.exe --verbose
 ```
 
 #### Verification via Standard OS Tools
+
 Alternatively, you can verify the binaries using standard OS tools and GitHub attestation features to maintain your organization's chain-of-custody protocols:
 
 ```bash

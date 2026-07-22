@@ -1,50 +1,58 @@
 # System Knowledge Document: Concatenator (v0.5.0-RC)
 
 ## 1. Executive System Overview
+
 **Concatenator** (developed by Kolla Engineering Labs, `kolla-engineering-labs.dev`) is an industrial-grade, local-first utility designed to optimize LLM (Large Language Model) context management. Engineered to solve the friction of feeding codebase segments to reasoning engines, Concatenator bridges the gap between local filesystems and LLM prompts via a bimodal interface consisting of a high-speed CLI and a high-density "workbench" Web UI.
 
 Unlike stateless context dumping utilities, Concatenator operates as a **Stateful Workbench** centered around a Virtual File System (VFS) with the following core missions:
-* **Bidirectional Context Pipelines**:
-  * **Concatenate Mode**: Recursively crawls, tokenizes, and merges targeted files and folders into structured, standardized plain-text (`.txt`) or PDF (`.pdf`) context bundles.
-  * **De-concatenate Mode**: Ingests context bundles and reverse-constructs/re-creates the local system structure, outputting a bit-perfect, reconstructed directory hierarchy encapsulated in a JSZip (`.zip`) archive.
-* **Token Physics (Observability)**: Preserves strict token telemetry using a byte pair encoder (BPE) model (`cl100k_base`), calculating precise token weights, tracking "Context Saturation" metrics against user-defined budgets, and bubble-up aggregating directory-level weights.
-* **Context Hygiene & Neutralization**: Sanitizes files prior to compilation. It strips binary elements, redacts sensitive entropy (e.g. AWS or OpenAI API keys), and neutralizes structural meta-characters (such as nested code-block backticks) to prevent LLM prompt-injection and structural formatting degradation.
-* **Zero-Trust Local Execution**: Operates with absolute data sovereignty. Standard distribution wraps the entire application as a standalone Node 22 Single Executable Application (SEA) that functions 100% offline, binding HTTP utilities strictly to local routing interfaces (`127.0.0.1`) under token-protected authentication.
+
+- **Bidirectional Context Pipelines**:
+  - **Concatenate Mode**: Recursively crawls, tokenizes, and merges targeted files and folders into structured, standardized plain-text (`.txt`) or PDF (`.pdf`) context bundles.
+  - **De-concatenate Mode**: Ingests context bundles and reverse-constructs/re-creates the local system structure, outputting a bit-perfect, reconstructed directory hierarchy encapsulated in a JSZip (`.zip`) archive.
+- **Token Physics (Observability)**: Preserves strict token telemetry using a byte pair encoder (BPE) model (`cl100k_base`), calculating precise token weights, tracking "Context Saturation" metrics against user-defined budgets, and bubble-up aggregating directory-level weights.
+- **Context Hygiene & Neutralization**: Sanitizes files prior to compilation. It strips binary elements, redacts sensitive entropy (e.g. AWS or OpenAI API keys), and neutralizes structural meta-characters (such as nested code-block backticks) to prevent LLM prompt-injection and structural formatting degradation.
+- **Zero-Trust Local Execution**: Operates with absolute data sovereignty. Standard distribution wraps the entire application as a standalone Node 22 Single Executable Application (SEA) that functions 100% offline, binding HTTP utilities strictly to local routing interfaces (`127.0.0.1`) under token-protected authentication.
 
 ---
 
 ## 2. Final Tech Stack & Active Dependencies
+
 The production design prioritizes dependency-minimalism, optimal performance, and cryptographic isolation:
 
 ### Core Runtime & Build Architecture
-* **Language**: TypeScript (v5.8.2 Strict Mode).
-* **Execution Environment**: Node.js v22 (LTS) / Node.js v24.
-* **Distribution Platform**: Node 22 Single Executable Applications (SEA).
-* **Bundler**: `esbuild` (v0.25.0), configured to pack dependencies into a standalone, single-file CommonJS (`dist/cli.bundle.js`) file prior to binary injection.
-* **Binary Injector**: `postject` (for fusing raw compiled V8 JS blocks into native Node executables).
+
+- **Language**: TypeScript (v5.8.2 Strict Mode).
+- **Execution Environment**: Node.js v22 (LTS) / Node.js v24.
+- **Distribution Platform**: Node 22 Single Executable Applications (SEA).
+- **Bundler**: `esbuild` (v0.25.0), configured to pack dependencies into a standalone, single-file CommonJS (`dist/cli.bundle.js`) file prior to binary injection.
+- **Binary Injector**: `postject` (for fusing raw compiled V8 JS blocks into native Node executables).
 
 ### Backend Engineering (Local Server Mode)
-* **API Wrapper**: Express (`express` `^4.21.2`), decoupled from core domain logic and serving static assets inline from the SEA bundle.
-* **Process Watchdog & Dev Runner**: `tsx` (`^4.21.0`) for execution, combined with `concurrently` to run hot-reloading development instances.
-* **Encryption & Hash Utilities**: Node native `crypto` for high-performance SHA-256 calculation.
-* **File System Access**: Native Node `fs` (using strictly non-blocking streams and system-agnostic path normalizers), coupled with `jszip` (`^3.10.1`) for in-memory reconstruction.
+
+- **API Wrapper**: Express (`express` `^4.21.2`), decoupled from core domain logic and serving static assets inline from the SEA bundle.
+- **Process Watchdog & Dev Runner**: `tsx` (`^4.21.0`) for execution, combined with `concurrently` to run hot-reloading development instances.
+- **Encryption & Hash Utilities**: Node native `crypto` for high-performance SHA-256 calculation.
+- **File System Access**: Native Node `fs` (using strictly non-blocking streams and system-agnostic path normalizers), coupled with `jszip` (`^3.10.1`) for in-memory reconstruction.
 
 ### Frontend Engineering (High-Density UI)
-* **Framework**: React 19 (`react` `^19.0.1`, `react-dom` `^19.0.1`).
-* **Toolchain & Server**: Vite 6+ (`vite` `^6.2.3`).
-* **Styling Engine**: Tailwind CSS v4 (`@tailwindcss/vite` `^4.1.14`), using `@import "tailwindcss";` in `src/index.css`.
-* **State & Caching Providers**: Context-based React state coupled with standardized JSON-serialized local state persistence (`localStorage` and `sessionStorage`).
-* **Interface & Animation Controls**: `lucide-react` (`^0.546.0`) for high-fidelity technical symbols; `motion` (`^12.23.24`) for smooth modal and list transitions.
-* **Product Analytics**: `posthog-js`, configured to operate with maximum privacy parameters (`persistence: 'localStorage'`, `person_profiles: 'always'`, and anonymized IP logging).
+
+- **Framework**: React 19 (`react` `^19.0.1`, `react-dom` `^19.0.1`).
+- **Toolchain & Server**: Vite 6+ (`vite` `^6.2.3`).
+- **Styling Engine**: Tailwind CSS v4 (`@tailwindcss/vite` `^4.1.14`), using `@import "tailwindcss";` in `src/index.css`.
+- **State & Caching Providers**: Context-based React state coupled with standardized JSON-serialized local state persistence (`localStorage` and `sessionStorage`).
+- **Interface & Animation Controls**: `lucide-react` (`^0.546.0`) for high-fidelity technical symbols; `motion` (`^12.23.24`) for smooth modal and list transitions.
+- **Product Analytics**: `posthog-js`, configured to operate with maximum privacy parameters (`persistence: 'localStorage'`, `person_profiles: 'always'`, and anonymized IP logging).
 
 ### Governance, Verification & Testing
-* **Version Management**: Changesets (`.changesets`) for atomic release versioning.
-* **Local Code Quality**: Prettier (statically aligned to LF newlines), Snyk (vulnerability tracking), and SonarCloud (static analysis).
-* **Test Runners**: Vitest (`^4.1.4`) for core engine coverage; Playwright (`^1.59.1`) for visual E2E verification.
+
+- **Version Management**: Changesets (`.changesets`) for atomic release versioning.
+- **Local Code Quality**: Prettier (statically aligned to LF newlines), Snyk (vulnerability tracking), and SonarCloud (static analysis).
+- **Test Runners**: Vitest (`^4.1.4`) for core engine coverage; Playwright (`^1.59.1`) for visual E2E verification.
 
 ---
 
 ## 3. Architecture & State Machine
+
 The entire application adheres to a strict Core-First / Thin-Consumer software pattern:
 ┌────────────────────────────────────────────────────────┐
 │ @concatenator/core │
@@ -58,6 +66,7 @@ The entire application adheres to a strict Core-First / Thin-Consumer software p
 └────────────────────────┘ └────────────────────────┘
 
 ### Data Compilation Pipeline (Concatenate Mode)
+
 1. **Target Discovery**: `UnifiedCrawler` initiates a recursive directory crawl from `rootPath`.
 2. **Security Pre-flight**: The path encounters `assertPathWithinRoot`. The real location of each file is resolved using `fs.realpathSync`. If a path breaks the boundaries of the `rootPath` (e.g., directory traversal or external symlinks), execution crashes instantly.
 3. **Ignore Evaluation**: Discovered paths are funneled through `IgnoreEngine`. Files containing binary signatures or forbidden asset extensions (e.g. `.png`, `.jpg`, `.pdf`, `.zip`) are hard-ignored. Standard texts (including `.svg` files) are validated against `.gitignore` and `.concatenate-ignore` (prioritizing ordered, trailing negation `!pattern` checks).
@@ -67,19 +76,22 @@ The entire application adheres to a strict Core-First / Thin-Consumer software p
 7. **Bundle Generation**: Outputs the manifest-wrapped text. It places an unforgeable, cryptographically signed SHA-256 metadata manifest (`SHA256SUMS.asc`) at the bundle header and lists each file wrapped in standard delimiters (`--- FILE: path/to/file ---`).
 
 ### Reverse Reconstruction Pipeline (De-concatenate Mode)
+
 1. **Signature Alignment**: The de-concatenation pipeline parses the metadata headers from the context bundle to locate the file manifest.
 2. **Directory Taint Guard**: Before writing, a pre-flight validator asserts whether the target output folder is clean. If contents are detected and the `--force` (or UI `forceMode`) flag is disabled, it throws a `CRITICAL_WARNING` and halts execution to prevent file-system pollution.
 3. **Bit-Perfect Extraction**: The VFS matches file hashes dynamically using Content Addressable Storage (CAS). Files whose hashes match the local directory structure are skipped, executing an idempotent extraction.
 4. **Un-Neutralization**: Sanitized strings and escaped backticks are dynamically un-escaped back onto the local file system.
 
 ### CLI-to-UI Handshake State Machine
-* **Spawning**: Working in UI mode, `concatenator --ui <path>` initializes the API server, binds it locally to `127.0.0.1`, and writes an active `.concatenator.lock` file containing the process ID (PID), chosen port, and an ephemeral auth token to the project root.
-* **Token Guard**: The CLI spawns the browser and appends the token as a URL query parameter (`?token=xyz`). The React app parses the query into `sessionStorage` and injects it as an `X-Concatenator-Token` header for all future `/api/*` endpoints. 
-* **Heartbeat & Self-Reclamation**: A "Dead Man's Switch" uses `setInterval` to trigger `POST /api/heartbeat`. If the API fails to see a valid ping from the active tab for over 15 minutes, or if `isProcessing` is false, it executes `LifecycleManager.prepareShutdown()`, cleans the VFS, unlinks `.concatenator.lock`, and halts.
+
+- **Spawning**: Working in UI mode, `concatenator --ui <path>` initializes the API server, binds it locally to `127.0.0.1`, and writes an active `.concatenator.lock` file containing the process ID (PID), chosen port, and an ephemeral auth token to the project root.
+- **Token Guard**: The CLI spawns the browser and appends the token as a URL query parameter (`?token=xyz`). The React app parses the query into `sessionStorage` and injects it as an `X-Concatenator-Token` header for all future `/api/*` endpoints.
+- **Heartbeat & Self-Reclamation**: A "Dead Man's Switch" uses `setInterval` to trigger `POST /api/heartbeat`. If the API fails to see a valid ping from the active tab for over 15 minutes, or if `isProcessing` is false, it executes `LifecycleManager.prepareShutdown()`, cleans the VFS, unlinks `.concatenator.lock`, and halts.
 
 ---
 
 ## 4. Core File Layout & Directory Structure
+
 /
 ├── index.html # Mount target for the React application
 ├── package.json # Core dependencies, workspace configurations, and build matrixes
@@ -135,51 +147,53 @@ The entire application adheres to a strict Core-First / Thin-Consumer software p
 ---
 
 ## 5. Critical Technical Constraints & Edge Cases
+
 During the development, hardening, and testing phases of the Concatenator project, several critical edge cases and security-to-filesystem issues were successfully resolved:
 
 1. **The CRLF Prettier/Git Conflict**:
-   * *Problem*: Development on Windows generated files with Carriage Return Line Feeds (`CRLF`), triggering formatting anomalies (`prettier --check .`) on standard Unix/Linux and macOS CI/CD environments.
-   * *Solution*: Standardized EOL metrics globally by configuring a strict `.gitattributes` file that maps `* text=auto eol=lf` and forcing `.prettierrc` to check `"endOfLine": "lf"`. Legacy index records were purged via an intensive git normalization loop (`git add --renormalize .`).
+   - _Problem_: Development on Windows generated files with Carriage Return Line Feeds (`CRLF`), triggering formatting anomalies (`prettier --check .`) on standard Unix/Linux and macOS CI/CD environments.
+   - _Solution_: Standardized EOL metrics globally by configuring a strict `.gitattributes` file that maps `* text=auto eol=lf` and forcing `.prettierrc` to check `"endOfLine": "lf"`. Legacy index records were purged via an intensive git normalization loop (`git add --renormalize .`).
 
 2. **The "Franken-Project" Path Overlap**:
-   * *Problem*: If a child directory (e.g. `bar/`) was dropped, and its parent folder (e.g., `foo/`) was dropped afterward, duplicate file trees appeared at overlapping depths, disrupting the VFS tree and doubling token costs.
-   * *Solution*: Created a flat-map virtual filesystem index (`Record<string, string>`) that resolves absolute paths. It automatically executes **Root Pruning**, absorbing child nodes into parent paths and recalculating directory states.
+   - _Problem_: If a child directory (e.g. `bar/`) was dropped, and its parent folder (e.g., `foo/`) was dropped afterward, duplicate file trees appeared at overlapping depths, disrupting the VFS tree and doubling token costs.
+   - _Solution_: Created a flat-map virtual filesystem index (`Record<string, string>`) that resolves absolute paths. It automatically executes **Root Pruning**, absorbing child nodes into parent paths and recalculating directory states.
 
 3. **The "Useless Regular-Expression Escape" Bug**:
-   * *Problem*: Input parsing configuration arrays using standard string literals (e.g., `'/^\..*_cache$/'`) had their backslashes consumed during compilation, translating to `/^..*_cache$/` which matched arbitrary strings.
-   * *Solution*: Fixed by replacing literal configuration patterns with doubly escaped strings `'/^\\..*_cache$/'` or using true, native JS regular expression literals.
+   - _Problem_: Input parsing configuration arrays using standard string literals (e.g., `'/^\..*_cache$/'`) had their backslashes consumed during compilation, translating to `/^..*_cache$/` which matched arbitrary strings.
+   - _Solution_: Fixed by replacing literal configuration patterns with doubly escaped strings `'/^\\..*_cache$/'` or using true, native JS regular expression literals.
 
 4. **VFS Crawler Traversal Breakout Vulnerability**:
-   * *Problem*: Early VFS crawlers used standard `fs.statSync()`, resolving symbolic links (symlinks) automatically. This made local web hosts vulnerable to directory-climb attacks (`../../etc/passwd`).
-   * *Solution*: Re-engineered VFS traversal around `fs.lstatSync()` so symlinks are ignored by default. It restricts deep link traversal using a realpath check (`assertPathWithinRoot`).
+   - _Problem_: Early VFS crawlers used standard `fs.statSync()`, resolving symbolic links (symlinks) automatically. This made local web hosts vulnerable to directory-climb attacks (`../../etc/passwd`).
+   - _Solution_: Re-engineered VFS traversal around `fs.lstatSync()` so symlinks are ignored by default. It restricts deep link traversal using a realpath check (`assertPathWithinRoot`).
 
 5. **React 19 Double-Initialization Analytics Bug**:
-   * *Problem*: React 19's `<StrictMode>` caused components to double-render in development contexts. This resulted in dual-initialization of the analytics client, generating double-pings and duplicate analytics IDs.
-   * *Solution*: Moved the `posthog.init()` constructor entirely **outside** the React tree in `main.tsx`, executing the initialization precisely once directly on the global scope before target mounting.
+   - _Problem_: React 19's `<StrictMode>` caused components to double-render in development contexts. This resulted in dual-initialization of the analytics client, generating double-pings and duplicate analytics IDs.
+   - _Solution_: Moved the `posthog.init()` constructor entirely **outside** the React tree in `main.tsx`, executing the initialization precisely once directly on the global scope before target mounting.
 
 6. **Vite TypeScript Environment Squiggle**:
-   * *Problem*: TS compiler threw semantic errors when mapping environment variables (`import.meta.env`), as standard TS was blind to Vite-injected context and configuration macros.
-   * *Solution*: Solved by updating the compilation parameters inside `tsconfig.json` to explicitly check `"types": ["vite/client"]`, paired with a dedicated ambient typings shim file `src/vite-env.d.ts`.
+   - _Problem_: TS compiler threw semantic errors when mapping environment variables (`import.meta.env`), as standard TS was blind to Vite-injected context and configuration macros.
+   - _Solution_: Solved by updating the compilation parameters inside `tsconfig.json` to explicitly check `"types": ["vite/client"]`, paired with a dedicated ambient typings shim file `src/vite-env.d.ts`.
 
 7. **Synchronous I/O Event Loop Blockage (The Liveliness Paradox)**:
-   * *Problem*: Performing heavy file serialization or deep JSZip processes blocked the local Node event loop. This caused standard `/api/heartbeat` requests to fail, firing false-positive "Server Disconnected" UI overlays.
-   * *Solution*: Implemented a decoupled, progress-based **Engine Pulse**. The core writes operational metadata to a local `.concatenator/pulse.json` file. The server provides a lightweight, non-blocking `/api/pulse` stream route that runs on a native browser fallback loop to detect actual thread liveness.
+   - _Problem_: Performing heavy file serialization or deep JSZip processes blocked the local Node event loop. This caused standard `/api/heartbeat` requests to fail, firing false-positive "Server Disconnected" UI overlays.
+   - _Solution_: Implemented a decoupled, progress-based **Engine Pulse**. The core writes operational metadata to a local `.concatenator/pulse.json` file. The server provides a lightweight, non-blocking `/api/pulse` stream route that runs on a native browser fallback loop to detect actual thread liveness.
 
 ---
 
 ## 6. Future Roadmap & Pending Features
+
 The upcoming development cycle focuses on scaling the utility, optimizing performance, and preparing for team-focused corporate compliance:
 
-* **Automatic Dependency Pruning / Smart Filters**:
-  * Implement active pre-filtering within `IgnoreEngine` to detect and automatically skip high-token, zero-signal system lockfiles or compiled bundles (e.g. `package-lock.json`, `pnpm-lock.yaml`, `*.js.map`).
-* **Sovereign Key Discovery Protocol**:
-  * Refactor the `concatenator verify` CLI command to automatically fetch the primary architect’s public GPG signing key by checking a standardized, localized path (`GET kolla-engineering-labs.dev/.well-known/gpg-key.asc`) if it's missing from the system's local keychain.
-* **Automatic Job Recovery System**:
-  * Build a VFS bootstrap system that recognizes incomplete or interrupted operations, parsing the local `.concatenator/pulse.json` file on startup to resume massive file collections or extractions exactly where they were aborted.
-* **GPG-Signed Delta-Patching (v1.2.0)**:
-  * Abstract the Node 22 Single Executable Application binary wrapper to run as an immutable "Host Shell" that can fetch and hot-swap only the lightweight, verified JavaScript resource blob (`@concatenator/core`). This avoids downloading the heavy 80MB+ Node.js runtime executable during minor updates.
-* **Homebrew Tap and Security-Hardened Distribution Channels**:
-  * Create official Homebrew Taps (macOS) and Chocolatey packages (Windows) to allow robust, terminal-bound client extraction installations (`brew install`) that bypass standard browser sandboxes and proxy blocks.
-* **Contextual Safety HUD & Secretlint Integration**:
-  * Embed code-level vulnerability checks directly inside `SecretScanner` using established static security profiles (e.g. Snyk or gitleaks pattern sets).
-  * Build a visual **Safety HUD** in the Web UI, highlighting flagged files in the tree alongside clear options to verify, skip, or force-include them before bundling.
+- **Automatic Dependency Pruning / Smart Filters**:
+  - Implement active pre-filtering within `IgnoreEngine` to detect and automatically skip high-token, zero-signal system lockfiles or compiled bundles (e.g. `package-lock.json`, `pnpm-lock.yaml`, `*.js.map`).
+- **Sovereign Key Discovery Protocol**:
+  - Refactor the `concatenator verify` CLI command to automatically fetch the primary architect’s public GPG signing key by checking a standardized, localized path (`GET kolla-engineering-labs.dev/.well-known/gpg-key.asc`) if it's missing from the system's local keychain.
+- **Automatic Job Recovery System**:
+  - Build a VFS bootstrap system that recognizes incomplete or interrupted operations, parsing the local `.concatenator/pulse.json` file on startup to resume massive file collections or extractions exactly where they were aborted.
+- **GPG-Signed Delta-Patching (v1.2.0)**:
+  - Abstract the Node 22 Single Executable Application binary wrapper to run as an immutable "Host Shell" that can fetch and hot-swap only the lightweight, verified JavaScript resource blob (`@concatenator/core`). This avoids downloading the heavy 80MB+ Node.js runtime executable during minor updates.
+- **Homebrew Tap and Security-Hardened Distribution Channels**:
+  - Create official Homebrew Taps (macOS) and Chocolatey packages (Windows) to allow robust, terminal-bound client extraction installations (`brew install`) that bypass standard browser sandboxes and proxy blocks.
+- **Contextual Safety HUD & Secretlint Integration**:
+  - Embed code-level vulnerability checks directly inside `SecretScanner` using established static security profiles (e.g. Snyk or gitleaks pattern sets).
+  - Build a visual **Safety HUD** in the Web UI, highlighting flagged files in the tree alongside clear options to verify, skip, or force-include them before bundling.

@@ -11,9 +11,9 @@ interface StatusBarProps {
 }
 
 const BUDGET_PRESETS = [
-  { name: 'GPT-4.1',        value: 1047576, model: 'o200k_base' },
-  { name: 'GPT-4o',         value: 128000,  model: 'o200k_base' },
-  { name: 'Claude Opus 4',  value: 200000,  model: 'o200k_base' },
+  { name: 'GPT-4.1', value: 1047576, model: 'o200k_base' },
+  { name: 'GPT-4o', value: 128000, model: 'o200k_base' },
+  { name: 'Claude Opus 4', value: 200000, model: 'o200k_base' },
   { name: 'Gemini 2.5 Pro', value: 1048576, model: 'o200k_base' },
 ]
 
@@ -42,7 +42,9 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   const textColorClass = useMemo(() => {
     if (saturation < 70) return 'text-emerald-600 dark:text-emerald-400'
     if (saturation < 90) return 'text-amber-600 dark:text-amber-400'
-    return isOverBudget ? 'text-red-600 dark:text-red-500' : 'text-rose-600 dark:text-rose-400'
+    return isOverBudget
+      ? 'text-red-600 dark:text-red-500'
+      : 'text-rose-600 dark:text-rose-400'
   }, [saturation, isOverBudget])
 
   const [isEditingCustom, setIsEditingCustom] = React.useState(false)
@@ -174,11 +176,9 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         <div
           className={`whitespace-nowrap min-w-10 sm:min-w-12 text-right font-bold tabular-nums ${textColorClass}`}
         >
-          {isOverBudget ? (
-            `${totalTokens.toLocaleString()} / ${tokenBudget.toLocaleString()}`
-          ) : (
-            `${Math.round(saturation)}%`
-          )}
+          {isOverBudget
+            ? `${totalTokens.toLocaleString()} / ${tokenBudget.toLocaleString()}`
+            : `${Math.round(saturation)}%`}
         </div>
       </div>
 

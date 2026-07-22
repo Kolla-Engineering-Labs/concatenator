@@ -1,5 +1,6 @@
 import { createContext, Dispatch, SetStateAction } from 'react'
 import { AppMode, ViewPreference, WorkbenchState } from '../types/workbench'
+import { HydratedFile } from '../../core/VFSHydrator'
 
 export interface ModeContextType extends WorkbenchState {
   setMode: (mode: AppMode) => void
@@ -15,6 +16,7 @@ export interface ModeContextType extends WorkbenchState {
   resetWorkbench: () => void
   setAutoSaveIgnore: Dispatch<SetStateAction<boolean>>
   setShowIgnored: Dispatch<SetStateAction<boolean>>
+  hydrateFiles: (paths: string[]) => Map<string, HydratedFile>
 }
 
 export const ModeContext = createContext<ModeContextType | undefined>(undefined)

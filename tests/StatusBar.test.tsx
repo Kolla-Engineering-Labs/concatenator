@@ -4,12 +4,14 @@ import { describe, it, expect, vi } from 'vitest'
 import { StatusBar } from '../src/web/components/StatusBar'
 
 const mockSetTokenBudget = vi.fn()
+const mockSetTokenModel = vi.fn()
 
 // Mock useWorkbench
 vi.mock('../src/web/hooks/useWorkbench', () => ({
   useWorkbench: () => ({
     tokenBudget: 100,
     setTokenBudget: mockSetTokenBudget,
+    setTokenModel: mockSetTokenModel,
   }),
 }))
 
