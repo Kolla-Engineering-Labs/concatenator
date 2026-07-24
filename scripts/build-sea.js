@@ -266,6 +266,7 @@ try {
 
   const finalExePath = join(finalDistDir, exeName)
   renameSync(exePath, finalExePath)
+  copyFileSync(finalExePath, join(seaDir, exeName))
 
   console.log(`\n🚀 Artifact moved to: ${finalExePath}`)
   console.log(`\nUsage: ${finalExePath} --help`)

@@ -32,6 +32,7 @@
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:headed": "playwright test --headed",
     "build:exe": "npx tsx scripts/build-sea.js",
+    "build:sea": "npx tsx scripts/build-sea.js",
     "build:manifest": "node scripts/generate-manifest.js",
     "test:release": "tsx scripts/verify-release-candidate.ts",
     "pre-release": "npm run test:release",
