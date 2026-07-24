@@ -7,6 +7,7 @@ export enum IgnoreSource {
   DEFAULT = 'default',
   FILE = 'file',
   SESSION = 'session',
+  MANUAL = 'manual override',
 }
 
 export type FileStatus = 'included' | 'ignored' | 'rejected'

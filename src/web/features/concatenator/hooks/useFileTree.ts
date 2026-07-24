@@ -4,7 +4,7 @@
  */
 
 import { useMemo } from 'react'
-import { FileItem, TreeItem } from '../../../../core/types'
+import { FileItem, TreeItem, IgnoreSource } from '../../../../core/types'
 
 const EMPTY_MAP = {}
 
@@ -14,7 +14,12 @@ const EMPTY_MAP = {}
 export const useFileTree = (
   filteredFiles: FileItem[],
   isIgnored: (path: string) => boolean,
-  getIgnoreResult: (path: string) => { ignored: boolean; reason?: string },
+  getIgnoreResult: (path: string) => {
+    ignored: boolean
+    reason?: string
+    ignoreSource?: IgnoreSource
+    source?: IgnoreSource
+  },
   isExplicitlyNegated: (path: string) => boolean,
   tokenMap: Record<string, { tokens: number; isPrecise: boolean }> = EMPTY_MAP
 ) => {
@@ -27,7 +32,10 @@ export const useFileTree = (
       isIgnored: false,
     }
 
-    const pathCache = new Map<string, { ignored: boolean; reason?: string }>()
+    const pathCache = new Map<
+      string,
+      { ignored: boolean; reason?: string; ignoreSource?: IgnoreSource }
+    >()
     const negatedCache = new Map<string, boolean>()
 
     filteredFiles.forEach((file) => {
@@ -41,9 +49,14 @@ export const useFileTree = (
 
         let ignoreResult = pathCache.get(currentPath)
         if (!ignoreResult) {
-          ignoreResult = getIgnoreResult
+          const res = getIgnoreResult
             ? getIgnoreResult(currentPath)
             : { ignored: isIgnored(currentPath) }
+          ignoreResult = {
+            ignored: res.ignored,
+            reason: res.reason,
+            ignoreSource: res.ignoreSource ?? res.source,
+          }
           pathCache.set(currentPath, ignoreResult)
         }
 
@@ -61,8 +74,15 @@ export const useFileTree = (
             path: currentPath,
             kind: isLast ? file.kind : 'directory',
             children: isLast && file.kind === 'file' ? undefined : [],
-            isIgnored: ignoreResult.ignored,
-            reason: ignoreResult.reason,
+            isIgnored: isLast
+              ? (file.isIgnored ?? ignoreResult.ignored)
+              : ignoreResult.ignored,
+            reason: isLast
+              ? (file.reason ?? ignoreResult.reason)
+              : ignoreResult.reason,
+            ignoreSource: isLast
+              ? (file.ignoreSource ?? ignoreResult.ignoreSource)
+              : ignoreResult.ignoreSource,
             isNegated: isLast ? (file as FileItem).isNegated : isNegatedResult,
             file: isLast ? file : undefined,
           }

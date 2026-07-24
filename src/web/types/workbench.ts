@@ -12,6 +12,7 @@ export interface WorkbenchState {
   mode: AppMode
   view: ViewPreference
   ignoreList: string[]
+  suspendedRules: string[]
   isSidebarOpen: boolean
   isIgnored: (path: string) => boolean
   compiledIgnores: (string | RegExp)[]

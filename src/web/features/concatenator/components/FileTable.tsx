@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import {
   ChevronUp,
   ChevronDown,
@@ -11,6 +11,7 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
+  Ban,
 } from 'lucide-react'
 import { FileItem } from '../../../../core/types'
 import { cn, formatFileSize } from '../../../../lib/utils'
@@ -31,10 +32,95 @@ export const FileTable: React.FC<FileTableProps> = ({
   onRemoveFile,
   onQuickLook,
 }) => {
-  const { addIgnorePattern, removeIgnorePattern, isIgnored, ignoreList } =
-    useWorkbench()
+  const {
+    addIgnorePattern,
+    removeIgnorePattern,
+    suspendRule,
+    isIgnored,
+    ignoreList,
+    getIgnoreResult,
+  } = useWorkbench()
+
   const [sortField, setSortField] = useState<SortField>('path')
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc')
+
+  const [contextMenu, setContextMenu] = useState<{
+    x: number
+    y: number
+    file: FileItem
+  } | null>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!contextMenu) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setContextMenu(null)
+      }
+    }
+
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setContextMenu(null)
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('mousedown', handleClickOutside)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [contextMenu])
+
+  const getMatchedRule = (file: FileItem): string | undefined => {
+    if (file.reason) return file.reason
+    if (getIgnoreResult) {
+      const res = getIgnoreResult(file.path)
+      if (res && res.reason) return res.reason
+    }
+    return undefined
+  }
+
+  const handleContextMenu = (e: React.MouseEvent, file: FileItem) => {
+    if (file.isIgnored) {
+      e.preventDefault()
+      e.stopPropagation()
+
+      const menuWidth = 240
+      const menuHeight = 120
+      const x = Math.min(e.clientX, window.innerWidth - menuWidth - 12)
+      const y = Math.min(e.clientY, window.innerHeight - menuHeight - 12)
+
+      setContextMenu({ x: Math.max(12, x), y: Math.max(12, y), file })
+    }
+  }
+
+  const handleIncludeFile = (file: FileItem) => {
+    const path = file.path
+    const variants = [path, `${path}/`, `${path}/**`]
+    const negationPattern = `!${path}`
+    const list = ignoreList || []
+
+    if (file.isIgnored || isIgnored(path)) {
+      const existingPattern = variants.find((v) => list.includes(v))
+      if (existingPattern) {
+        removeIgnorePattern(existingPattern)
+      } else {
+        addIgnorePattern(negationPattern)
+      }
+    }
+    setContextMenu(null)
+  }
+
+  const handleDisableRule = (file: FileItem, matchedRule?: string) => {
+    if (matchedRule) {
+      suspendRule(matchedRule)
+    }
+    setContextMenu(null)
+  }
 
   const sortedFiles = useMemo(() => {
     return [...files].sort((a, b) => {
@@ -116,6 +202,7 @@ export const FileTable: React.FC<FileTableProps> = ({
                 data-testid="file-row"
                 data-path={file.path}
                 data-ignored={file.isIgnored}
+                onContextMenu={(e) => handleContextMenu(e, file)}
                 className={cn(
                   'group hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors',
                   file.isIgnored && 'opacity-40 grayscale italic'
@@ -139,17 +226,17 @@ export const FileTable: React.FC<FileTableProps> = ({
                       {file.name}
                     </span>
                     {file.isIgnored && (
-                      <>
-                        <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 text-[8px] font-bold uppercase tracking-wider border border-slate-200 dark:border-slate-700 ml-2">
-                          Ignored
-                        </span>
-                        {(file.reason || file.ignoreSource) && (
-                          <span className="text-[8px] font-mono text-slate-400 bg-slate-800/50 px-1.5 py-0.5 rounded ml-1.5 inline-block align-middle">
-                            {file.reason || 'Ignored'}
-                            {file.ignoreSource && ` (${file.ignoreSource})`}
-                          </span>
-                        )}
-                      </>
+                      <span
+                        className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 text-[8px] font-bold uppercase tracking-wider border border-slate-200 dark:border-slate-700 ml-2 font-mono"
+                        title={
+                          file.reason || file.ignoreSource
+                            ? `${file.reason || 'Ignored'}${file.ignoreSource ? ` (${file.ignoreSource})` : ''}`
+                            : 'Ignored'
+                        }
+                      >
+                        {file.reason || 'Ignored'}
+                        {file.ignoreSource ? ` (${file.ignoreSource})` : ''}
+                      </span>
                     )}
                     {file.isNegated && (
                       <span className="text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 px-1.5 py-0.5 rounded uppercase tracking-tighter font-bold inline-block align-middle ml-2">
@@ -268,6 +355,7 @@ export const FileTable: React.FC<FileTableProps> = ({
             data-testid="file-row"
             data-path={file.path}
             data-ignored={file.isIgnored}
+            onContextMenu={(e) => handleContextMenu(e, file)}
             className={cn(
               'p-4 rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900/50 space-y-3 transition-all',
               file.isIgnored && 'opacity-50 grayscale italic'
@@ -289,14 +377,16 @@ export const FileTable: React.FC<FileTableProps> = ({
                       {file.name}
                     </span>
                     {file.isIgnored && (
-                      <span className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 text-[8px] font-bold uppercase tracking-wider border border-slate-200 dark:border-slate-700 shrink-0">
-                        Ignored
-                      </span>
-                    )}
-                    {file.isIgnored && (file.reason || file.ignoreSource) && (
-                      <span className="text-[8px] font-mono text-slate-400 bg-slate-800/50 px-1.5 py-0.5 rounded shrink-0">
+                      <span
+                        className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 text-[8px] font-bold uppercase tracking-wider border border-slate-200 dark:border-slate-700 shrink-0 font-mono"
+                        title={
+                          file.reason || file.ignoreSource
+                            ? `${file.reason || 'Ignored'}${file.ignoreSource ? ` (${file.ignoreSource})` : ''}`
+                            : 'Ignored'
+                        }
+                      >
                         {file.reason || 'Ignored'}
-                        {file.ignoreSource && ` (${file.ignoreSource})`}
+                        {file.ignoreSource ? ` (${file.ignoreSource})` : ''}
                       </span>
                     )}
                   </div>
@@ -396,6 +486,58 @@ export const FileTable: React.FC<FileTableProps> = ({
           </div>
         ))}
       </div>
+
+      {contextMenu && (
+        <>
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setContextMenu(null)}
+            onContextMenu={(e) => {
+              e.preventDefault()
+              setContextMenu(null)
+            }}
+          />
+          <div
+            ref={menuRef}
+            data-testid="context-menu"
+            className="fixed z-50 min-w-[220px] max-w-[320px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl py-1.5 text-xs animate-in fade-in zoom-in-95 duration-100"
+            style={{
+              top: `${contextMenu.y}px`,
+              left: `${contextMenu.x}px`,
+            }}
+          >
+            <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-800 text-[10px] uppercase font-bold text-slate-400 truncate">
+              {contextMenu.file.name}
+            </div>
+
+            <button
+              data-testid="context-menu-include"
+              onClick={() => handleIncludeFile(contextMenu.file)}
+              className="w-full px-3 py-2 text-left flex items-center gap-2 font-medium text-slate-700 dark:text-slate-200 hover:bg-brand-50 dark:hover:bg-brand-900/20 hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
+            >
+              <Eye className="w-3.5 h-3.5 text-brand-500 shrink-0" />
+              <span>Include this specific file</span>
+            </button>
+
+            {(() => {
+              const rule = getMatchedRule(contextMenu.file)
+              return (
+                <button
+                  data-testid="context-menu-disable-rule"
+                  disabled={!rule}
+                  onClick={() => handleDisableRule(contextMenu.file, rule)}
+                  className="w-full px-3 py-2 text-left flex items-center gap-2 font-medium text-slate-700 dark:text-slate-200 hover:bg-amber-50 dark:hover:bg-amber-900/20 hover:text-amber-600 dark:hover:text-amber-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Ban className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                  <span className="truncate">
+                    {rule ? `Disable rule: ${rule}` : 'Disable rule'}
+                  </span>
+                </button>
+              )
+            })()}
+          </div>
+        </>
+      )}
     </div>
   )
 }

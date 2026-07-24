@@ -13,6 +13,8 @@ export interface ModeContextType extends WorkbenchState {
   setTokenModel: (model: string) => void
   addIgnorePattern: (pattern: string) => void
   removeIgnorePattern: (pattern: string) => void
+  suspendRule: (pattern: string) => void
+  unsuspendRule: (pattern: string) => void
   resetWorkbench: () => void
   setAutoSaveIgnore: Dispatch<SetStateAction<boolean>>
   setShowIgnored: Dispatch<SetStateAction<boolean>>

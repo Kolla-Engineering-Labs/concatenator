@@ -7,6 +7,7 @@ import { Footer } from '../src/web/features/concatenator/components/Footer'
 import { ModeSwitch } from '../src/web/components/ModeSwitch'
 import { OutputFormatToggle } from '../src/web/features/concatenator/components/OutputFormatToggle'
 import { TreeNode } from '../src/web/features/concatenator/components/TreeNode'
+import { IgnoreList } from '../src/web/features/concatenator/components/IgnoreList'
 import { TreeItem } from '../src/core/types'
 import { AppMode, ViewPreference } from '../src/web/types/workbench'
 
@@ -582,5 +583,45 @@ describe('OutputFormatToggle Component', () => {
     const wrapper = container.firstChild as HTMLElement
     expect(wrapper?.classList.contains('flex')).toBe(true)
     expect(wrapper?.classList.contains('rounded-lg')).toBe(true)
+  })
+})
+
+describe('IgnoreList Component', () => {
+  const mockUnsuspendRule = vi.fn()
+  const mockRemoveIgnoreItem = vi.fn()
+  const mockAddIgnoreItem = vi.fn()
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(useWorkbench).mockReturnValue({
+      suspendedRules: ['*.svg'],
+      unsuspendRule: mockUnsuspendRule,
+    } as any)
+  })
+
+  it('renders suspended items with line-through and undo button', () => {
+    render(
+      <IgnoreList
+        ignoreList={['*.svg', 'node_modules/']}
+        isIgnoreListMinimized={false}
+        setIsIgnoreListMinimized={vi.fn()}
+        newIgnoreItem=""
+        setNewIgnoreItem={vi.fn()}
+        addIgnoreItem={mockAddIgnoreItem}
+        removeIgnoreItem={mockRemoveIgnoreItem}
+        autoSaveIgnore={false}
+        setAutoSaveIgnore={vi.fn()}
+      />
+    )
+
+    const svgItem = screen.getByTestId('ignore-item-*.svg')
+    expect(svgItem).toHaveAttribute('data-suspended', 'true')
+    expect(screen.getByText('*.svg')).toHaveClass('line-through')
+
+    const unsuspendBtn = screen.getByTestId('unsuspend-item-*.svg')
+    expect(unsuspendBtn).toBeInTheDocument()
+
+    fireEvent.click(unsuspendBtn)
+    expect(mockUnsuspendRule).toHaveBeenCalledWith('*.svg')
   })
 })

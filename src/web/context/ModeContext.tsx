@@ -4,6 +4,7 @@ import { AppMode, ViewPreference } from '../types/workbench'
 import { ModeContext } from './ModeContextCore'
 import { DEFAULT_IGNORE_LIST } from '../../core/constants'
 import { IgnoreEngine } from '../../core/ignore/IgnoreEngine'
+import { IgnoreSource } from '../../core/types'
 import { hydrateVFS } from '../../core/VFSHydrator'
 import { ApiClient } from '../services/ApiClient'
 import { logger } from '../../lib/logger'
@@ -197,32 +198,70 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
     // Trigger any additional cleanup for file streams here
   }, [setForceMode, setVirtualFileSystem])
 
+  const [suspendedRules, setSuspendedRules] = useLocalStorage<string[]>(
+    'concat_suspended_rules',
+    []
+  )
+
   const addIgnorePattern = useCallback(
     (pattern: string) => {
       setIgnoreList((prev) => {
         if (prev.includes(pattern)) return prev
         return [...prev, pattern]
       })
+      // If re-adding a pattern that was suspended, unsuspend it
+      setSuspendedRules((prev) => prev.filter((p) => p !== pattern))
     },
-    [setIgnoreList]
+    [setIgnoreList, setSuspendedRules]
   )
 
   const removeIgnorePattern = useCallback(
     (pattern: string) => {
+      const cleanPattern = pattern.replace(/\/$/, '')
       setIgnoreList((prev) => {
-        // Try exact match, or match without trailing slash
-        const cleanPattern = pattern.replace(/\/$/, '')
         return prev.filter(
           (p) => p !== pattern && p.replace(/\/$/, '') !== cleanPattern
         )
       })
+      setSuspendedRules((prev) =>
+        prev.filter(
+          (p) => p !== pattern && p.replace(/\/$/, '') !== cleanPattern
+        )
+      )
     },
-    [setIgnoreList]
+    [setIgnoreList, setSuspendedRules]
   )
 
+  const suspendRule = useCallback(
+    (pattern: string) => {
+      setSuspendedRules((prev) =>
+        prev.includes(pattern) ? prev : [...prev, pattern]
+      )
+    },
+    [setSuspendedRules]
+  )
+
+  const unsuspendRule = useCallback(
+    (pattern: string) => {
+      setSuspendedRules((prev) => prev.filter((p) => p !== pattern))
+    },
+    [setSuspendedRules]
+  )
+
+  const activeIgnoreList = React.useMemo(() => {
+    return ignoreList.filter((pattern) => !suspendedRules.includes(pattern))
+  }, [ignoreList, suspendedRules])
+
   const ignoreEngine = React.useMemo(() => {
-    return new IgnoreEngine(ignoreList)
-  }, [ignoreList])
+    return new IgnoreEngine(
+      activeIgnoreList.map((pattern) => {
+        if (DEFAULT_IGNORE_LIST.includes(pattern)) {
+          return { pattern, source: IgnoreSource.DEFAULT }
+        }
+        return { pattern, source: IgnoreSource.MANUAL }
+      })
+    )
+  }, [activeIgnoreList])
 
   const isIgnored = useCallback(
     (path: string) => ignoreEngine.isIgnored(path),
@@ -262,6 +301,7 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
         mode,
         view,
         ignoreList,
+        suspendedRules,
         isIgnored,
         isSidebarOpen,
         compiledIgnores: ignoreEngine.patterns,
@@ -275,6 +315,8 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
         setIgnoreList,
         addIgnorePattern,
         removeIgnorePattern,
+        suspendRule,
+        unsuspendRule,
         setSidebarOpen: setIsSidebarOpen,
         setForceMode,
         setVirtualFileSystem,

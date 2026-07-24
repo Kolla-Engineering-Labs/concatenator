@@ -25,21 +25,15 @@ test.describe('Concatenate Mode', () => {
 
     // Clear localStorage before navigation to avoid needing a reload
     await page.addInitScript(() => {
-      if (sessionStorage.getItem('__test_init__')) return
-
-      localStorage.removeItem('concatenate-ignore')
-      localStorage.removeItem('concatenate-view-mode')
-      localStorage.removeItem('concatenate-dark-mode')
-      localStorage.removeItem('concat_mode')
-      localStorage.removeItem('concat_view')
-      localStorage.removeItem('concat_sidebar')
+      localStorage.clear()
+      localStorage.setItem('concat_mode', '"concatenate"')
+      localStorage.setItem('concat_view', '"list"')
       localStorage.setItem('concat_auto_save_ignore', 'true')
       localStorage.setItem('concat_show_ignored', 'true')
 
       // Set sidebar to true for desktop (>=1024px), false for mobile to avoid obscuring content
       const isMobile = window.innerWidth < 1024
       localStorage.setItem('concat_sidebar', isMobile ? 'false' : 'true')
-      sessionStorage.setItem('__test_init__', 'true')
     })
 
     // Reset server-side ignore list BEFORE navigation so client fetches correct state.

@@ -5,7 +5,7 @@
 
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import JSZip from 'jszip'
-import { FileItem, OutputFormat } from '../../../../core/types'
+import { FileItem, OutputFormat, IgnoreSource } from '../../../../core/types'
 import { HydratedFile } from '../../../../core/VFSHydrator'
 import { AppMode } from '../../../types/workbench'
 import {
@@ -98,7 +98,12 @@ export const useFileProcessing = ({
       const map = new Map<string, HydratedFile>()
       for (const path of paths) {
         const ignored = isIgnored ? isIgnored(path) : false
-        map.set(path, { isIgnored: ignored, isNegated: false })
+        map.set(path, {
+          isIgnored: ignored,
+          isNegated: false,
+          reason: path,
+          ignoreSource: ignored ? IgnoreSource.MANUAL : undefined,
+        })
       }
       return map
     },

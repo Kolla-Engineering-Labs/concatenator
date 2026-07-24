@@ -87,6 +87,13 @@ export const TreeNode: React.FC<TreeNodeProps> = ({
       }
     }
   }
+  const nodeReason = node.file?.reason || node.reason
+  const nodeSource = node.file?.ignoreSource || node.ignoreSource
+  const matchedRuleTitle =
+    nodeReason || nodeSource
+      ? `${nodeReason || 'Ignored'}${nodeSource ? ` (${nodeSource})` : ''}`
+      : 'Ignored'
+
   return (
     <div className="select-none">
       <div
@@ -97,7 +104,7 @@ export const TreeNode: React.FC<TreeNodeProps> = ({
         )}
         title={
           effectivelyIgnored
-            ? `Ignored by: ${node.reason || 'Inherited/Other'}`
+            ? `Ignored by: ${nodeReason || 'Inherited/Other'}`
             : undefined
         }
         style={{ paddingLeft: `${depth * 1.25 + 0.5}rem` }}
@@ -136,17 +143,13 @@ export const TreeNode: React.FC<TreeNodeProps> = ({
               {node.name}
               {node.kind === 'directory' && node.name !== 'Root' ? '/' : ''}
               {node.isIgnored && !node.isNegated && (
-                <>
-                  <span className="ml-2 text-[10px] bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded uppercase tracking-tighter font-bold opacity-60 inline-block align-middle border border-slate-300 dark:border-slate-700">
-                    Ignored
-                  </span>
-                  {(node.reason || node.ignoreSource) && (
-                    <span className="inline-block ml-1.5 text-[8px] font-mono text-slate-400 bg-slate-800/50 px-1.5 py-0.5 rounded align-middle">
-                      {node.reason || 'Ignored'}
-                      {node.ignoreSource && ` (${node.ignoreSource})`}
-                    </span>
-                  )}
-                </>
+                <span
+                  className="ml-2 text-[10px] bg-slate-200 dark:bg-slate-800 px-1.5 py-0.5 rounded uppercase tracking-tighter font-bold opacity-60 inline-block align-middle border border-slate-300 dark:border-slate-700 font-mono"
+                  title={matchedRuleTitle}
+                >
+                  {nodeReason || 'Ignored'}
+                  {nodeSource ? ` (${nodeSource})` : ''}
+                </span>
               )}
               {node.isNegated && (
                 <span className="ml-2 text-[10px] bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 px-1.5 py-0.5 rounded uppercase tracking-tighter font-bold inline-block align-middle">
@@ -154,7 +157,14 @@ export const TreeNode: React.FC<TreeNodeProps> = ({
                 </span>
               )}
               {!node.isIgnored && inheritedIgnored && (
-                <span className="ml-2 text-[10px] bg-slate-100 dark:bg-slate-800/50 px-1.5 py-0.5 rounded uppercase tracking-tighter font-bold opacity-40 inline-block align-middle">
+                <span
+                  className="ml-2 text-[10px] bg-slate-100 dark:bg-slate-800/50 px-1.5 py-0.5 rounded uppercase tracking-tighter font-bold opacity-40 inline-block align-middle"
+                  title={
+                    nodeReason || nodeSource
+                      ? `${nodeReason || 'Inherited'}${nodeSource ? ` (${nodeSource})` : ''}`
+                      : 'Inherited'
+                  }
+                >
                   Inherited
                 </span>
               )}

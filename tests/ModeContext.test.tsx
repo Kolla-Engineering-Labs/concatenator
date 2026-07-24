@@ -490,4 +490,28 @@ describe('ModeContext (Workbench State)', () => {
     })
     consoleSpy.mockRestore()
   })
+
+  it('handles suspendRule and unsuspendRule', async () => {
+    const { result } = renderHook(() => useWorkbench(), { wrapper })
+
+    await act(async () => {
+      result.current.setIgnoreList(['*.svg'])
+    })
+
+    expect(result.current.isIgnored('logo.svg')).toBe(true)
+
+    await act(async () => {
+      result.current.suspendRule('*.svg')
+    })
+
+    expect(result.current.suspendedRules).toContain('*.svg')
+    expect(result.current.isIgnored('logo.svg')).toBe(false)
+
+    await act(async () => {
+      result.current.unsuspendRule('*.svg')
+    })
+
+    expect(result.current.suspendedRules).not.toContain('*.svg')
+    expect(result.current.isIgnored('logo.svg')).toBe(true)
+  })
 })
