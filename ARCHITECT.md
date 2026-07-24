@@ -1,4 +1,4 @@
-# System Knowledge Document: Concatenator (v0.5.0-RC)
+# System Knowledge Document: Concatenator (v0.8.0)
 
 ## 1. Executive System Overview
 
@@ -41,13 +41,15 @@ The production design prioritizes dependency-minimalism, optimal performance, an
 - **Styling Engine**: Tailwind CSS v4 (`@tailwindcss/vite` `^4.1.14`), using `@import "tailwindcss";` in `src/index.css`.
 - **State & Caching Providers**: Context-based React state coupled with standardized JSON-serialized local state persistence (`localStorage` and `sessionStorage`).
 - **Interface & Animation Controls**: `lucide-react` (`^0.546.0`) for high-fidelity technical symbols; `motion` (`^12.23.24`) for smooth modal and list transitions.
-- **Product Analytics**: `posthog-js`, configured to operate with maximum privacy parameters (`persistence: 'localStorage'`, `person_profiles: 'always'`, and anonymized IP logging).
+- **Glob Matching**: `picomatch` (`^4.0.2`), replacing the prior `micromatch` dependency for uniform ESM-native glob and path-matching. Powers the entire `IgnoreEngine` rule compiler.
+- **Product Analytics**: `posthog-js`, configured to operate with maximum privacy parameters (`persistence: 'localStorage'`, `person_profiles: 'identified_only'`, and anonymized IP logging).
 
 ### Governance, Verification & Testing
 
 - **Version Management**: Changesets (`.changesets`) for atomic release versioning.
 - **Local Code Quality**: Prettier (statically aligned to LF newlines), Snyk (vulnerability tracking), and SonarCloud (static analysis).
 - **Test Runners**: Vitest (`^4.1.4`) for core engine coverage; Playwright (`^1.59.1`) for visual E2E verification.
+- **SEA CI/CD Release Pipeline**: Multi-Job Matrix workflow (`.github/workflows/release-sea-binaries.yml`) triggering strictly on `v*` tags. Executes Job 1 (`build` matrix across `ubuntu-latest`, `macos-latest`, `windows-latest`) and Job 2 (`publish` dependent aggregation on `ubuntu-latest`) with `SHA256SUMS` manifest generation, GPG detached signing (`SHA256SUMS.asc`), and GitHub Release uploads via `gh release`.
 
 ---
 
@@ -122,8 +124,11 @@ The entire application adheres to a strict Core-First / Thin-Consumer software p
 │ ├── TokenService.ts # Multi-tiered token algebra (Heuristic / Precise count aggregator)
 │ ├── SecretScanner.ts # PII extraction blocks; encapsulates regex masking standards
 │ ├── VFSManager.ts # Virtual directory state mapping and depth-absorbed file trees
-│ ├── IgnoreEngine.ts # Pattern compiler matching standard globs and trailing negations (!)
-│ └── LifecycleManager.ts # Graceful server shutdowns, pid management, and lockfile sweeps
+│ ├── VFSHydrator.ts # Pure hydration layer — single source of truth for ignore resolution (returns Map<string, HydratedFile>)
+│ ├── types.ts # Core type definitions including IgnoreSource enum (DEFAULT / FILE / SESSION)
+│ ├── LifecycleManager.ts # Graceful server shutdowns, pid management, and lockfile sweeps
+│ └── ignore/
+│ └── IgnoreEngine.ts # picomatch-based pattern compiler; last-match-wins semantics; supports IgnoreSource tagging
 │
 ├── cli/ # @concatenator/cli domains
 │ └── index.ts # Commander.js command schema (concat, extract, validate, ui)
@@ -150,39 +155,57 @@ The entire application adheres to a strict Core-First / Thin-Consumer software p
 
 During the development, hardening, and testing phases of the Concatenator project, several critical edge cases and security-to-filesystem issues were successfully resolved:
 
-1. **The CRLF Prettier/Git Conflict**:
-   - _Problem_: Development on Windows generated files with Carriage Return Line Feeds (`CRLF`), triggering formatting anomalies (`prettier --check .`) on standard Unix/Linux and macOS CI/CD environments.
-   - _Solution_: Standardized EOL metrics globally by configuring a strict `.gitattributes` file that maps `* text=auto eol=lf` and forcing `.prettierrc` to check `"endOfLine": "lf"`. Legacy index records were purged via an intensive git normalization loop (`git add --renormalize .`).
+8. **VFS Hydration Pipeline (IgnoreSource Attribution & Manual Overrides)**:
+   - _Problem_: UI components previously called `IgnoreEngine.isIgnored()` at render time, losing the metadata about _why_ a file was ignored (user session rule vs. default built-in) and _which source_ triggered the match. This made rendering `reason` and `ignoreSource` badges impossible without duplicate evaluation.
+   - _Solution_: Introduced `VFSHydrator.ts` — a pure, side-effect-free batch resolution layer. `hydrateVFS(paths, engine)` iterates all paths once and returns a `Map<string, HydratedFile>` keyed by path. Each entry carries `{ isIgnored, isNegated, reason, ignoreSource }`. UI reconciliation now performs a single O(1) map lookup per file, eliminating redundant engine calls entirely. `IgnoreSource` values (`DEFAULT`, `FILE`, `SESSION`, and `manual override` for user-toggled files) drive the inline badge labels and tooltips rendered in `FileTable` and `TreeNode`.
 
-2. **The "Franken-Project" Path Overlap**:
-   - _Problem_: If a child directory (e.g. `bar/`) was dropped, and its parent folder (e.g., `foo/`) was dropped afterward, duplicate file trees appeared at overlapping depths, disrupting the VFS tree and doubling token costs.
-   - _Solution_: Created a flat-map virtual filesystem index (`Record<string, string>`) that resolves absolute paths. It automatically executes **Root Pruning**, absorbing child nodes into parent paths and recalculating directory states.
+9. **Context Menu & Rule Suspension Architecture (`suspendRule` / `unsuspendRule`)**:
+   - _Problem_: Developers needed granular control to bypass specific built-in or glob ignore rules for individual files without editing global config files or typing complex negation syntax manually.
+   - _Solution_: Implemented a contextual right-click menu in `FileTable.tsx` for ignored file rows. Right-clicking an ignored row opens two options:
+     - **Include this specific file**: Automatically appends a path-level negation rule (`!path/to/file`) to `ignoreList`.
+     - **Disable rule: [matchedRule]**: Invokes `suspendRule(rule)` in `ModeContext`, suspending the rule locally without altering underlying config files.
+   - The **"Ignore Files" pill** interface (`IgnoreList.tsx`) renders active ignore rules alongside suspended rules, providing an inline `RotateCcw` control to unsuspend/restore default rules dynamically.
 
-3. **The "Useless Regular-Expression Escape" Bug**:
-   - _Problem_: Input parsing configuration arrays using standard string literals (e.g., `'/^\..*_cache$/'`) had their backslashes consumed during compilation, translating to `/^..*_cache$/` which matched arbitrary strings.
-   - _Solution_: Fixed by replacing literal configuration patterns with doubly escaped strings `'/^\\..*_cache$/'` or using true, native JS regular expression literals.
+10. **picomatch Migration (micromatch → picomatch)**:
+    - _Problem_: `micromatch` introduced a heavyweight transitive dependency tree and was not ESM-native, causing incompatibilities in strict ESM builds.
+    - _Solution_: Replaced with `picomatch@^4.0.2`, a zero-dependency, ESM-first glob library. `IgnoreEngine` now uses `picomatch.makeRe()` to compile all glob patterns into native `RegExp` objects at construction time, eliminating runtime glob string parsing on every path evaluation.
 
-4. **VFS Crawler Traversal Breakout Vulnerability**:
-   - _Problem_: Early VFS crawlers used standard `fs.statSync()`, resolving symbolic links (symlinks) automatically. This made local web hosts vulnerable to directory-climb attacks (`../../etc/passwd`).
-   - _Solution_: Re-engineered VFS traversal around `fs.lstatSync()` so symlinks are ignored by default. It restricts deep link traversal using a realpath check (`assertPathWithinRoot`).
+11. **The CRLF Prettier/Git Conflict**:
+    - _Problem_: Development on Windows generated files with Carriage Return Line Feeds (`CRLF`), triggering formatting anomalies (`prettier --check .`) on standard Unix/Linux and macOS CI/CD environments.
+    - _Solution_: Standardized EOL metrics globally by configuring a strict `.gitattributes` file that maps `* text=auto eol=lf` and forcing `.prettierrc` to check `"endOfLine": "lf"`. Legacy index records were purged via an intensive git normalization loop (`git add --renormalize .`).
 
-5. **React 19 Double-Initialization Analytics Bug**:
-   - _Problem_: React 19's `<StrictMode>` caused components to double-render in development contexts. This resulted in dual-initialization of the analytics client, generating double-pings and duplicate analytics IDs.
-   - _Solution_: Moved the `posthog.init()` constructor entirely **outside** the React tree in `main.tsx`, executing the initialization precisely once directly on the global scope before target mounting.
+12. **The "Franken-Project" Path Overlap**:
+    - _Problem_: If a child directory (e.g. `bar/`) was dropped, and its parent folder (e.g., `foo/`) was dropped afterward, duplicate file trees appeared at overlapping depths, disrupting the VFS tree and doubling token costs.
+    - _Solution_: Created a flat-map virtual filesystem index (`Record<string, string>`) that resolves absolute paths. It automatically executes **Root Pruning**, absorbing child nodes into parent paths and recalculating directory states.
 
-6. **Vite TypeScript Environment Squiggle**:
-   - _Problem_: TS compiler threw semantic errors when mapping environment variables (`import.meta.env`), as standard TS was blind to Vite-injected context and configuration macros.
-   - _Solution_: Solved by updating the compilation parameters inside `tsconfig.json` to explicitly check `"types": ["vite/client"]`, paired with a dedicated ambient typings shim file `src/vite-env.d.ts`.
+13. **The "Useless Regular-Expression Escape" Bug**:
+    - _Problem_: Input parsing configuration arrays using standard string literals (e.g., `'/^\..*_cache$/'`) had their backslashes consumed during compilation, translating to `/^..*_cache$/` which matched arbitrary strings.
+    - _Solution_: Fixed by replacing literal configuration patterns with doubly escaped strings `'/^\\..*_cache$/'` or using true, native JS regular expression literals.
 
-7. **Synchronous I/O Event Loop Blockage (The Liveliness Paradox)**:
-   - _Problem_: Performing heavy file serialization or deep JSZip processes blocked the local Node event loop. This caused standard `/api/heartbeat` requests to fail, firing false-positive "Server Disconnected" UI overlays.
-   - _Solution_: Implemented a decoupled, progress-based **Engine Pulse**. The core writes operational metadata to a local `.concatenator/pulse.json` file. The server provides a lightweight, non-blocking `/api/pulse` stream route that runs on a native browser fallback loop to detect actual thread liveness.
+14. **VFS Crawler Traversal Breakout Vulnerability**:
+    - _Problem_: Early VFS crawlers used standard `fs.statSync()`, resolving symbolic links (symlinks) automatically. This made local web hosts vulnerable to directory-climb attacks (`../../etc/passwd`).
+    - _Solution_: Re-engineered VFS traversal around `fs.lstatSync()` so symlinks are ignored by default. It restricts deep link traversal using a realpath check (`assertPathWithinRoot`).
+
+15. **React 19 Double-Initialization Analytics Bug**:
+    - _Problem_: React 19's `<StrictMode>` caused components to double-render in development contexts. This resulted in dual-initialization of the analytics client, generating double-pings and duplicate analytics IDs.
+    - _Solution_: Moved the `posthog.init()` constructor entirely **outside** the React tree in `main.tsx`, executing the initialization precisely once directly on the global scope before target mounting.
+
+16. **Vite TypeScript Environment Squiggle**:
+    - _Problem_: TS compiler threw semantic errors when mapping environment variables (`import.meta.env`), as standard TS was blind to Vite-injected context and configuration macros.
+    - _Solution_: Solved by updating the compilation parameters inside `tsconfig.json` to explicitly check `"types": ["vite/client"]`, paired with a dedicated ambient typings shim file `src/vite-env.d.ts`.
+
+17. **Synchronous I/O Event Loop Blockage (The Liveliness Paradox)**:
+    - _Problem_: Performing heavy file serialization or deep JSZip processes blocked the local Node event loop. This caused standard `/api/heartbeat` requests to fail, firing false-positive "Server Disconnected" UI overlays.
+    - _Solution_: Implemented a decoupled, progress-based **Engine Pulse**. The core writes operational metadata to a local `.concatenator/pulse.json` file. The server provides a lightweight, non-blocking `/api/pulse` stream route that runs on a native browser fallback loop to detect actual thread liveness.
 
 ---
 
 ## 6. Future Roadmap & Pending Features
 
 The upcoming development cycle focuses on scaling the utility, optimizing performance, and preparing for team-focused corporate compliance:
+
+- **E2E Observability Coverage (In Progress — v0.8.x)**:
+  - The `e2e/observability.spec.ts` Playwright suite now validates the Gas Gauge red overage state (token budget exceeded), the `reason` + `ignoreSource` badge rendering for default-ignored directories like `node_modules`, and the negation-discovery pipeline. All tests use the native DOM input upload path to remain WebKit-compatible.
 
 - **Automatic Dependency Pruning / Smart Filters**:
   - Implement active pre-filtering within `IgnoreEngine` to detect and automatically skip high-token, zero-signal system lockfiles or compiled bundles (e.g. `package-lock.json`, `pnpm-lock.yaml`, `*.js.map`).

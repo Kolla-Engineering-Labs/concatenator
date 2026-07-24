@@ -120,6 +120,7 @@ All file path operations include strict validation to prevent path traversal att
 > Concatenator processes file contents in the browser. Be aware:
 
 - **No automatic scanning**: Files are not scanned for malware or malicious content
+- **SecretScanner Masking**: Before bundle generation, `SecretScanner` redacts high-entropy strings matching credential patterns (AWS keys, OpenAI tokens, private key PEM blocks). This happens server-side in the CLI and in-memory in the Web UI during concatenation — not at import time.
 - **Binary files**: While primarily designed for text files, binary files can be processed
 - **Large files**: The Max File Limit setting (default 10,000 files) helps prevent memory exhaustion
 
@@ -145,4 +146,4 @@ We thank the security researchers and community members who have responsibly dis
 
 ---
 
-Last updated: 2026-05-10
+Last updated: 2026-07-22

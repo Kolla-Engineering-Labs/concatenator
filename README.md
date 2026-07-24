@@ -1,6 +1,7 @@
 # Concatenator
 
 [![Release](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/release.yml/badge.svg)](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/release.yml)
+[![Release SEA Binaries](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/release-sea-binaries.yml/badge.svg)](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/release-sea-binaries.yml)
 [![CI & Quality Gate](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/ci.yml/badge.svg)](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/github-code-scanning/codeql)
 [![codecov](https://codecov.io/gh/Kolla-Engineering-Labs/concatenator/graph/badge.svg?token=ubXyDShjEa)](https://codecov.io/gh/Kolla-Engineering-Labs/concatenator)
@@ -61,15 +62,22 @@ graph LR
   - **Discovery-First Traversal**: The core engine now prioritizes negations (e.g., `!core`). Files matching a negation pattern are discovered and included even if they reside within an ignored directory (e.g., `tests/`), ensuring complete visibility for "exception" files.
   - **Heavy Directory Traversal Hardening**: To prevent catastrophic traversal times and event-loop lockups when scanning enormous dependency or build folders, unanchored negated patterns (e.g., `!core`) are **explicitly bypassed** inside heavy common directories (including `node_modules`, `.git`, `.next`, `.expo`, `.gradle`, `.terraform`, `.vagrant`, `bower_components`, `playwright-report`, `test-results`, `venv`, and `vendor`).
   - **Anchored Negation Exceptions**: If you explicitly need to target and discover an exception file/folder inside a heavy ignored folder, you must use an **anchored negated pattern** (e.g., `!node_modules/core`), which allows the recursive engine to directly target the folder without wasting resources scanning the entire parent tree.
+  - **Right-Click Context Menu**: Right-clicking any ignored file row in the Workbench table opens a contextual menu allowing developers to **"Include this specific file"** via an automatic path-level negation override (`!path/to/file`) or **"Disable rule: [matchedRule]"** to suspend default/glob rules locally.
   - **Auto-Discovery**: CLI automatically respects `.concatignore` or `.gitignore` in your current working directory.
   - **CLI Persistence**: Use `-i, --ignore-file <path>` to leverage existing project configurations for both bundling and extraction.
   - **Web Auto-Save**: Toggle the **"Auto-Save to .concatenate-ignore"** option in the UI to keep your local workspace in sync with your project's ignore configuration automatically.
-- **File Status Indicators**:
+- **File Status Indicators & Rule Management**:
   - The Workbench uses visual badges to clarify how ignore rules are applied:
     - **Ignored**: Explicitly matches a pattern in your ignore list.
     - **Negated**: Re-included via a negation pattern (prefixed with `!`).
     - **Inherited**: Automatically excluded because a parent directory is ignored.
     - **Negated + Inherited**: A powerful hybrid state indicating an "exception" file that is included even though its containing folder is ignored.
+  - Each ignored row also renders an inline **reason badge** (e.g., `node_modules (default)`) derived from the `IgnoreSource` metadata. The badge suffix/tooltip disambiguates the ignore trigger:
+    - `(default)` — applied by a built-in engine default (e.g. `node_modules`, `.git`).
+    - `(file)` — applied by a `.concatenate-ignore` or `.gitignore` rule.
+    - `(session)` — applied by a pattern added in the current workbench session.
+    - `(manual override)` — applied when an individual file is manually toggled/ignored via the inline eye icon.
+  - **Ignore Files Pill & Rule Suspension**: The **"Ignore Files"** pill component displays both active ignore patterns and locally suspended rules. Suspended rules (disabled via context menu or rule toggles) are visually highlighted with a restore icon (`RotateCcw`), enabling quick re-enabling or fine-grained rule tuning.
 - **Structural Redundancy Fixes**:
   - **Root Pruning (Web)**: Automatically reconciles overlapping folder drops. If you drop a parent folder after a child, the workbench "absorbs" the child into the new structure and provides visual feedback via the **Absorption Toast**.
   - **Input Pruning (CLI)**: Normalizes and filters overlapping command-line arguments. If both `./src` and `./src/components` are passed, the redundant sub-path is automatically pruned.
@@ -135,10 +143,11 @@ graph LR
 ## Tech Stack
 
 - **Frontend**: [React 19](https://react.dev/), [TypeScript](https://www.typescriptlang.org/), [Tailwind CSS 4](https://tailwindcss.com/)
-- **Animations**: [Framer Motion](https://www.framer.com/motion/) (`motion/react`)
+- **Animations**: [Motion](https://motion.dev/) (`motion/react`)
 - **Icons**: [Lucide React](https://lucide.dev/)
 - **Backend**: [Express](https://expressjs.com/) (Node.js 22+)
 - **Build Tool**: [Vite 6](https://vitejs.dev/)
+- **Glob Matching**: [picomatch](https://github.com/micromatch/picomatch) (ESM-native, zero-dependency glob/path matcher powering `IgnoreEngine`)
 - **Utilities**: [JSZip](https://stuk.github.io/jszip/) for archive generation, [jsPDF](https://github.com/parallax/jsPDF) for PDF generation
 
 ### 🗺️ Architecture Map
@@ -330,10 +339,17 @@ You can compile Concatenator into a single standalone executable (SEA) for Windo
 
 ```bash
 # Build for your current platform
-npm run build:exe
+npm run build:sea
 ```
 
-The generated executable will be available in the `dist/v0.6.0/{platform}/` directory.
+The generated executable will be available in `dist/sea/`.
+
+#### Automated Multi-Job Matrix Release Pipeline
+
+On tagging a new release (`v*`), our GitHub Actions workflow ([`.github/workflows/release-sea-binaries.yml`](.github/workflows/release-sea-binaries.yml)) executes a 2-stage multi-job matrix pipeline:
+
+1. **Job 1 (Build Matrix)**: Compiles native SEA binaries in parallel on `ubuntu-latest`, `macos-latest`, and `windows-latest` (`npm run build:sea`) and uploads platform artifacts (`concatenator-linux-x64`, `concatenator-macos-x64`, `concatenator-windows-x64.exe`).
+2. **Job 2 (Publish & Cryptographic Signing)**: Downloads all platform binaries into `dist/sea/`, generates a `SHA256SUMS` manifest, attaches a GPG detached ASCII armor signature (`SHA256SUMS.asc`), and publishes all release assets directly to GitHub Releases via `gh release`.
 
 #### Distribution Structure
 
@@ -341,11 +357,12 @@ Concatenator follows a versioned distribution pattern to ensure reliable deploym
 
 ```
 dist/
-└── v0.6.0/
-    ├── win32/
-    │   └── concatenator.exe  (Signed binary)
-    └── darwin/
-        └── concatenator      (Signed & Notarized, or [Ad-Hoc](./docs/MACOS_SECURITY.md))
+└── sea/
+    ├── concatenator-linux-x64        (Linux SEA Binary)
+    ├── concatenator-macos-x64        (macOS SEA Binary)
+    ├── concatenator-windows-x64.exe  (Windows SEA Binary)
+    ├── SHA256SUMS                    (Checksum Manifest)
+    └── SHA256SUMS.asc                (GPG Detached Signature)
 ```
 
 #### Commands

@@ -49,7 +49,7 @@ Thank you for your interest in contributing to Concatenator! This document provi
    > **API Security**: You MUST set a `CONCATENATOR_API_TOKEN` in your `.env` to run the development server or E2E tests. Generate a random string: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`.
 
    > [!IMPORTANT]
-   > **Naming Convention**: When adding new environment variables, use the `VITE_` prefix for client-side access. For PostHog specifically, always use the `VITE_PUBLIC_` prefix (e.g., `VITE_PUBLIC_POSTHOG_KEY`).
+   > **Naming Convention**: When adding new environment variables, use the `VITE_` prefix for client-side access. For PostHog specifically, always use the `VITE_PUBLIC_` prefix (e.g., `VITE_PUBLIC_POSTHOG_KEY`). Always set `person_profiles: 'identified_only'` in local-first / offline-capable app contexts.
 
 4. **Start the development server**:
    ```bash
@@ -71,11 +71,21 @@ Thank you for your interest in contributing to Concatenator! This document provi
 | `npm run test:e2e:ui`     | Run E2E tests with Playwright UI mode          |
 | `npm run test:e2e:debug`  | Run E2E tests in debug mode                    |
 | `npm run test:e2e:headed` | Run E2E tests in headed mode (visible browser) |
-| `npm run build:exe`       | Build the single executable application (SEA)  |
+| `npm run build:sea`       | Execute the SEA build pipeline for single executable application  |
+| `npm run build:exe`       | Build the single executable application (SEA) (alias) |
 | `npm run build:manifest`  | Generate SHA256SUMS for built artifacts        |
 | `npm run test:release`    | Audit release candidate (GPG + SHA256)         |
 | `npm run pre-release`     | Pre-release hook for local verification        |
 | `npm run clean`           | Remove build artifacts (dist/, web-assets.ts)  |
+
+---
+
+## 🚀 CI/CD & Automated SEA Release Pipeline
+
+Official releases strictly trigger on tag creation matching `v*` via `.github/workflows/release-sea-binaries.yml`. The release architecture uses a **Multi-Job Matrix Strategy**:
+
+1. **Job 1 (`build`)**: Runs a parallel matrix on `ubuntu-latest`, `macos-latest`, and `windows-latest`. Each runner executes `npm ci` followed by `npm run build:sea`, uploading platform-specific binaries (`concatenator-linux-x64`, `concatenator-macos-x64`, `concatenator-windows-x64.exe`) as GitHub Actions artifacts.
+2. **Job 2 (`publish`)**: A dependent job (`needs: build`) running on `ubuntu-latest`. It downloads all platform artifacts into `dist/sea/`, computes `SHA256SUMS`, signs the manifest using the imported repository secrets (`GPG_PRIVATE_KEY` / `GPG_PASSPHRASE`) to generate `SHA256SUMS.asc`, and attaches all payload artifacts to the GitHub Release via `gh release upload`.
 
 ---
 
@@ -112,21 +122,36 @@ We value **Clean Architecture** and **Decoupled Logic**. Understanding these pri
 
 ```
 src/
-├── components/     # React UI components (presentation layer)
-├── hooks/          # Custom React hooks (business logic orchestration)
-├── lib/            # Core business logic and utilities
-│   ├── logger.ts   # Logging utility
-│   └── ...         # Pure functions, parsers, generators
-├── types.ts        # TypeScript type definitions
-├── constants.ts    # Application constants
-├── App.tsx         # Main application component
-├── main.tsx        # Application entry point
-└── tests/          # Unit tests (colocated with Vitest)
-    └── *.test.ts   # Test files for lib/ utilities
+├── core/                  # @concatenator/core (engine & services)
+│   ├── ignore/
+│   │   └── IgnoreEngine.ts  # picomatch-based rule compiler, last-match-wins
+│   ├── VFSHydrator.ts       # Pure batch hydration layer — returns Map<string, HydratedFile>
+│   ├── VFSManager.ts        # VFS flat-map state (root pruning, directory absorption)
+│   ├── TokenService.ts      # BPE / heuristic token counting
+│   ├── SecretScanner.ts     # PII masking & backtick neutralization
+│   ├── types.ts             # Core types: FileItem, IgnoreSource, ValidationResult
+│   └── ...
+├── cli/                   # @concatenator/cli (Commander.js commands)
+│   └── index.ts
+├── web/                   # @concatenator/web (React 19 workbench)
+│   ├── features/
+│   │   └── concatenator/
+│   │       ├── components/  # FileTable, TreeNode, UploadZone, QuickLook
+│   │       └── hooks/       # useFileProcessing, useFileTree
+│   ├── hooks/               # useWorkbench, useTokenAggregation, useLocalStorage
+│   ├── components/          # StatusBar, ModeSwitch
+│   └── context/             # ModeContext
+├── lib/                   # Shared utilities (utils.ts, fileIcons.tsx, logger.ts)
+├── App.tsx                # Web container
+└── main.tsx               # Entry point (PostHog initialized outside React tree)
 
 e2e/                # End-to-end tests (Playwright)
 ├── *.spec.ts       # E2E test files
-└── fixtures/       # Test data and helpers
+├── fixtures/       # Custom test fixtures and apiContext helpers
+└── helpers/        # FileUploadHelper, sidebar helpers
+
+tests/              # Unit tests (Vitest)
+└── *.test.ts
 ```
 
 ### 🧩 Architectural Principles
@@ -243,14 +268,37 @@ npm run test:e2e:debug    # Debug mode with step-through
 **Writing E2E tests**:
 
 ```typescript
-import { test, expect } from '@playwright/test'
+import { test, expect, resetIgnoreList } from './fixtures'
+import { FileUploadHelper } from './helpers/file-upload'
 
-test('user can concatenate files', async ({ page }) => {
+test('default ignored paths render the reason badge', async ({
+  page,
+  apiContext,
+}) => {
+  await resetIgnoreList(apiContext)
   await page.goto('/')
-  await page.getByTestId('drop-zone').dispatchEvent('drop', {
-    dataTransfer: { files: [mockFile] },
-  })
-  await expect(page.getByText('1 file selected')).toBeVisible()
+
+  const uploadHelper = new FileUploadHelper(page)
+  try {
+    // Use the native DOM input upload path — compatible with all browsers including WebKit.
+    // Do NOT use synthetic DataTransfer drops: WebKit's security sandbox blocks programmatic
+    // FileSystemEntry construction, making readEntries() and webkitGetAsEntry() non-functional.
+    await uploadHelper.setFilesOnInput([
+      {
+        name: 'index.js',
+        path: 'node_modules/lodash/index.js',
+        content: '// lodash',
+      },
+    ])
+    const row = page
+      .locator('[data-path="node_modules/lodash/index.js"]')
+      .first()
+    await expect(row).toHaveAttribute('data-ignored', 'true')
+    await expect(row.locator('span.font-mono')).toContainText('node_modules')
+    await expect(row.locator('span.font-mono')).toContainText('(default)')
+  } finally {
+    uploadHelper.cleanup()
+  }
 })
 ```
 
@@ -300,10 +348,10 @@ We aim for high test coverage on core logic. Coverage reports are generated auto
    ```
 
    **What constitutes "UI Flows"?** E2E tests are required for changes touching:
-   - `src/components/*` — Any React component changes
-   - Framer Motion animations — Motion/transition changes
-   - File System Access API logic — Drag-and-drop, file picker interactions
-   - Mode toggles, output format changes
+   - `src/web/features/concatenator/components/*` — Any React component changes
+   - Motion animations — Motion/transition changes
+   - File upload / drag-and-drop interactions — always use `FileUploadHelper.setFilesOnInput`; never use synthetic `DataTransfer` or `readEntries()` mocks (WebKit sandbox incompatible)
+   - Mode toggles, output format changes, ignore list mutations
 
 4. **Update documentation**:
    - Update `README.md` if adding new features
