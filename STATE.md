@@ -3,7 +3,6 @@
 **Current Version:** v0.8.0
 **Last Updated:** 2026-07-24
 
-
 ## Active Context & Architecture
 
 - **Core Engine (Ignore System 3.0):** Features Discovery-First Traversal, forcing recursion for negated patterns (`!core`) while bypassing heavy system folders[cite: 1].
