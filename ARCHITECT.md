@@ -49,6 +49,8 @@ The production design prioritizes dependency-minimalism, optimal performance, an
 - **Version Management**: Changesets (`.changesets`) for atomic release versioning.
 - **Local Code Quality**: Prettier (statically aligned to LF newlines), Snyk (vulnerability tracking), and SonarCloud (static analysis).
 - **Test Runners**: Vitest (`^4.1.4`) for core engine coverage; Playwright (`^1.59.1`) for visual E2E verification.
+- **CI/CD Quality Gate**: `.github/workflows/ci.yml` executes build, type-checking, linting, formatting, and unit test coverage on PRs and pushes.
+- **Dedicated E2E Pipeline**: `.github/workflows/e2e.yml` runs Playwright end-to-end browser tests on `ubuntu-latest` (Node.js 22 LTS) on PRs and pushes to `main`, archiving `playwright-report/` artifacts on every run.
 - **SEA CI/CD Release Pipeline**: Multi-Job Matrix workflow (`.github/workflows/release-sea-binaries.yml`) triggering strictly on `v*` tags. Executes Job 1 (`build` matrix across `ubuntu-latest`, `macos-latest`, `windows-latest`) and Job 2 (`publish` dependent aggregation on `ubuntu-latest`) with `SHA256SUMS` manifest generation, GPG detached signing (`SHA256SUMS.asc`), and GitHub Release uploads via `gh release`.
 
 ---

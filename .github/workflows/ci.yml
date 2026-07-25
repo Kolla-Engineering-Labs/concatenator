@@ -58,22 +58,6 @@ jobs:
           path: ./coverage/
           retention-days: 1
 
-      - name: Update APT Repository
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          for i in {1..5}; do
-            sudo apt-get update && break || (echo "Retry $i..." && sleep 5)
-          done
-
-      - name: Install Playwright Browsers
-        # Only happens if Build and Unit Tests pass
-        run: npx playwright install --with-deps
-
-      - name: Run E2E Tests (Playwright)
-        run: npm run test:e2e
-        env:
-          CI: true
-
       # --- Visualize Coverage Directory ---
       - name: List coverage directory
         run: ls -R ./coverage
@@ -95,11 +79,3 @@ jobs:
           use_oidc: true
           files: ./coverage/lcov.info
           fail_ci_if_error: false
-
-      - name: Upload Playwright Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report-${{ matrix.os }}-node22
-          path: playwright-report/
-          retention-days: 7

@@ -253,7 +253,7 @@ We use **Playwright** for end-to-end testing. E2E tests focus on:
 **Running E2E tests**:
 
 ```bash
-npm run test:e2e          # Headless mode (CI)
+npm run test:e2e          # Headless mode (CI workflow: .github/workflows/e2e.yml)
 npm run test:e2e:ui       # Interactive UI mode
 npm run test:e2e:headed   # Visible browser
 npm run test:e2e:debug    # Debug mode with step-through

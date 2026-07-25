@@ -3,6 +3,7 @@
 [![Release](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/release.yml/badge.svg)](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/release.yml)
 [![Release SEA Binaries](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/release-sea-binaries.yml/badge.svg)](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/release-sea-binaries.yml)
 [![CI & Quality Gate](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/ci.yml/badge.svg)](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/ci.yml)
+[![E2E Testing](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/e2e.yml/badge.svg)](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/e2e.yml)
 [![CodeQL](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/github-code-scanning/codeql)
 [![codecov](https://codecov.io/gh/Kolla-Engineering-Labs/concatenator/graph/badge.svg?token=ubXyDShjEa)](https://codecov.io/gh/Kolla-Engineering-Labs/concatenator)
 [![Bundle Analysis](https://img.shields.io/badge/Bundle%20Analysis-View%20Report-blue)](https://app.codecov.io/gh/Kolla-Engineering-Labs/concatenator/bundles)

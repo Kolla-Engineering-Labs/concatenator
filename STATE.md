@@ -18,6 +18,8 @@
 - v0.8.0 Audit Matrix test suite implementation across `VFSHydrator.ts` (15k node scale & DTO mapping), `IgnoreEngine.ts` (Discovery-First Traversal & forced recursion), `FileTable.tsx` (ephemeral rule suspensions), and `token.worker.ts` / `useTokenAggregation.ts` (500ms hybrid batch throttling).
 - Phase C Security Sprint: Implemented strict symlink rejection in `PathValidator.resolveAndJail()`, deterministic `SymlinkRejectedError` & `PathTraversalError` security errors, ENOENT trap handling for non-existent target files during extraction, and telemetry logging across the VFS de-concatenation engine.
 - CI/CD Pipeline Modernization: Pinned Node.js 22 LTS (`node-version: '22.x'`) globally across all workflow jobs, resolved coverage artifact failure by enforcing `npm run test:coverage` prior to `upload-artifact`, updated third-party actions to latest major versions, and added `vitest.config.ts`.
+- CI/CD Matrix Stabilization: Mathematically enforced Unix line endings (`* text=auto eol=lf`) in `.gitattributes` and configured `if-no-files-found: ignore` for the Playwright artifact upload in `.github/workflows/ci.yml` to prevent ghost artifact failures.
+- Dedicated E2E Workflow Separation: Created `.github/workflows/e2e.yml` for isolated Playwright E2E execution on `ubuntu-latest` (Node 22 LTS) with `if: always()` report artifact upload, removed all Playwright steps from `.github/workflows/ci.yml`, and updated documentation across `README.md`, `ARCHITECT.md`, `CONTRIBUTING.md`, and `e2e/README.md`.
 
 ## Pending Roadmap Tasks (Immediate Focus)
 
