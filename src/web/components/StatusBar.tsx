@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react'
 import { useWorkbench } from '../hooks/useWorkbench'
-import { Zap } from 'lucide-react'
+import { Zap, AlertTriangle } from 'lucide-react'
 
 interface StatusBarProps {
   totalTokens: number
@@ -11,9 +11,10 @@ interface StatusBarProps {
 }
 
 const BUDGET_PRESETS = [
-  { name: 'GPT-4o', value: 128000 },
-  { name: 'Claude 3.5', value: 200000 },
-  { name: 'Gemini 1.5', value: 1000000 },
+  { name: 'GPT-4.1', value: 1047576, model: 'o200k_base' },
+  { name: 'GPT-4o', value: 128000, model: 'o200k_base' },
+  { name: 'Claude Opus 4', value: 200000, model: 'o200k_base' },
+  { name: 'Gemini 2.5 Pro', value: 1048576, model: 'o200k_base' },
 ]
 
 export const StatusBar: React.FC<StatusBarProps> = ({
@@ -23,24 +24,26 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   isConnected,
   wasEverConnected = false,
 }) => {
-  const { tokenBudget, setTokenBudget } = useWorkbench()
+  const { tokenBudget, setTokenBudget, setTokenModel } = useWorkbench()
 
   const saturation = useMemo(() => {
     if (tokenBudget === 0) return 0
     return (totalTokens / tokenBudget) * 100
   }, [totalTokens, tokenBudget])
 
+  const isOverBudget = tokenBudget > 0 && totalTokens > tokenBudget
+
   const colorClass = useMemo(() => {
     if (saturation < 70) return 'bg-emerald-500'
     if (saturation < 90) return 'bg-amber-500'
-    return 'bg-rose-500'
-  }, [saturation])
+    return isOverBudget ? 'bg-red-500' : 'bg-rose-500'
+  }, [saturation, isOverBudget])
 
   const textColorClass = useMemo(() => {
     if (saturation < 70) return 'text-emerald-600 dark:text-emerald-400'
     if (saturation < 90) return 'text-amber-600 dark:text-amber-400'
-    return 'text-rose-600 dark:text-rose-400'
-  }, [saturation])
+    return isOverBudget ? 'text-red-500' : 'text-rose-600 dark:text-rose-400'
+  }, [saturation, isOverBudget])
 
   const [isEditingCustom, setIsEditingCustom] = React.useState(false)
 
@@ -51,6 +54,10 @@ export const StatusBar: React.FC<StatusBarProps> = ({
       return
     }
     setIsEditingCustom(false)
+    const preset = BUDGET_PRESETS.find((p) => p.value === Number(val))
+    if (preset) {
+      setTokenModel(preset.model)
+    }
     setTokenBudget(Number(val))
   }
 
@@ -60,7 +67,7 @@ export const StatusBar: React.FC<StatusBarProps> = ({
   return (
     <div className="min-h-10 py-2 sm:py-0 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between px-4 z-[60] text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider shrink-0 gap-3 sm:gap-6 lg:pl-[19rem]">
       {/* Left Side: Stats */}
-      <div className="flex items-center gap-4 sm:gap-6 w-full sm:w-auto justify-center sm:justify-start">
+      <div className="flex items-center gap-4 sm:gap-6 w-full sm:w-auto justify-center sm:justify-start shrink-0">
         {/* Version */}
         <div
           className="flex items-center gap-1.5 shrink-0 px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700"
@@ -95,14 +102,14 @@ export const StatusBar: React.FC<StatusBarProps> = ({
           }
         >
           {isConnected === null && (
-            <span className="block h-2 w-2 rounded-full bg-slate-400 animate-pulse" />
+            <span className="block h-2 w-2 min-w-[8px] min-h-[8px] rounded-full bg-slate-400 animate-pulse shrink-0" />
           )}
           {isConnected === true && (
-            <span className="block h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="block h-2 w-2 min-w-[8px] min-h-[8px] rounded-full bg-emerald-500 animate-pulse shrink-0" />
           )}
           {isConnected === false && (
             <span
-              className="block h-2 w-2 rounded-full bg-amber-500"
+              className="block h-2 w-2 min-w-[8px] min-h-[8px] rounded-full bg-amber-500 shrink-0"
               data-testid="heartbeat-dot-amber"
             />
           )}
@@ -155,16 +162,29 @@ export const StatusBar: React.FC<StatusBarProps> = ({
 
       {/* Center: Progress Bar */}
       <div className="flex-1 w-full max-w-md px-4 sm:px-8 flex items-center gap-3 sm:gap-4">
+        {isOverBudget && (
+          <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+        )}
         <div className="flex-1 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden relative">
           <div
-            className={`absolute top-0 left-0 h-full transition-all duration-500 ease-out ${colorClass}`}
-            style={{ width: `${Math.min(saturation, 100)}%` }}
+            className={`absolute top-0 left-0 h-full ${
+              isOverBudget
+                ? 'bg-red-500'
+                : `transition-all duration-500 ease-out ${colorClass}`
+            }`}
+            style={{
+              width: isOverBudget ? '100%' : `${Math.min(saturation, 100)}%`,
+            }}
           />
         </div>
         <div
-          className={`w-10 sm:w-12 text-right font-bold tabular-nums ${textColorClass}`}
+          className={`whitespace-nowrap min-w-10 sm:min-w-12 text-right font-bold tabular-nums ${
+            isOverBudget ? 'text-red-500' : textColorClass
+          }`}
         >
-          {Math.round(saturation)}%
+          {isOverBudget
+            ? `${totalTokens.toLocaleString()} / ${tokenBudget.toLocaleString()}`
+            : `${Math.round(saturation)}%`}
         </div>
       </div>
 

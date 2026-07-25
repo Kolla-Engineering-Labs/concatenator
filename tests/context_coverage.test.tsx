@@ -44,7 +44,7 @@ describe('ModeContext Coverage', () => {
       expect(ApiClient.getIgnoreList).toHaveBeenCalled()
     })
 
-    expect(contextValue.ignoreList).toEqual(['dist', 'node_modules']) // sorted
+    expect(contextValue.ignoreList).toEqual(['dist', 'node_modules'])
   })
 
   it('handles server fetch error gracefully', async () => {

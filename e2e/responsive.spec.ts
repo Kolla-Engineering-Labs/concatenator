@@ -6,9 +6,9 @@ test.describe('Responsive UI - Sidebar', () => {
   })
 
   test.beforeEach(async ({ page }) => {
-    await page.goto('/')
+    await page.goto('/', { waitUntil: 'domcontentloaded' })
     await page.evaluate(() => localStorage.clear())
-    await page.reload()
+    await page.reload({ waitUntil: 'domcontentloaded' })
   })
 
   test('should hide sidebar by default and toggle correctly', async ({

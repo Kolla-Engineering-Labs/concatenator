@@ -51,28 +51,44 @@ Concatenator binaries for Windows and macOS are cryptographically signed to ensu
 
 Always verify the publisher in your OS security prompts before running the executable.
 
-### 🔐 GPG-Signed Manifests (Independent Verification)
+### Binary Verification
 
-Beyond OS-level signing, we provide a **GPG-signed manifest** for every official release. This allows you to verify binary integrity even if OS certificate chains are compromised or unavailable (e.g., in air-gapped systems).
+Beyond OS-level signing, we provide a **GPG-signed manifest** for every official release. This allows you to verify binary integrity even if OS certificate chains are compromised or unavailable (e.g., in air-gapped systems). We explicitly encourage establishing cryptographic chain-of-custody before executing standalone binaries on Enterprise systems.
 
 - **Manifest File**: `SHA256SUMS.asc` (Standard SHA-256 hashes inside a PGP Clearsigned Message).
 - **Architect PGP Fingerprint**: `4A21 4627 3B7B 0A35 4C41  4753 5B22 4C5F 51E6 10EF`
-- **Verification via CLI**:
 
-  ```bash
-  concatenator verify self
-  ```
+#### Verification via NPM (Recommended)
 
-  This command hashes the current binary and compares it against the local `SHA256SUMS.asc` (found in the same directory). If the architect's public key is in your keychain, it also performs a cryptographic signature check.
+You can run our verification command directly from the npm/source layer. This allows you to establish trust in the standalone binary using the distributed npm package before executing it:
+
+```bash
+npx @kolla/concatenator verify ./concatenator-windows-x64.exe
+```
+
+For deeper cryptographic debugging, append the `--verbose` flag:
+
+```bash
+npx @kolla/concatenator verify ./concatenator-windows-x64.exe --verbose
+```
+
+#### Verification via Standard OS Tools
+
+Alternatively, you can verify the binaries using standard OS tools and GitHub attestation features to maintain your organization's chain-of-custody protocols:
+
+```bash
+# 1. Verify the PGP signature of the manifest
+gpg --import public.key
+gpg --verify SHA256SUMS.asc
+
+# 2. Verify the SHA256 hash of the binary matches the manifest
+shasum -a 256 -c SHA256SUMS.asc
+
+# 3. (Optional) Verify via GitHub Attestations if artifacts were downloaded from GitHub Releases
+gh attestation verify ./concatenator-windows-x64.exe -o Kolla-Engineering-Labs
+```
 
 - **Pre-Release Audit**: Our build pipeline includes a `npm run test:release` audit that orchestrates GPG signature verification and SHA256 integrity checks on release candidates before they are finalized.
-
-- **Manual Verification**:
-  ```bash
-  gpg --import public.key
-  gpg --verify SHA256SUMS.asc
-  shasum -a 256 -c SHA256SUMS.asc
-  ```
 
 ## Security-Related Configuration
 
@@ -104,6 +120,7 @@ All file path operations include strict validation to prevent path traversal att
 > Concatenator processes file contents in the browser. Be aware:
 
 - **No automatic scanning**: Files are not scanned for malware or malicious content
+- **SecretScanner Masking**: Before bundle generation, `SecretScanner` redacts high-entropy strings matching credential patterns (AWS keys, OpenAI tokens, private key PEM blocks). This happens server-side in the CLI and in-memory in the Web UI during concatenation — not at import time.
 - **Binary files**: While primarily designed for text files, binary files can be processed
 - **Large files**: The Max File Limit setting (default 10,000 files) helps prevent memory exhaustion
 
@@ -129,4 +146,4 @@ We thank the security researchers and community members who have responsibly dis
 
 ---
 
-Last updated: 2026-05-10
+Last updated: 2026-07-22

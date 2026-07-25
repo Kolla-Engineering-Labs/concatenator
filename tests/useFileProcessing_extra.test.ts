@@ -4,6 +4,12 @@ import { useFileProcessing } from '../src/web/features/concatenator/hooks/useFil
 import { AppMode } from '../src/web/types/workbench'
 
 // Mock ApiClient
+const mockHydrateFalse = (paths: string[]) => {
+  const map = new Map()
+  paths.forEach((p) => map.set(p, { isIgnored: false, isNegated: false }))
+  return map
+}
+
 const { mockGetFileBlob } = vi.hoisted(() => ({
   mockGetFileBlob: vi.fn(),
 }))
@@ -58,10 +64,17 @@ describe('useFileProcessing Extra Coverage', () => {
     const { result } = renderHook(() =>
       useFileProcessing({
         appMode: AppMode.CONCATENATE,
-        isIgnored: (path) => path.includes('ignored'),
+        hydrateFiles: (paths) => {
+          const map = new Map()
+          paths.forEach((p) =>
+            map.set(p, { isIgnored: p.includes('ignored'), isNegated: false })
+          )
+          return map
+        },
         maxFileLimit: 100,
         isIgnoreListLoading: false,
         setVirtualFileSystem: vi.fn(),
+        shouldRecurse: () => false,
       })
     )
 
@@ -99,10 +112,11 @@ describe('useFileProcessing Extra Coverage', () => {
     const { result } = renderHook(() =>
       useFileProcessing({
         appMode: AppMode.CONCATENATE,
-        isIgnored: () => false,
+        hydrateFiles: mockHydrateFalse,
         maxFileLimit: 100,
         isIgnoreListLoading: false,
         setVirtualFileSystem: vi.fn(),
+        shouldRecurse: () => false,
       })
     )
 
@@ -122,10 +136,11 @@ describe('useFileProcessing Extra Coverage', () => {
     const { result } = renderHook(() =>
       useFileProcessing({
         appMode: AppMode.CONCATENATE,
-        isIgnored: () => false,
+        hydrateFiles: mockHydrateFalse,
         maxFileLimit: 100,
         isIgnoreListLoading: false,
         setVirtualFileSystem: vi.fn(),
+        shouldRecurse: () => false,
       })
     )
 
@@ -165,10 +180,11 @@ describe('useFileProcessing Extra Coverage', () => {
     const { result } = renderHook(() =>
       useFileProcessing({
         appMode: AppMode.CONCATENATE,
-        isIgnored: () => false,
+        hydrateFiles: mockHydrateFalse,
         maxFileLimit: 100,
         isIgnoreListLoading: false,
         setVirtualFileSystem: vi.fn(),
+        shouldRecurse: () => false,
       })
     )
 
@@ -196,10 +212,11 @@ describe('useFileProcessing Extra Coverage', () => {
     const { result } = renderHook(() =>
       useFileProcessing({
         appMode: AppMode.CONCATENATE,
-        isIgnored: () => false,
+        hydrateFiles: mockHydrateFalse,
         maxFileLimit: 100,
         isIgnoreListLoading: false,
         setVirtualFileSystem: vi.fn(),
+        shouldRecurse: () => false,
       })
     )
 
@@ -241,10 +258,11 @@ describe('useFileProcessing Extra Coverage', () => {
     const { result } = renderHook(() =>
       useFileProcessing({
         appMode: AppMode.CONCATENATE,
-        isIgnored: () => false,
+        hydrateFiles: mockHydrateFalse,
         maxFileLimit: 100,
         isIgnoreListLoading: false,
         setVirtualFileSystem: vi.fn(),
+        shouldRecurse: () => false,
       })
     )
 

@@ -1,0 +1,105 @@
+name: Release SEA Binaries
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build SEA Binary (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            exe_name: concatenator
+            target_name: concatenator-linux-x64
+          - os: macos-latest
+            platform: darwin
+            exe_name: concatenator
+            target_name: concatenator-macos-x64
+          - os: windows-latest
+            platform: win32
+            exe_name: concatenator.exe
+            target_name: concatenator-windows-x64.exe
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Execute SEA build pipeline
+        run: npm run build:sea
+
+      - name: Stage platform binary
+        shell: bash
+        run: |
+          if [ -f "dist/sea/${{ matrix.exe_name }}" ]; then
+            cp "dist/sea/${{ matrix.exe_name }}" "dist/sea/${{ matrix.target_name }}"
+          fi
+
+      - name: Upload platform binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sea-binary-${{ matrix.platform }}
+          path: dist/sea/${{ matrix.target_name }}
+
+  publish:
+    name: Publish SEA Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'npm'
+
+      - name: Download all SEA binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: 'sea-binary-*'
+          path: dist/sea
+          merge-multiple: true
+
+      - name: Generate SHA256SUMS manifest
+        run: |
+          cd dist/sea
+          sha256sum concatenator-* > SHA256SUMS
+
+      - name: Import GPG private key
+        uses: crazy-max/ghaction-import-gpg@v6
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.GPG_PASSPHRASE }}
+
+      - name: Generate detached ASCII armor signature
+        run: |
+          cd dist/sea
+          gpg --batch --yes --detach-sign --armor --output SHA256SUMS.asc SHA256SUMS
+
+      - name: Publish aggregated release payload to GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/sea/* --title "${GITHUB_REF_NAME}" --generate-notes || gh release upload "${GITHUB_REF_NAME}" dist/sea/* --clobber

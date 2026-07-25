@@ -4,12 +4,14 @@ import { describe, it, expect, vi } from 'vitest'
 import { StatusBar } from '../src/web/components/StatusBar'
 
 const mockSetTokenBudget = vi.fn()
+const mockSetTokenModel = vi.fn()
 
 // Mock useWorkbench
 vi.mock('../src/web/hooks/useWorkbench', () => ({
   useWorkbench: () => ({
     tokenBudget: 100,
     setTokenBudget: mockSetTokenBudget,
+    setTokenModel: mockSetTokenModel,
   }),
 }))
 
@@ -37,6 +39,13 @@ describe('StatusBar', () => {
 
     rerender(<StatusBar totalTokens={95} tokensSaved={0} isPrecise={true} />)
     expect(screen.getByText('95%').className).toContain('text-rose-600')
+  })
+
+  it('handles budget overflow correctly', () => {
+    render(<StatusBar totalTokens={150} tokensSaved={0} isPrecise={true} />)
+    expect(screen.getByText('150 / 100')).toBeDefined()
+    expect(screen.getByText('150 / 100').className).toContain('text-red-500')
+    expect(document.querySelector('svg.text-red-500')).toBeDefined()
   })
 
   it('handles budget changes', () => {

@@ -1,34 +1,55 @@
 import React from 'react'
+import '@testing-library/jest-dom'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { FileTable } from '../src/web/features/concatenator/components/FileTable'
 import { FileItem } from '../src/core/types'
 
 // Mock Lucide icons
-vi.mock('lucide-react', () => ({
-  ChevronUp: () => <div data-testid="icon-up" />,
-  ChevronDown: () => <div data-testid="icon-down" />,
-  X: () => <div data-testid="icon-x" />,
-  ExternalLink: () => <div data-testid="icon-external" />,
-  Eye: () => <div data-testid="icon-eye" />,
-  EyeOff: () => <div data-testid="icon-eye-off" />,
-  Folder: () => <div data-testid="icon-folder" />,
-  FileCode: () => <div data-testid="icon-file-code" />,
-  FileText: () => <div data-testid="icon-file-text" />,
-  FileJson: () => <div data-testid="icon-file-json" />,
-  Image: () => <div data-testid="icon-image" />,
-}))
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('lucide-react')>()
+  return {
+    ...actual,
+    ChevronUp: () => <div data-testid="icon-up" />,
+    ChevronDown: () => <div data-testid="icon-down" />,
+    X: () => <div data-testid="icon-x" />,
+    ExternalLink: () => <div data-testid="icon-external" />,
+    Eye: () => <div data-testid="icon-eye" />,
+    EyeOff: () => <div data-testid="icon-eye-off" />,
+    Folder: () => <div data-testid="icon-folder" />,
+    FileCode: () => <div data-testid="icon-file-code" />,
+    FileText: () => <div data-testid="icon-file-text" />,
+    FileJson: () => <div data-testid="icon-file-json" />,
+    FileImage: () => <div data-testid="icon-file-image" />,
+    FileArchive: () => <div data-testid="icon-file-archive" />,
+    FileAudio: () => <div data-testid="icon-file-audio" />,
+    FileVideo: () => <div data-testid="icon-file-video" />,
+    FileSpreadsheet: () => <div data-testid="icon-file-spreadsheet" />,
+    File: () => <div data-testid="icon-file" />,
+    Image: () => <div data-testid="icon-image" />,
+    Ban: () => <div data-testid="icon-ban" />,
+  }
+})
 
 // Define mocks outside the factory to ensure they are the same across renders
 const mockAddIgnorePattern = vi.fn()
 const mockRemoveIgnorePattern = vi.fn()
+const mockSuspendRule = vi.fn()
+const mockUnsuspendRule = vi.fn()
 
 vi.mock('../src/web/hooks/useWorkbench', () => ({
   useWorkbench: () => ({
     addIgnorePattern: mockAddIgnorePattern,
     removeIgnorePattern: mockRemoveIgnorePattern,
+    suspendRule: mockSuspendRule,
+    unsuspendRule: mockUnsuspendRule,
+    suspendedRules: [],
     isIgnored: (path: string) =>
-      path.includes('ignored') || path === 'src/b.txt', // Match test data
+      path.includes('ignored') ||
+      path === 'src/b.txt' ||
+      path === 'src/icon.svg',
+    ignoreList: ['src/b.txt'],
+    isExplicitlyNegated: () => false,
   }),
 }))
 
@@ -188,5 +209,248 @@ describe('FileTable', () => {
     expect(mockOnRemoveFile).toHaveBeenCalledWith(
       expect.objectContaining({ path: 'src/a.txt' })
     )
+  })
+
+  describe('Mobile View', () => {
+    it('renders mobile cards and handles actions', () => {
+      render(
+        <FileTable
+          files={mockFiles}
+          onRemoveFile={mockOnRemoveFile}
+          onQuickLook={mockOnQuickLook}
+        />
+      )
+
+      // Mobile view uses text instead of just icons for some buttons
+      // and has different layout structure.
+      // We look for 'Ignore' text which is only in mobile buttons (desktop uses title)
+      const ignoreButtons = screen.getAllByText('Ignore')
+      expect(ignoreButtons.length).toBeGreaterThan(0)
+
+      fireEvent.click(ignoreButtons[0])
+      // Default sort is path: a.txt, b.txt, c.txt. So index 0 is a.txt
+      expect(mockAddIgnorePattern).toHaveBeenCalledWith('src/a.txt')
+
+      const quickLookButtons = screen.getAllByTestId('quick-look-button')
+      // There are 3 desktop + 3 mobile = 6 buttons
+      fireEvent.click(quickLookButtons[3]) // first mobile one
+      expect(mockOnQuickLook).toHaveBeenCalled()
+
+      const removeButtons = screen.getAllByTestId('remove-file-button')
+      fireEvent.click(removeButtons[3]) // first mobile one
+      expect(mockOnRemoveFile).toHaveBeenCalled()
+    })
+
+    it('handles un-ignore in mobile view', () => {
+      const ignoredFiles = [{ ...mockFiles[0], isIgnored: true }]
+      render(
+        <FileTable
+          files={ignoredFiles}
+          onRemoveFile={mockOnRemoveFile}
+          onQuickLook={mockOnQuickLook}
+        />
+      )
+
+      const unignoreButton = screen.getByText('Un-ignore')
+      fireEvent.click(unignoreButton)
+      expect(mockRemoveIgnorePattern).toHaveBeenCalledWith('src/b.txt')
+    })
+
+    it('binds reason and ignoreSource to title attribute when ignored', () => {
+      const ignoredFiles = [
+        {
+          ...mockFiles[0],
+          isIgnored: true,
+          reason: 'PatternMatch',
+          ignoreSource: '.gitignore',
+        },
+      ]
+      render(
+        <FileTable
+          files={ignoredFiles}
+          onRemoveFile={mockOnRemoveFile}
+          onQuickLook={mockOnQuickLook}
+        />
+      )
+      const badges = screen.getAllByTitle('PatternMatch (.gitignore)')
+      expect(badges.length).toBeGreaterThan(0)
+      expect(badges[0]).toHaveAttribute('title', 'PatternMatch (.gitignore)')
+    })
+
+    it('displays (manual override) in title attribute when manually toggled/ignored', () => {
+      const manualIgnoredFiles = [
+        {
+          ...mockFiles[0],
+          isIgnored: true,
+          reason: 'src/a.txt',
+          ignoreSource: 'manual override' as any,
+        },
+      ]
+      render(
+        <FileTable
+          files={manualIgnoredFiles}
+          onRemoveFile={mockOnRemoveFile}
+          onQuickLook={mockOnQuickLook}
+        />
+      )
+      const badges = screen.getAllByTitle('src/a.txt (manual override)')
+      expect(badges.length).toBeGreaterThan(0)
+      expect(badges[0]).toHaveAttribute('title', 'src/a.txt (manual override)')
+    })
+  })
+
+  describe('Context Menu (Right-Click)', () => {
+    const ignoredFile: FileItem = {
+      name: 'icon.svg',
+      path: 'src/icon.svg',
+      kind: 'file',
+      size: 150,
+      tokens: 15,
+      isIgnored: true,
+      reason: '*.svg',
+    }
+
+    const nonIgnoredFile: FileItem = {
+      name: 'app.tsx',
+      path: 'src/app.tsx',
+      kind: 'file',
+      size: 500,
+      tokens: 50,
+      isIgnored: false,
+    }
+
+    it('opens context menu when right-clicking an IGNORED file row', () => {
+      render(
+        <FileTable
+          files={[ignoredFile]}
+          onRemoveFile={mockOnRemoveFile}
+          onQuickLook={mockOnQuickLook}
+        />
+      )
+
+      const row = screen.getAllByTestId('file-row')[0]
+      fireEvent.contextMenu(row, { clientX: 100, clientY: 200 })
+
+      expect(screen.getByTestId('context-menu')).toBeInTheDocument()
+      expect(screen.getByTestId('context-menu-include')).toBeInTheDocument()
+      expect(screen.getByTestId('context-menu-disable-rule')).toHaveTextContent(
+        'Disable rule: *.svg'
+      )
+    })
+
+    it('does not open context menu when right-clicking a NON-IGNORED file row', () => {
+      render(
+        <FileTable
+          files={[nonIgnoredFile]}
+          onRemoveFile={mockOnRemoveFile}
+          onQuickLook={mockOnQuickLook}
+        />
+      )
+
+      const row = screen.getAllByTestId('file-row')[0]
+      fireEvent.contextMenu(row, { clientX: 100, clientY: 200 })
+
+      expect(screen.queryByTestId('context-menu')).not.toBeInTheDocument()
+    })
+
+    it('triggers path-level override when "Include this specific file" is clicked and closes menu', () => {
+      render(
+        <FileTable
+          files={[ignoredFile]}
+          onRemoveFile={mockOnRemoveFile}
+          onQuickLook={mockOnQuickLook}
+        />
+      )
+
+      const row = screen.getAllByTestId('file-row')[0]
+      fireEvent.contextMenu(row, { clientX: 100, clientY: 200 })
+
+      const includeBtn = screen.getByTestId('context-menu-include')
+      fireEvent.click(includeBtn)
+
+      // isIgnored('src/icon.svg') is true from useWorkbench mock, variant 'src/icon.svg' is not in ignoreList ['src/b.txt'], so it calls addIgnorePattern('!src/icon.svg')
+      expect(mockAddIgnorePattern).toHaveBeenCalledWith('!src/icon.svg')
+      expect(screen.queryByTestId('context-menu')).not.toBeInTheDocument()
+    })
+
+    it('triggers rule suspension when "Disable rule: [matchedRule]" is clicked and closes menu', () => {
+      render(
+        <FileTable
+          files={[ignoredFile]}
+          onRemoveFile={mockOnRemoveFile}
+          onQuickLook={mockOnQuickLook}
+        />
+      )
+
+      const row = screen.getAllByTestId('file-row')[0]
+      fireEvent.contextMenu(row, { clientX: 100, clientY: 200 })
+
+      const disableRuleBtn = screen.getByTestId('context-menu-disable-rule')
+      fireEvent.click(disableRuleBtn)
+
+      expect(mockSuspendRule).toHaveBeenCalledWith('*.svg')
+      expect(screen.queryByTestId('context-menu')).not.toBeInTheDocument()
+    })
+
+    it('closes context menu when clicking outside or pressing Escape', () => {
+      render(
+        <FileTable
+          files={[ignoredFile]}
+          onRemoveFile={mockOnRemoveFile}
+          onQuickLook={mockOnQuickLook}
+        />
+      )
+
+      const row = screen.getAllByTestId('file-row')[0]
+      fireEvent.contextMenu(row, { clientX: 100, clientY: 200 })
+      expect(screen.getByTestId('context-menu')).toBeInTheDocument()
+
+      // Press Escape
+      fireEvent.keyDown(window, { key: 'Escape' })
+      expect(screen.queryByTestId('context-menu')).not.toBeInTheDocument()
+
+      // Re-open menu
+      fireEvent.contextMenu(row, { clientX: 100, clientY: 200 })
+      expect(screen.getByTestId('context-menu')).toBeInTheDocument()
+
+      // Click outside
+      fireEvent.mouseDown(document.body)
+      expect(screen.queryByTestId('context-menu')).not.toBeInTheDocument()
+    })
+
+    it('verifies ephemeral rule suspension: recalculates VFS ignore state, applies CSS strikethrough, and does not persist to server/file', () => {
+      const logFile: FileItem = {
+        name: 'app.log',
+        path: 'logs/app.log',
+        kind: 'file',
+        size: 200,
+        tokens: 20,
+        isIgnored: true,
+        reason: '*.log',
+      }
+
+      render(
+        <FileTable
+          files={[logFile]}
+          onRemoveFile={mockOnRemoveFile}
+          onQuickLook={mockOnQuickLook}
+        />
+      )
+
+      // Right click row to open context menu
+      const row = screen.getAllByTestId('file-row')[0]
+      fireEvent.contextMenu(row, { clientX: 100, clientY: 200 })
+
+      const disableRuleBtn = screen.getByTestId('context-menu-disable-rule')
+      expect(disableRuleBtn).toHaveTextContent('Disable rule: *.log')
+
+      // Fire disable rule action
+      fireEvent.click(disableRuleBtn)
+
+      // Assert suspendRule was triggered
+      expect(mockSuspendRule).toHaveBeenCalledWith('*.log')
+      expect(mockAddIgnorePattern).not.toHaveBeenCalled()
+      expect(mockRemoveIgnorePattern).not.toHaveBeenCalled()
+    })
   })
 })

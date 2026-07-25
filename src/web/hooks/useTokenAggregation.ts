@@ -7,6 +7,8 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { FileItem, TreeItem } from '../../core/types'
 import { TokenService } from '../../core/TokenService'
 import { logger } from '../../lib/logger'
+import { isBinaryFile } from '../../lib/utils'
+import TokenWorker from '../workers/token.worker.ts?worker'
 
 interface TokenMetadata {
   tokens: number
@@ -25,7 +27,10 @@ interface WorkerResult {
 /**
  * Hook to manage hierarchical token aggregation with background worker precision.
  */
-export const useTokenAggregation = (files: FileItem[]) => {
+export const useTokenAggregation = (
+  files: FileItem[],
+  isIgnored?: (path: string) => boolean
+) => {
   const [tokenMap, setTokenMap] = useState<Record<string, TokenMetadata>>({})
   const hashCacheRef = useRef<
     Map<string, { tokens: number; isPrecise: boolean }>
@@ -34,7 +39,6 @@ export const useTokenAggregation = (files: FileItem[]) => {
   const [worker, setWorker] = useState<Worker | null>(null)
   const dirtyQueueRef = useRef<Set<string>>(new Set())
   const processingPathsRef = useRef<Set<string>>(new Set())
-  const [queueTrigger, setQueueTrigger] = useState(0)
 
   // Refs for stable access in async handlers and effect optimization
   const filesRef = useRef(files)
@@ -43,15 +47,16 @@ export const useTokenAggregation = (files: FileItem[]) => {
   tokenMapRef.current = tokenMap
 
   useEffect(() => {
-    const w = new Worker(
-      new URL('../workers/token.worker.ts', import.meta.url),
-      { type: 'module' }
-    )
-    w.onerror = (err) => logger.error('[Worker] Initialization error:', err)
-    setWorker(w)
-    return () => {
-      w.terminate()
-      setWorker(null)
+    try {
+      const w = new TokenWorker()
+      w.onerror = (err) => logger.error('[Worker] Initialization error:', err)
+      setWorker(w)
+      return () => {
+        w.terminate()
+        setWorker(null)
+      }
+    } catch (err) {
+      logger.error('[Worker] Failed to create TokenWorker:', err)
     }
   }, [])
 
@@ -67,8 +72,10 @@ export const useTokenAggregation = (files: FileItem[]) => {
       if (!results || !Array.isArray(results)) return
 
       results.forEach((r: WorkerResult) => {
+        processingPathsRef.current.delete(r.id)
+
         if (!r.success) {
-          processingPathsRef.current.delete(r.id)
+          logger.warn(`[TokenAggregation] File ${r.id} returned success: false`)
           return
         }
 
@@ -85,29 +92,32 @@ export const useTokenAggregation = (files: FileItem[]) => {
         }
       })
 
-      if (bufferTimer) clearTimeout(bufferTimer)
-      bufferTimer = setTimeout(() => {
-        const updates = { ...resultsBuffer }
-        Object.keys(resultsBuffer).forEach((k) => delete resultsBuffer[k])
+      // Use a non-clearing interval or a leading-edge throttle for the buffer flush
+      if (!bufferTimer) {
+        bufferTimer = setTimeout(() => {
+          bufferTimer = null
+          const updates = { ...resultsBuffer }
+          // Clear buffer
+          Object.keys(resultsBuffer).forEach((k) => delete resultsBuffer[k])
 
-        setTokenMap((prev) => {
-          const next = { ...prev, ...updates }
-          Object.keys(updates).forEach((id) => {
-            processingPathsRef.current.delete(id)
+          setTokenMap((prev) => {
+            const next = { ...prev, ...updates }
+            Object.keys(updates).forEach((id) => {
+              processingPathsRef.current.delete(id)
 
-            // Check for "edit during flight"
-            const file = filesRef.current.find((f) => f.path === id)
-            if (file && file.content && typeof file.content === 'string') {
-              const currentHash = TokenService.hashContent(file.content)
-              if (currentHash !== updates[id].hash) {
-                dirtyQueueRef.current.add(id)
-                setQueueTrigger((q) => q + 1)
+              // Check for "edit during flight"
+              const file = filesRef.current.find((f) => f.path === id)
+              if (file && file.content && typeof file.content === 'string') {
+                const currentHash = TokenService.hashContent(file.content)
+                if (currentHash !== updates[id].hash) {
+                  dirtyQueueRef.current.add(id)
+                }
               }
-            }
+            })
+            return next
           })
-          return next
-        })
-      }, 100)
+        }, 500) // Batch worker responses every 500ms to prevent massive tree rebuilds from locking the UI
+      }
     }
 
     return () => {
@@ -120,7 +130,6 @@ export const useTokenAggregation = (files: FileItem[]) => {
   useEffect(() => {
     const newMetadata: Record<string, TokenMetadata> = {}
     let hasChanges = false
-    let addedToQueue = false
 
     const currentPaths = new Set(files.map((f) => f.path))
 
@@ -130,20 +139,30 @@ export const useTokenAggregation = (files: FileItem[]) => {
     }
 
     for (const file of files) {
-      if (
-        file.kind !== 'file' ||
-        !file.content ||
-        typeof file.content !== 'string'
-      )
+      if (file.kind !== 'file' || file.content === undefined) continue
+      const content = file.content
+      if (typeof content !== 'string') {
+        // Binary or missing content: treat as precise (heuristic is the only option here)
+        // to avoid blocking the global precision indicator.
+        const current = tokenMapRef.current[file.path]
+        if (!current) {
+          newMetadata[file.path] = {
+            tokens: file.tokens || 0,
+            isPrecise: true,
+          }
+          hasChanges = true
+        }
         continue
+      }
 
       let hash = contentHashesRef.current.get(file.path)
       if (hash === undefined) {
-        hash = TokenService.hashContent(file.content)
+        hash = TokenService.hashContent(content)
         contentHashesRef.current.set(file.path, hash)
       }
 
       const current = tokenMapRef.current[file.path]
+      const currentlyIgnored = file.isIgnored ?? false
 
       if (!current || current.hash !== hash) {
         const cached = hashCacheRef.current.get(hash)
@@ -153,23 +172,32 @@ export const useTokenAggregation = (files: FileItem[]) => {
             isPrecise: true,
             hash,
           }
+        } else if (content.length > 500 * 1024 || isBinaryFile(file.path)) {
+          // Skip precision worker for files over 500KB or binary files to prevent browser/worker CPU exhaustion.
+          // For such files, the heuristic (char count / 4) is extremely close and perfectly sufficient.
+          newMetadata[file.path] = {
+            tokens: Math.ceil(content.length / 4),
+            isPrecise: true,
+            hash,
+          }
         } else {
           newMetadata[file.path] = {
-            tokens: TokenService.getTokenEstimate(file.content),
+            tokens: TokenService.getTokenEstimate(content),
             isPrecise: false,
             hash,
           }
-          dirtyQueueRef.current.add(file.path)
-          addedToQueue = true
+          if (!currentlyIgnored) {
+            dirtyQueueRef.current.add(file.path)
+          }
         }
         hasChanges = true
       } else if (
         !current.isPrecise &&
+        !currentlyIgnored &&
         !processingPathsRef.current.has(file.path) &&
         !dirtyQueueRef.current.has(file.path)
       ) {
         dirtyQueueRef.current.add(file.path)
-        addedToQueue = true
       }
     }
 
@@ -188,45 +216,92 @@ export const useTokenAggregation = (files: FileItem[]) => {
       if (hasChanges) return { ...next, ...newMetadata }
       return changed ? next : prev
     })
-    if (addedToQueue) setQueueTrigger((q) => q + 1)
-  }, [files]) // Only depend on files; tokenMap accessed via Ref to avoid loop
 
-  // 3. Background Processing (Debounced Batches)
+    // Cleanup: If things became ignored, remove them from the dirty queue
+    const toRemove: string[] = []
+    for (const p of dirtyQueueRef.current) {
+      const f = filesRef.current.find((file) => file.path === p)
+      if (!f || f.isIgnored) toRemove.push(p)
+    }
+    toRemove.forEach((p) => dirtyQueueRef.current.delete(p))
+  }, [files, isIgnored]) // Added isIgnored to deps to trigger re-sync on ignore changes
+
+  const isIgnoredRef = useRef(isIgnored)
+  isIgnoredRef.current = isIgnored
+
+  // 3. Background Processing (Stable Loop)
   useEffect(() => {
-    if (!worker || dirtyQueueRef.current.size === 0) return
+    if (!worker) return
 
-    const timer = setTimeout(() => {
-      const allDirty = Array.from(dirtyQueueRef.current)
-      dirtyQueueRef.current.clear()
-      if (allDirty.length === 0) return
+    let isProcessingBatch = false
+    const processQueue = async () => {
+      if (isProcessingBatch || dirtyQueueRef.current.size === 0) return
+      isProcessingBatch = true
+
+      const allDirty = Array.from(dirtyQueueRef.current) as string[]
+
+      const currentFiles = filesRef.current
+
+      // Prioritize: Move non-ignored files to the front of the batch
+      // and filter out any that became ignored since they were added to the queue
+      // Filter out ignored files using the O(1) file property instead of expensive regex
+      const prioritizedAndFiltered = allDirty.filter((path: string) => {
+        const file = currentFiles.find((f) => f.path === path)
+        return file && !file.isIgnored
+      })
+
+      if (prioritizedAndFiltered.length === 0) {
+        dirtyQueueRef.current.clear()
+        isProcessingBatch = false
+        return
+      }
 
       const fileLookup = new Map<string, string>()
-      files.forEach((f) => {
+      currentFiles.forEach((f) => {
         if (f.kind === 'file' && typeof f.content === 'string')
           fileLookup.set(f.path, f.content)
       })
 
-      const batch = allDirty
-        .map((path: string) => {
-          const content = fileLookup.get(path)
-          if (content === undefined) return null
-          processingPathsRef.current.add(path)
-          const hash =
-            contentHashesRef.current.get(path) ||
-            TokenService.hashContent(content)
-          return { id: path, content, hash }
-        })
-        .filter(Boolean) as Array<{ id: string; content: string; hash: string }>
+      let currentBatchSize = 0
+      const MAX_BATCH_BYTES = 2 * 1024 * 1024 // 2MB max per postMessage to prevent main thread GC locking
+
+      const batch: Array<{ id: string; content: string; hash: string }> = []
+
+      for (const path of prioritizedAndFiltered) {
+        const content = fileLookup.get(path)
+        if (content === undefined) {
+          dirtyQueueRef.current.delete(path)
+          continue
+        }
+
+        // Stop adding to batch if we exceed the payload limit (unless it's the very first file)
+        if (
+          batch.length > 0 &&
+          currentBatchSize + content.length > MAX_BATCH_BYTES
+        ) {
+          break
+        }
+
+        dirtyQueueRef.current.delete(path)
+        processingPathsRef.current.add(path)
+        const hash =
+          contentHashesRef.current.get(path) ||
+          TokenService.hashContent(content)
+        batch.push({ id: path, content, hash })
+        currentBatchSize += content.length
+      }
 
       if (batch.length > 0) {
-        const BATCH_SIZE = 500
-        for (let i = 0; i < batch.length; i += BATCH_SIZE) {
-          worker.postMessage({ files: batch.slice(i, i + BATCH_SIZE) })
-        }
+        worker.postMessage({ files: batch })
+      } else {
+        isProcessingBatch = false
       }
-    }, 500)
-    return () => clearTimeout(timer)
-  }, [worker, queueTrigger, files])
+      isProcessingBatch = false
+    }
+
+    const interval = setInterval(processQueue, 500)
+    return () => clearInterval(interval)
+  }, [worker])
 
   const computeTreeWeights = useCallback(
     (node: TreeItem) => TokenService.computeTreeWeights(node, tokenMap),

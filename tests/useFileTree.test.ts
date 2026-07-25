@@ -5,7 +5,14 @@ import { FileItem } from '../src/core/types'
 
 describe('useFileTree', () => {
   it('returns root node with empty children for empty file list', () => {
-    const { result } = renderHook(() => useFileTree([], () => false))
+    const { result } = renderHook(() =>
+      useFileTree(
+        [],
+        () => false,
+        () => ({ ignored: false }),
+        () => false
+      )
+    )
 
     expect(result.current.name).toBe('Root')
     expect(result.current.path).toBe('')
@@ -18,7 +25,14 @@ describe('useFileTree', () => {
       { name: 'test.txt', path: 'test.txt', kind: 'file', content: 'hello' },
     ]
 
-    const { result } = renderHook(() => useFileTree(files, () => false))
+    const { result } = renderHook(() =>
+      useFileTree(
+        files,
+        () => false,
+        () => ({ ignored: false }),
+        () => false
+      )
+    )
 
     // Single file stays under Root, only single directory gets promoted
     expect(result.current.name).toBe('Root')
@@ -44,7 +58,14 @@ describe('useFileTree', () => {
       },
     ]
 
-    const { result } = renderHook(() => useFileTree(files, () => false))
+    const { result } = renderHook(() =>
+      useFileTree(
+        files,
+        () => false,
+        () => ({ ignored: false }),
+        () => false
+      )
+    )
 
     // Should promote single root directory
     expect(result.current.name).toBe('src')
@@ -74,7 +95,14 @@ describe('useFileTree', () => {
       { name: 'zdir', path: 'zdir', kind: 'directory' },
     ]
 
-    const { result } = renderHook(() => useFileTree(files, () => false))
+    const { result } = renderHook(() =>
+      useFileTree(
+        files,
+        () => false,
+        () => ({ ignored: false }),
+        () => false
+      )
+    )
 
     const children = result.current.children || []
     expect(children[0].kind).toBe('directory') // adir
@@ -98,6 +126,8 @@ describe('useFileTree', () => {
     const { result: result2 } = renderHook(() =>
       useFileTree(
         [...files, { name: 'testdir', path: 'testdir', kind: 'directory' }],
+        () => false,
+        () => ({ ignored: false }),
         () => false
       )
     )
@@ -114,7 +144,14 @@ describe('useFileTree', () => {
       { name: 'deep.txt', path: 'a/b/c/d/e/deep.txt', kind: 'file' },
     ]
 
-    const { result } = renderHook(() => useFileTree(files, () => false))
+    const { result } = renderHook(() =>
+      useFileTree(
+        files,
+        () => false,
+        () => ({ ignored: false }),
+        () => false
+      )
+    )
 
     // Should promote 'e' as the Minimum Common Root
     expect(result.current.name).toBe('e')
@@ -138,7 +175,14 @@ describe('useFileTree', () => {
       { name: 'c.txt', path: 'folder/c.txt', kind: 'file' },
     ]
 
-    const { result } = renderHook(() => useFileTree(files, () => false))
+    const { result } = renderHook(() =>
+      useFileTree(
+        files,
+        () => false,
+        () => ({ ignored: false }),
+        () => false
+      )
+    )
 
     expect(result.current.name).toBe('folder')
     expect(result.current.children).toHaveLength(3)
@@ -150,7 +194,14 @@ describe('useFileTree', () => {
       { name: 'file2.txt', path: 'project/file2.txt', kind: 'file' },
     ]
 
-    const { result } = renderHook(() => useFileTree(files, () => false))
+    const { result } = renderHook(() =>
+      useFileTree(
+        files,
+        () => false,
+        () => ({ ignored: false }),
+        () => false
+      )
+    )
 
     // Should return 'project' as root, not a synthetic root with 'project' as child
     expect(result.current.name).toBe('project')
@@ -163,7 +214,14 @@ describe('useFileTree', () => {
       { name: 'file2.txt', path: 'project2/file2.txt', kind: 'file' },
     ]
 
-    const { result } = renderHook(() => useFileTree(files, () => false))
+    const { result } = renderHook(() =>
+      useFileTree(
+        files,
+        () => false,
+        () => ({ ignored: false }),
+        () => false
+      )
+    )
 
     // Should return synthetic root with both projects as children
     expect(result.current.name).toBe('Root')
@@ -177,7 +235,14 @@ describe('useFileTree', () => {
       { name: 'another.txt', path: 'another.txt', kind: 'file' },
     ]
 
-    const { result } = renderHook(() => useFileTree(files, () => false))
+    const { result } = renderHook(() =>
+      useFileTree(
+        files,
+        () => false,
+        () => ({ ignored: false }),
+        () => false
+      )
+    )
 
     // Multiple root files should be under synthetic root
     expect(result.current.name).toBe('Root')
@@ -189,7 +254,14 @@ describe('useFileTree', () => {
       { name: 'file.txt', path: '/src/file.txt', kind: 'file' },
     ]
 
-    const { result } = renderHook(() => useFileTree(files, () => false))
+    const { result } = renderHook(() =>
+      useFileTree(
+        files,
+        () => false,
+        () => ({ ignored: false }),
+        () => false
+      )
+    )
 
     // Leading slash should be handled, promoting 'src'
     expect(result.current.name).toBe('src')
@@ -201,7 +273,14 @@ describe('useFileTree', () => {
       { name: 'file.txt', path: 'src//file.txt', kind: 'file' },
     ]
 
-    const { result } = renderHook(() => useFileTree(files, () => false))
+    const { result } = renderHook(() =>
+      useFileTree(
+        files,
+        () => false,
+        () => ({ ignored: false }),
+        () => false
+      )
+    )
 
     // Empty segments should be filtered out
     expect(result.current.name).toBe('src')
@@ -214,9 +293,11 @@ describe('useFileTree', () => {
       { name: 'file.txt', path: 'file.txt', kind: 'file' },
     ]
     const isIgnored = () => false
+    const isNegated = () => false
+    const getIgnoreResult = () => ({ ignored: false })
 
     const { result, rerender } = renderHook(
-      ({ files }) => useFileTree(files, isIgnored),
+      ({ files }) => useFileTree(files, isIgnored, getIgnoreResult, isNegated),
       {
         initialProps: { files },
       }
@@ -241,7 +322,13 @@ describe('useFileTree', () => {
     ]
 
     const { result, rerender } = renderHook(
-      ({ files }) => useFileTree(files, () => false),
+      ({ files }) =>
+        useFileTree(
+          files,
+          () => false,
+          () => ({ ignored: false }),
+          () => false
+        ),
       {
         initialProps: { files: files1 },
       }
@@ -265,7 +352,14 @@ describe('useFileTree', () => {
       { name: 'main.js', path: 'project/main.js', kind: 'file' },
     ]
 
-    const { result } = renderHook(() => useFileTree(files, () => false))
+    const { result } = renderHook(() =>
+      useFileTree(
+        files,
+        () => false,
+        () => ({ ignored: false }),
+        () => false
+      )
+    )
 
     expect(result.current.name).toBe('project')
     const children = result.current.children || []
@@ -286,7 +380,14 @@ describe('useFileTree', () => {
       { name: 'file.txt', path: 'some.dir/another.dir/file.txt', kind: 'file' },
     ]
 
-    const { result } = renderHook(() => useFileTree(files, () => false))
+    const { result } = renderHook(() =>
+      useFileTree(
+        files,
+        () => false,
+        () => ({ ignored: false }),
+        () => false
+      )
+    )
 
     expect(result.current.name).toBe('another.dir')
     expect(result.current.children?.[0].name).toBe('file.txt')

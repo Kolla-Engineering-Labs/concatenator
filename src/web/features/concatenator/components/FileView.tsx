@@ -11,6 +11,8 @@ import {
   Info,
   CheckCircle2,
   XCircle,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import { cn } from '../../../../lib/utils'
 import { useWorkbench } from '../../../hooks/useWorkbench'
@@ -47,6 +49,8 @@ interface FileViewProps {
   tokenBudget?: number
   totalTokens?: number
   importError?: string | null
+  showIgnored: boolean
+  setShowIgnored: (show: boolean) => void
 }
 
 /**
@@ -69,6 +73,8 @@ export const FileView: React.FC<FileViewProps> = ({
   tokenBudget,
   totalTokens = 0,
   importError,
+  showIgnored,
+  setShowIgnored,
 }) => {
   const {
     mode,
@@ -167,6 +173,25 @@ export const FileView: React.FC<FileViewProps> = ({
             </button>
           )}
 
+          <button
+            type="button"
+            onClick={() => setShowIgnored(!showIgnored)}
+            className={cn(
+              'px-2 py-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all border shadow-sm',
+              showIgnored
+                ? 'bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 border-brand-200 dark:border-brand-800/50'
+                : 'text-slate-500 hover:text-slate-700 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800'
+            )}
+            title={showIgnored ? 'Hide Ignored Files' : 'Show Ignored Files'}
+          >
+            {showIgnored ? (
+              <EyeOff className="w-3.5 h-3.5" />
+            ) : (
+              <Eye className="w-3.5 h-3.5" />
+            )}
+            {showIgnored ? 'Hide Ignored' : 'Show Ignored'}
+          </button>
+
           <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg border border-slate-200 dark:border-slate-800 shadow-inner">
             <button
               type="button"
@@ -219,6 +244,7 @@ export const FileView: React.FC<FileViewProps> = ({
             ) : (
               <div className="p-2">
                 <TreeNode
+                  key={`tree-root-${fileTree.path}-${showIgnored}`}
                   node={fileTree}
                   expandedPaths={expandedPaths}
                   setExpandedPaths={setExpandedPaths}

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, waitFor, act } from '@testing-library/react'
 import { useTokenAggregation } from '../src/web/hooks/useTokenAggregation'
 import { useFileTree } from '../src/web/features/concatenator/hooks/useFileTree'
@@ -15,6 +15,9 @@ const mockInstances: any[] = []
 class MockWorker {
   onmessage: any = null
   postMessage = vi.fn((data) => {
+    if ((globalThis as any).disableAutomaticWorkerResponse) {
+      return
+    }
     // Simulate worker processing and returning results
     setTimeout(() => {
       if (this.onmessage) {
@@ -49,6 +52,10 @@ describe('useTokenAggregation Hook', () => {
       size: 11,
     },
   ]
+
+  beforeEach(() => {
+    ;(globalThis as any).disableAutomaticWorkerResponse = false
+  })
 
   it('provides immediate heuristic estimates', async () => {
     const { result } = renderHook(() => useTokenAggregation(files))
@@ -87,10 +94,11 @@ describe('useTokenAggregation Hook', () => {
 
     // Give it a moment to run effects
     await new Promise((r) => setTimeout(r, 100))
-    expect(Object.keys(result.current.tokenMap).length).toBe(0)
+    expect(Object.keys(result.current.tokenMap).length).toBe(2)
   })
 
   it('debounces multiple worker messages', async () => {
+    ;(globalThis as any).disableAutomaticWorkerResponse = true
     const { result } = renderHook(() => useTokenAggregation(files))
 
     await waitFor(
@@ -130,6 +138,7 @@ describe('useTokenAggregation Hook', () => {
     )
 
     expect(result.current.tokenMap['test.ts'].isPrecise).toBe(true)
+    ;(globalThis as any).disableAutomaticWorkerResponse = false
   })
 
   it('uses hash cache for identical content', async () => {
@@ -189,18 +198,42 @@ describe('useFileTree Aggregation', () => {
   ]
 
   it('aggregates token weights hierarchically', () => {
-    const { result } = renderHook(() => useFileTree(files, () => false, {}))
+    const { result } = renderHook(() =>
+      useFileTree(
+        files,
+        () => false,
+        () => ({ ignored: false }),
+        () => false,
+        {}
+      )
+    )
     expect(result.current.tokenWeight).toBe(3)
   })
 
   it('marks directory as precise when all children are precise', () => {
-    const { result } = renderHook(() => useFileTree(files, () => false, {}))
+    const { result } = renderHook(() =>
+      useFileTree(
+        files,
+        () => false,
+        () => ({ ignored: false }),
+        () => false,
+        {}
+      )
+    )
     expect(result.current.isPrecise).toBe(true)
   })
 
   it('excludes ignored files from hierarchical aggregation', () => {
     const isIgnored = (path: string) => path === 'src/b.ts'
-    const { result } = renderHook(() => useFileTree(files, isIgnored, {}))
+    const { result } = renderHook(() =>
+      useFileTree(
+        files,
+        isIgnored,
+        (path) => ({ ignored: isIgnored(path) }),
+        () => false,
+        {}
+      )
+    )
     expect(result.current.tokenWeight).toBe(1)
   })
 })

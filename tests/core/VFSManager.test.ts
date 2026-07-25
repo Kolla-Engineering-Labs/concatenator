@@ -45,6 +45,7 @@ describe('VFSManager', () => {
 
     const logFile = result.tree.children?.find((c) => c.name === 'secret.log')
     expect(logFile?.isIgnored).toBe(true)
+    expect(logFile?.reason).toBe('Matched glob *.log')
   })
 
   it('should handle regex ignore patterns', () => {

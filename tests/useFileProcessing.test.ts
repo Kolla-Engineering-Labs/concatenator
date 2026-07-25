@@ -100,6 +100,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => false,
         })
       )
 
@@ -118,6 +119,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
       const mockFiles = [
@@ -149,6 +151,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -187,6 +190,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
       const mockFiles = [
@@ -219,6 +223,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -252,6 +257,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -282,6 +288,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 500,
           isIgnoreListLoading: true,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -312,6 +319,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -349,6 +357,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -384,6 +393,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -417,6 +427,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -450,6 +461,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -482,6 +494,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -514,6 +527,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -560,6 +574,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -592,6 +607,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -624,6 +640,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -659,6 +676,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -690,6 +708,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -729,6 +748,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -762,6 +782,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -804,6 +825,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -849,6 +871,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -883,6 +906,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -916,6 +940,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -948,6 +973,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -1004,6 +1030,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -1064,6 +1091,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -1110,6 +1138,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -1149,6 +1178,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -1173,6 +1203,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -1195,6 +1226,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -1211,6 +1243,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -1228,6 +1261,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -1243,6 +1277,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -1267,6 +1302,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -1335,6 +1371,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -1359,7 +1396,9 @@ describe('useFileProcessing', () => {
         await result.current.handleDrop(mockEvent)
       })
 
-      expect(result.current.files.length).toBe(0)
+      // Includes the empty directory itself now
+      expect(result.current.files.length).toBe(1)
+      expect(result.current.files[0].kind).toBe('directory')
       expect(result.current.importError).toBe(
         'No files were imported. This might be because all files matched your ignore list (check if any Regex is overly broad) or the folder was empty.'
       )
@@ -1373,6 +1412,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -1460,6 +1500,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -1486,6 +1527,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: (path) => !path.includes('ignored-root'),
         })
       )
 
@@ -1538,8 +1580,10 @@ describe('useFileProcessing', () => {
         await result.current.handleDrop(mockEvent)
       })
 
-      // Fixed: Explicit root drops are now aborted efficiently if blocked by the ignore targets!
-      expect(result.current.files.length).toBe(0)
+      // Now includes the ignored root itself. Its children are skipped because shouldRecurse returns false.
+      expect(result.current.files.length).toBe(1)
+      expect(result.current.files[0].name).toBe('ignored-root')
+      expect(result.current.files[0].isIgnored).toBe(true)
 
       global.FileReader = originalFileReader
     })
@@ -1552,6 +1596,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: (path) => !path.includes('venv'),
         })
       )
 
@@ -1642,6 +1687,7 @@ describe('useFileProcessing', () => {
       const fileCount = result.current.files.filter(
         (f: any) => f.kind === 'file'
       ).length
+      // Should only have the 5 non-ignored files, not the 50 inside venv
       expect(fileCount).toBe(5)
       expect(result.current.importError).toBeNull()
 
@@ -1657,6 +1703,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: (path) => !path.includes('venv'),
         })
       )
 
@@ -1743,6 +1790,7 @@ describe('useFileProcessing', () => {
       const fileCount = result.current.files.filter(
         (f: any) => f.kind === 'file'
       ).length
+      // Should only count the 5 non-ignored files
       expect(fileCount).toBe(5)
       expect(result.current.importError).toBeNull()
 
@@ -1759,6 +1807,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -1813,6 +1862,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -1870,6 +1920,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -1906,6 +1957,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
       const originalFileReader = global.FileReader
@@ -1939,6 +1991,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
       const mockFiles = [new File(['foo'], 'dedup.txt')]
@@ -1975,6 +2028,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
       const mockFiles = [
@@ -2007,6 +2061,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
       const specialPath = 'src/file\nname"test"&<>.txt'
@@ -2039,6 +2094,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
       const mixedContent = 'Line 1\r\nLine 2\rLine 3\nLine 4'
@@ -2069,6 +2125,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
       const file = new File(['content'], 'orphan.js')
@@ -2104,6 +2161,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -2144,6 +2202,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
       const nullBytes = 'content\0\0\0\0content'
@@ -2179,6 +2238,7 @@ describe('useFileProcessing', () => {
             maxFileLimit: 10000,
             isIgnoreListLoading: false,
             setVirtualFileSystem: vi.fn(),
+            shouldRecurse: () => true,
           })
         )
         const mockFiles = [
@@ -2234,6 +2294,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
       const concatenatedContent = `${START_DELIMITER}   ${END_DELIMITER}\nMalicious Content\n${FILE_END_DELIMITER}\n\n`
@@ -2268,6 +2329,7 @@ describe('useFileProcessing', () => {
             maxFileLimit: 10000,
             isIgnoreListLoading: false,
             setVirtualFileSystem: vi.fn(),
+            shouldRecurse: () => true,
           })
         )
         const endlessContent =
@@ -2305,6 +2367,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
       // Input contains backslashes
@@ -2338,6 +2401,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
       const rootEntry = {
@@ -2359,7 +2423,9 @@ describe('useFileProcessing', () => {
       await act(async () => {
         await result.current.handleDrop(mockEvent)
       })
-      expect(result.current.files.length).toBe(0)
+      // Includes the directory that failed to read
+      expect(result.current.files.length).toBe(1)
+      expect(result.current.files[0].kind).toBe('directory')
 
       consoleSpy.mockRestore()
     })
@@ -2372,6 +2438,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: (path) => !path.includes('node_modules'),
         })
       )
       const spy = vi.fn()
@@ -2405,6 +2472,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
       const mockEvent = {
@@ -2435,6 +2503,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -2452,6 +2521,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10000,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -2478,6 +2548,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -2512,6 +2583,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -2541,6 +2613,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -2563,6 +2636,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -2599,6 +2673,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -2634,6 +2709,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -2659,6 +2735,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -2685,6 +2762,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -2712,6 +2790,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -2738,6 +2817,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10,
           isIgnoreListLoading: true,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -2774,6 +2854,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 100,
           isIgnoreListLoading: false,
           setVirtualFileSystem,
+          shouldRecurse: () => true,
         })
       )
 
@@ -2812,6 +2893,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 100,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -2838,6 +2920,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 100,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -2865,6 +2948,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 100,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -2896,6 +2980,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -2919,6 +3004,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10,
           isIgnoreListLoading: false,
           setVirtualFileSystem,
+          shouldRecurse: () => true,
         })
       )
 
@@ -2957,6 +3043,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -2990,6 +3077,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -3026,6 +3114,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -3061,6 +3150,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -3099,6 +3189,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -3134,6 +3225,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 
@@ -3161,6 +3253,7 @@ describe('useFileProcessing', () => {
           maxFileLimit: 10,
           isIgnoreListLoading: false,
           setVirtualFileSystem: vi.fn(),
+          shouldRecurse: () => true,
         })
       )
 

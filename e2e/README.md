@@ -49,6 +49,16 @@ npx playwright test concatenate.spec.ts
 npm run test:e2e:debug
 ```
 
+## CI/CD Workflow
+
+End-to-end tests run automatically in a dedicated GitHub Actions pipeline: [`.github/workflows/e2e.yml`](../.github/workflows/e2e.yml).
+
+- **Triggers**: Pull requests and pushes to `main`.
+- **Environment**: `ubuntu-latest` running Node.js 22 LTS (`node-version: '22.x'`).
+- **Browser Installation**: Installed via `npx playwright install --with-deps`.
+- **Test Command**: `npm run test:e2e`.
+- **Artifact Upload**: Uploads `playwright-report/` directory as `playwright-report` using `if: always()` to preserve test reports regardless of pass/fail outcome.
+
 ## Test Coverage
 
 ### Concatenate Mode Tests (`concatenate.spec.ts`)

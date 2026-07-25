@@ -4,7 +4,7 @@
  */
 
 import { useMemo } from 'react'
-import { FileItem, TreeItem } from '../../../../core/types'
+import { FileItem, TreeItem, IgnoreSource } from '../../../../core/types'
 
 const EMPTY_MAP = {}
 
@@ -14,6 +14,13 @@ const EMPTY_MAP = {}
 export const useFileTree = (
   filteredFiles: FileItem[],
   isIgnored: (path: string) => boolean,
+  getIgnoreResult: (path: string) => {
+    ignored: boolean
+    reason?: string
+    ignoreSource?: IgnoreSource
+    source?: IgnoreSource
+  },
+  isExplicitlyNegated: (path: string) => boolean,
   tokenMap: Record<string, { tokens: number; isPrecise: boolean }> = EMPTY_MAP
 ) => {
   const fileTree = useMemo(() => {
@@ -25,13 +32,39 @@ export const useFileTree = (
       isIgnored: false,
     }
 
+    const pathCache = new Map<
+      string,
+      { ignored: boolean; reason?: string; ignoreSource?: IgnoreSource }
+    >()
+    const negatedCache = new Map<string, boolean>()
+
     filteredFiles.forEach((file) => {
-      const parts = file.path.split('/').filter((p) => p !== '')
+      const normalizedPath = file.path.replace(/\\/g, '/')
+      const parts = normalizedPath.split('/').filter((p) => p !== '')
       let current = root
 
       parts.forEach((part, index) => {
         const isLast = index === parts.length - 1
         const currentPath = parts.slice(0, index + 1).join('/')
+
+        let ignoreResult = pathCache.get(currentPath)
+        if (!ignoreResult) {
+          const res = getIgnoreResult
+            ? getIgnoreResult(currentPath)
+            : { ignored: isIgnored(currentPath) }
+          ignoreResult = {
+            ignored: res.ignored,
+            reason: res.reason,
+            ignoreSource: res.ignoreSource ?? res.source,
+          }
+          pathCache.set(currentPath, ignoreResult)
+        }
+
+        let isNegatedResult = negatedCache.get(currentPath)
+        if (isNegatedResult === undefined) {
+          isNegatedResult = isExplicitlyNegated(currentPath)
+          negatedCache.set(currentPath, isNegatedResult)
+        }
 
         let existing = current.children?.find((c) => c.name === part)
 
@@ -41,7 +74,16 @@ export const useFileTree = (
             path: currentPath,
             kind: isLast ? file.kind : 'directory',
             children: isLast && file.kind === 'file' ? undefined : [],
-            isIgnored: file.isIgnored ?? isIgnored(currentPath),
+            isIgnored: isLast
+              ? (file.isIgnored ?? ignoreResult.ignored)
+              : ignoreResult.ignored,
+            reason: isLast
+              ? (file.reason ?? ignoreResult.reason)
+              : ignoreResult.reason,
+            ignoreSource: isLast
+              ? (file.ignoreSource ?? ignoreResult.ignoreSource)
+              : ignoreResult.ignoreSource,
+            isNegated: isLast ? (file as FileItem).isNegated : isNegatedResult,
             file: isLast ? file : undefined,
           }
           current.children?.push(existing)
@@ -101,19 +143,16 @@ export const useFileTree = (
     }
     sortTree(root)
 
-    // Path Normalization: Recursively prune single-child directories
-    // to ensure the tree starts at the Minimum Common Root.
-    let displayRoot = root
+    let promotedRoot = root
     while (
-      displayRoot.children &&
-      displayRoot.children.length === 1 &&
-      displayRoot.children[0].kind === 'directory'
+      promotedRoot.children &&
+      promotedRoot.children.length === 1 &&
+      promotedRoot.children[0].kind === 'directory'
     ) {
-      displayRoot = displayRoot.children[0]
+      promotedRoot = promotedRoot.children[0]
     }
-
-    return displayRoot
-  }, [filteredFiles, isIgnored, tokenMap])
+    return promotedRoot
+  }, [filteredFiles, isIgnored, getIgnoreResult, isExplicitlyNegated, tokenMap])
 
   return fileTree
 }

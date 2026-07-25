@@ -5,14 +5,18 @@ import { QuickLook } from '../src/web/features/concatenator/components/QuickLook
 import { FileItem } from '../src/core/types'
 
 // Mock Lucide icons
-vi.mock('lucide-react', () => ({
-  X: () => <div data-testid="icon-x" />,
-  FileCode: () => <div data-testid="icon-file-code" />,
-  Copy: () => <div data-testid="icon-copy" />,
-  Check: () => <div data-testid="icon-check" />,
-  Image: () => <div data-testid="icon-image" />,
-  FileText: () => <div data-testid="icon-file-text" />,
-}))
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('lucide-react')>()
+  return {
+    ...actual,
+    X: () => <div data-testid="icon-x" />,
+    FileCode: () => <div data-testid="icon-file-code" />,
+    Copy: () => <div data-testid="icon-copy" />,
+    Check: () => <div data-testid="icon-check" />,
+    Image: () => <div data-testid="icon-image" />,
+    FileText: () => <div data-testid="icon-file-text" />,
+  }
+})
 
 // Mock motion
 vi.mock('motion/react', () => ({

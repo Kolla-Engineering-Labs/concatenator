@@ -176,6 +176,20 @@ legacy content
       expect(result.files[0].path).toBe('legacy.txt')
       expect(result.files[0].content).toBe('legacy content')
     })
+
+    it('populates telemetry payload and safely continues extraction when encountering skipped or malformed file entries', () => {
+      const files = [
+        { path: 'valid.txt', content: 'valid' },
+        { path: 'second.txt', content: 'content' },
+      ]
+      const concatenated = concatenate(files, '2024-01-01', 'sec123')
+      const result = deconcatenate(concatenated)
+
+      expect(result.foundAny).toBe(true)
+      expect(result.files).toHaveLength(2)
+      expect(result.telemetry).toBeDefined()
+      expect(Array.isArray(result.telemetry.skipped)).toBe(true)
+    })
   })
 
   describe('deconcatenateHeader', () => {

@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { getEncoding } from 'js-tiktoken'
 import {
   TokenService,
   HeuristicStrategy,
@@ -13,6 +14,11 @@ import {
 import { TreeItem } from '../../src/core/types'
 
 describe('TokenService', () => {
+  beforeEach(async () => {
+    // Reset to default heuristic mode
+    await TokenService.loadPrecisionStrategy(undefined)
+  })
+
   describe('getTokenEstimate', () => {
     it('should return 0 for empty content', () => {
       expect(TokenService.getTokenEstimate('')).toBe(0)
@@ -26,19 +32,19 @@ describe('TokenService', () => {
 
   describe('getTokenCount', () => {
     it('should return 0 for empty content', () => {
-      expect(TokenService.getTokenCount('')).toBe(0)
-    })
-
-    it('should calculate tokens using current strategy', () => {
-      // By default it uses HeuristicStrategy (chars / 4)
-      expect(TokenService.getTokenCount('1234')).toBe(1)
+      expect(TokenService.getTokenCount('').count).toBe(0)
+      // Default heuristic: Math.ceil(length / 4)
+      // '1234' is length 4 => 1
+      // '12345' is length 5 => 2
+      // Using precise: 1234 is 1 token in cl100k
+      expect(TokenService.getTokenCount('1234').count).toBe(1)
     })
   })
 
   describe('Strategy Pattern', () => {
     it('HeuristicStrategy calculates tokens correctly', () => {
       const strategy = new HeuristicStrategy()
-      expect(strategy.calculate('Hello World')).toBe(3) // 11 chars / 4 = 2.75 -> 3
+      expect(strategy.calculate('Hello World').count).toBe(3) // 11 chars / 4 = ceil(2.75) = 3
     })
 
     it('PrecisionStrategy uses the provided encoder', () => {
@@ -46,26 +52,28 @@ describe('TokenService', () => {
         encode: (text: string) => new Uint32Array(text.split(' ').length),
       }
       const strategy = new PrecisionStrategy(mockEncoder)
-      expect(strategy.calculate('Hello World from Vitest')).toBe(4)
+      expect(strategy.calculate('Hello World from Vitest').count).toBe(4)
     })
   })
 
   describe('Precision Mode', () => {
     it('swaps to precision mode after loading', async () => {
-      // Note: We don't check isPrecise here because other tests might have loaded it already
-      await TokenService.loadPrecisionStrategy()
+      await TokenService.loadPrecisionStrategy(getEncoding('o200k_base'))
 
       expect(TokenService.isPrecise()).toBe(true)
-      // cl100k_base for "hello" is 1 token
-      expect(TokenService.getTokenCount('hello')).toBe(1)
-      // "Concatenator" is 3 tokens in cl100k_base (Conc + at + enator)
-      expect(TokenService.getTokenCount('Concatenator')).toBe(3)
+      // cl100k_base for "hello" is 1 token (same in o200k_base)
+      expect(TokenService.getTokenCount('hello').count).toBe(1)
+      // "Concatenator" is 3 tokens in cl100k_base / o200k_base
+      expect(TokenService.getTokenCount('Concatenator').count).toBe(3)
     })
   })
 
   describe('computeTreeWeights', () => {
+    beforeEach(async () => {
+      await TokenService.loadPrecisionStrategy(getEncoding('cl100k_base'))
+    })
+
     it('should bubble up weights in a nested structure', async () => {
-      await TokenService.loadPrecisionStrategy()
       const tree: TreeItem = {
         name: 'root',
         path: 'root',
@@ -172,6 +180,10 @@ describe('TokenService', () => {
   })
 
   describe('calculateAggregateTokens', () => {
+    beforeEach(async () => {
+      await TokenService.loadPrecisionStrategy(getEncoding('cl100k_base'))
+    })
+
     it('should calculate total tokens excluding ignored files', () => {
       const fileMap = {
         'src/a.ts': '12341234', // 3 tokens

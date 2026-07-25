@@ -11,7 +11,7 @@ import { logger } from '../lib/logger.js'
  * Strategy interface for token calculation.
  */
 export interface ITokenStrategy {
-  calculate(text: string): number
+  calculate(text: string): { count: number; model: string }
 }
 
 /**
@@ -19,9 +19,9 @@ export interface ITokenStrategy {
  * $1 token ≈ 4 characters$.
  */
 export class HeuristicStrategy implements ITokenStrategy {
-  calculate(text: string): number {
-    if (!text) return 0
-    return Math.ceil(text.length / 4)
+  calculate(text: string): { count: number; model: string } {
+    if (!text) return { count: 0, model: 'heuristic' }
+    return { count: Math.ceil(text.length / 4), model: 'heuristic' }
   }
 }
 
@@ -34,21 +34,23 @@ export interface ITiktokenEncoder {
  */
 export class PrecisionStrategy implements ITokenStrategy {
   private encoder: ITiktokenEncoder
+  private model: string
 
-  constructor(encoder: ITiktokenEncoder) {
+  constructor(encoder: ITiktokenEncoder, model: string = 'o200k_base') {
     this.encoder = encoder
+    this.model = model
   }
 
-  calculate(text: string): number {
-    if (!text) return 0
+  calculate(text: string): { count: number; model: string } {
+    if (!text) return { count: 0, model: this.model }
     try {
-      return this.encoder.encode(text).length
+      return { count: this.encoder.encode(text).length, model: this.model }
     } catch (err) {
       logger.warn(
         '[PrecisionStrategy] Tokenization failed, using heuristic.',
         err
       )
-      return Math.ceil(text.length / 4)
+      return { count: Math.ceil(text.length / 4), model: 'heuristic' }
     }
   }
 }
@@ -67,30 +69,27 @@ export class TokenService {
    * Initializes the precision strategy.
    * In Web UI, this is typically called via dynamic import to keep initial bundle lean.
    */
-  static async loadPrecisionStrategy(): Promise<void> {
-    if (this.loadingPromise) return this.loadingPromise
-
-    this.loadingPromise = (async () => {
-      try {
-        // Dynamic import ensures the main thread remains unblocked and bundle stays lean.
-        // o200k_base is the standard for gpt-4o.
-        const { getEncoding } = await import('js-tiktoken')
-        const encoder = getEncoding('o200k_base')
-        this.strategy = new PrecisionStrategy(encoder)
-        this._isPrecise = true
-      } catch {
-        this.strategy = new HeuristicStrategy()
-        this._isPrecise = false
-      }
-    })()
-
-    return this.loadingPromise
+  /**
+   * Initializes the precision strategy if an encoder instance is provided.
+   * Prevents bundling of BPE dictionaries on the main thread.
+   */
+  static async loadPrecisionStrategy(
+    encoder?: ITiktokenEncoder,
+    model: string = 'o200k_base'
+  ): Promise<void> {
+    if (encoder) {
+      this.strategy = new PrecisionStrategy(encoder, model)
+      this._isPrecise = true
+    } else {
+      this.strategy = new HeuristicStrategy()
+      this._isPrecise = false
+    }
   }
 
   /**
    * Calculate tokens using the current active strategy.
    */
-  static getTokenCount(text: string): number {
+  static getTokenCount(text: string): { count: number; model: string } {
     return this.strategy.calculate(text)
   }
 
@@ -98,14 +97,14 @@ export class TokenService {
    * Legacy alias for getTokenCount.
    */
   static getPreciseTokenCount(text: string): number {
-    return this.getTokenCount(text)
+    return this.getTokenCount(text).count
   }
 
   /**
    * Heuristic estimate (exposed for cases where precision isn't needed or available).
    */
   static getTokenEstimate(text: string): number {
-    return new HeuristicStrategy().calculate(text)
+    return new HeuristicStrategy().calculate(text).count
   }
 
   /**
@@ -119,13 +118,25 @@ export class TokenService {
    * Create a simple non-crypto hash for content caching
    */
   static hashContent(content: string): string {
+    const len = content.length
+    if (len === 0) return 'empty'
+
+    // O(1) hashing for massive strings: sample start, middle, and end rather than the entire file.
+    // This prevents main thread lockups on gigabyte-sized log/db files.
+    const sample =
+      len > 3000
+        ? content.slice(0, 1000) +
+          content.slice(Math.floor(len / 2), Math.floor(len / 2) + 1000) +
+          content.slice(-1000)
+        : content
+
     let hash = 0
-    for (let i = 0; i < content.length; i++) {
-      const char = content.charCodeAt(i)
+    for (let i = 0; i < sample.length; i++) {
+      const char = sample.charCodeAt(i)
       hash = (hash << 5) - hash + char
       hash |= 0 // Convert to 32bit integer
     }
-    return hash.toString(36) + content.length.toString(36)
+    return hash.toString(36) + ':' + len.toString(36)
   }
 
   /**
@@ -140,7 +151,7 @@ export class TokenService {
 
     for (const [path, content] of Object.entries(fileMap)) {
       if (!ignoreEngine.isIgnored(path)) {
-        totalTokens += this.getTokenCount(content)
+        totalTokens += this.getTokenCount(content).count
       }
     }
 
@@ -169,7 +180,7 @@ export class TokenService {
           node.file?.tokens !== undefined
             ? node.file.tokens
             : typeof node.file?.content === 'string'
-              ? this.getTokenCount(node.file.content)
+              ? this.getTokenCount(node.file.content).count
               : 0,
         isPrecise:
           node.file?.isPrecise ??

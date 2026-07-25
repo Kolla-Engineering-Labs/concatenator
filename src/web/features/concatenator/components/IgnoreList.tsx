@@ -5,8 +5,16 @@
 
 import React from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { Maximize2, Minimize2, X, Plus, ChevronUp } from 'lucide-react'
+import {
+  Maximize2,
+  Minimize2,
+  X,
+  Plus,
+  ChevronUp,
+  RotateCcw,
+} from 'lucide-react'
 import { useLocalStorage } from '../../../hooks/useLocalStorage'
+import { useWorkbench } from '../../../hooks/useWorkbench'
 import { cn } from '../../../../lib/utils'
 
 interface IgnoreListProps {
@@ -39,6 +47,7 @@ export const IgnoreList: React.FC<IgnoreListProps> = ({
   autoSaveIgnore,
   setAutoSaveIgnore,
 }) => {
+  const { suspendedRules = [], unsuspendRule } = useWorkbench()
   const [isIgnoreListExpanded, setIsIgnoreListExpanded] = useLocalStorage(
     'concat_ignore_expanded',
     false
@@ -120,7 +129,10 @@ export const IgnoreList: React.FC<IgnoreListProps> = ({
                 />
                 <button
                   type="button"
-                  onClick={addIgnoreItem}
+                  onClick={(e) => {
+                    e.preventDefault()
+                    addIgnoreItem()
+                  }}
                   disabled={!newIgnoreItem}
                   className="absolute right-1 top-1/2 -translate-y-1/2 p-1.5 text-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 disabled:text-slate-300 dark:disabled:text-slate-600 rounded-md transition-colors"
                   title="Add ignore pattern"
@@ -165,29 +177,65 @@ export const IgnoreList: React.FC<IgnoreListProps> = ({
             >
               <div className="flex flex-wrap gap-2">
                 <AnimatePresence mode="popLayout">
-                  {displayedItems.map((item) => (
-                    <motion.div
-                      key={item}
-                      layout
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.8 }}
-                      transition={{ duration: 0.15 }}
-                      className="flex items-center gap-1.5 px-2 py-1 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-[11px] font-medium group border border-slate-200 dark:border-slate-700 hover:border-brand-300 dark:hover:border-brand-700 transition-colors"
-                      data-testid={`ignore-item-${item}`}
-                    >
-                      <span className="truncate max-w-[120px]" title={item}>
-                        {item}
-                      </span>
-                      <button
-                        onClick={() => removeIgnoreItem(item)}
-                        className="p-0.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md text-slate-400 hover:text-red-500 transition-colors"
-                        title={`Remove ${item}`}
+                  {displayedItems.map((item) => {
+                    const isSuspended = suspendedRules.includes(item)
+                    return (
+                      <motion.div
+                        key={item}
+                        layout
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.8 }}
+                        transition={{ duration: 0.15 }}
+                        className={cn(
+                          'flex items-center gap-1.5 px-2 py-1 rounded-lg text-[11px] font-medium group border transition-colors',
+                          isSuspended
+                            ? 'bg-slate-100/50 dark:bg-slate-800/40 text-slate-400 dark:text-slate-500 border-slate-200/50 dark:border-slate-800/50 opacity-60'
+                            : item.startsWith('!')
+                              ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 hover:border-emerald-300'
+                              : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-brand-300 dark:hover:border-brand-700'
+                        )}
+                        data-testid={`ignore-item-${item}`}
+                        data-suspended={isSuspended}
                       >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </motion.div>
-                  ))}
+                        <span
+                          className={cn(
+                            'truncate max-w-[120px]',
+                            isSuspended &&
+                              'line-through decoration-slate-400/50'
+                          )}
+                          title={isSuspended ? `${item} (Suspended)` : item}
+                        >
+                          {item}
+                        </span>
+                        {isSuspended && unsuspendRule && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault()
+                              unsuspendRule(item)
+                            }}
+                            className="p-0.5 hover:bg-brand-100 dark:hover:bg-brand-900/30 rounded-md text-brand-500 hover:text-brand-600 transition-colors"
+                            title={`Re-enable ${item}`}
+                            data-testid={`unsuspend-item-${item}`}
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault()
+                            removeIgnoreItem(item)
+                          }}
+                          className="p-0.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md text-slate-400 hover:text-red-500 transition-colors"
+                          title={`Remove ${item}`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </motion.div>
+                    )
+                  })}
                 </AnimatePresence>
 
                 {hasMore && !isIgnoreListExpanded && (

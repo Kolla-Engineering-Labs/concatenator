@@ -29,11 +29,11 @@ export default defineConfig(({ mode }) => {
       exclude: ['e2e/**/*', 'node_modules/**/*'],
       reporters: env.CI ? ['default', 'junit'] : ['default'],
       outputFile: {
-        junit: './test-report.junit.xml',
+        junit: './coverage/test-report.junit.xml',
       },
       coverage: {
         provider: 'v8',
-        reporter: env.CI ? ['lcov', 'json-summary'] : ['text', 'html'],
+        reporter: env.CI ? ['lcov', 'json-summary', 'text'] : ['text', 'html'],
         reportsDirectory: './coverage',
         all: true,
         exclude: [
@@ -101,14 +101,21 @@ export default defineConfig(({ mode }) => {
         brotliSize: true,
       }),
     ],
+    // v0.8.0-observability-sync: force config reload to pick up package.json version
     define: {
       PROCESS_VERSION: JSON.stringify(
         JSON.parse(fs.readFileSync('./package.json', 'utf-8')).version
       ),
+      'process.platform': JSON.stringify('browser'),
+      'process.env': {},
+      'path.sep': JSON.stringify('/'),
     },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
+        ...(mode !== 'test'
+          ? { path: path.resolve(__dirname, './src/web/path-shim.ts') }
+          : {}),
       },
     },
     server: {
@@ -147,7 +154,7 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       sourcemap: false, // Disabled for bit-for-bit determinism
-      chunkSizeWarningLimit: 600,
+      chunkSizeWarningLimit: 6000,
       rollupOptions: {
         output: {
           entryFileNames: 'assets/[name].js',
@@ -176,10 +183,6 @@ export default defineConfig(({ mode }) => {
             // 5. Move jsPDF to its own chunk (it's huge)
             if (id.includes('node_modules/jspdf')) {
               return 'vendor-jspdf'
-            }
-            // 6. Move tiktoken to its own chunk (it's huge)
-            if (id.includes('node_modules/js-tiktoken')) {
-              return 'vendor-tiktoken'
             }
           },
         },

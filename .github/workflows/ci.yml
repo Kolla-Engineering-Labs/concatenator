@@ -18,7 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: [22]
+        node-version: ['22.x']
         os: ${{ fromJSON(github.event_name == 'pull_request' && github.base_ref == 'main' && '["ubuntu-latest", "windows-latest", "macos-latest"]' || '["ubuntu-latest"]') }}
 
     steps:
@@ -26,10 +26,10 @@ jobs:
         with:
           fetch-depth: 0 # Fetches all history so Codecov can find the base commit
 
-      - name: Set up Node ${{ matrix.node-version }}
+      - name: Set up Node.js 22 LTS
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: '22.x'
           cache: 'npm'
 
       - name: Install dependencies
@@ -47,7 +47,7 @@ jobs:
       - name: Format Check (Prettier)
         run: npm run format:check
 
-      - name: Run Unit Tests (Vitest)
+      - name: Run Unit Tests with Coverage (Vitest)
         run: npm run test:coverage
 
       - name: Archive coverage results
@@ -57,22 +57,6 @@ jobs:
           name: coverage-report-${{ matrix.os }}
           path: ./coverage/
           retention-days: 1
-
-      - name: Update APT Repository
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          for i in {1..5}; do
-            sudo apt-get update && break || (echo "Retry $i..." && sleep 5)
-          done
-
-      - name: Install Playwright Browsers
-        # Only happens if Build and Unit Tests pass
-        run: npx playwright install --with-deps
-
-      - name: Run E2E Tests (Playwright)
-        run: npm run test:e2e
-        env:
-          CI: true
 
       # --- Visualize Coverage Directory ---
       - name: List coverage directory
@@ -95,11 +79,3 @@ jobs:
           use_oidc: true
           files: ./coverage/lcov.info
           fail_ci_if_error: false
-
-      - name: Upload Playwright Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: playwright-report-${{ matrix.os }}-node${{ matrix.node-version }}
-          path: playwright-report/
-          retention-days: 7

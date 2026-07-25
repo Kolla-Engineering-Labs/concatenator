@@ -4,6 +4,8 @@ import { AppMode, ViewPreference } from '../types/workbench'
 import { ModeContext } from './ModeContextCore'
 import { DEFAULT_IGNORE_LIST } from '../../core/constants'
 import { IgnoreEngine } from '../../core/ignore/IgnoreEngine'
+import { IgnoreSource } from '../../core/types'
+import { hydrateVFS } from '../../core/VFSHydrator'
 import { ApiClient } from '../services/ApiClient'
 import { logger } from '../../lib/logger'
 
@@ -18,12 +20,29 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
     'concat_view',
     ViewPreference.LIST
   )
-  const [ignoreList, setIgnoreList] = useLocalStorage<string[]>(
+  const [ignoreList, setIgnoreListInternal] = useLocalStorage<string[]>(
     'concat_ignore',
     [...DEFAULT_IGNORE_LIST]
   )
+
+  const setIgnoreList = useCallback(
+    (updater: string[] | ((prev: string[]) => string[])) => {
+      setIgnoreListInternal((prev) => {
+        const next = typeof updater === 'function' ? updater(prev) : updater
+        // Custom sort: normal patterns first (alphabetical), then negated patterns (alphabetical)
+        const normal = next.filter((p) => !p.startsWith('!')).sort()
+        const negated = next.filter((p) => p.startsWith('!')).sort()
+        return [...normal, ...negated]
+      })
+    },
+    [setIgnoreListInternal]
+  )
   const [autoSaveIgnore, setAutoSaveIgnore] = useLocalStorage<boolean>(
     'concat_auto_save_ignore',
+    false
+  )
+  const [showIgnored, setShowIgnored] = useLocalStorage<boolean>(
+    'concat_show_ignored',
     false
   )
   const isInitialMount = React.useRef(true)
@@ -42,9 +61,6 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
       try {
         const serverList = await ApiClient.getIgnoreList()
         if (mounted && Array.isArray(serverList)) {
-          const sorted = [...serverList].sort((a: string, b: string) =>
-            a.localeCompare(b)
-          )
           setIgnoreList((prev) => {
             // Merge server list with any items added locally during the fetch
             // (items that are neither in the default list nor in the server list)
@@ -53,12 +69,10 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
                 !DEFAULT_IGNORE_LIST.includes(item) &&
                 !serverList.includes(item)
             )
-            const merged = Array.from(
-              new Set([...serverList, ...localOnly])
-            ).sort((a: string, b: string) => a.localeCompare(b))
-            return merged
+            const merged = Array.from(new Set([...serverList, ...localOnly]))
+            return merged.sort()
           })
-          lastSyncedList.current = sorted
+          lastSyncedList.current = [...serverList].sort()
         }
 
         // Also fetch VFS tree if available
@@ -184,36 +198,94 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
     // Trigger any additional cleanup for file streams here
   }, [setForceMode, setVirtualFileSystem])
 
+  const [suspendedRules, setSuspendedRules] = useLocalStorage<string[]>(
+    'concat_suspended_rules',
+    []
+  )
+
   const addIgnorePattern = useCallback(
     (pattern: string) => {
       setIgnoreList((prev) => {
         if (prev.includes(pattern)) return prev
-        const next = [...prev, pattern].sort((a, b) => a.localeCompare(b))
-        return next
+        return [...prev, pattern]
       })
+      // If re-adding a pattern that was suspended, unsuspend it
+      setSuspendedRules((prev) => prev.filter((p) => p !== pattern))
     },
-    [setIgnoreList]
+    [setIgnoreList, setSuspendedRules]
   )
 
   const removeIgnorePattern = useCallback(
     (pattern: string) => {
-      setIgnoreList((prev) => prev.filter((p) => p !== pattern))
+      const cleanPattern = pattern.replace(/\/$/, '')
+      setIgnoreList((prev) => {
+        return prev.filter(
+          (p) => p !== pattern && p.replace(/\/$/, '') !== cleanPattern
+        )
+      })
+      setSuspendedRules((prev) =>
+        prev.filter(
+          (p) => p !== pattern && p.replace(/\/$/, '') !== cleanPattern
+        )
+      )
     },
-    [setIgnoreList]
+    [setIgnoreList, setSuspendedRules]
   )
 
+  const suspendRule = useCallback(
+    (pattern: string) => {
+      setSuspendedRules((prev) =>
+        prev.includes(pattern) ? prev : [...prev, pattern]
+      )
+    },
+    [setSuspendedRules]
+  )
+
+  const unsuspendRule = useCallback(
+    (pattern: string) => {
+      setSuspendedRules((prev) => prev.filter((p) => p !== pattern))
+    },
+    [setSuspendedRules]
+  )
+
+  const activeIgnoreList = React.useMemo(() => {
+    return ignoreList.filter((pattern) => !suspendedRules.includes(pattern))
+  }, [ignoreList, suspendedRules])
+
   const ignoreEngine = React.useMemo(() => {
-    return new IgnoreEngine(ignoreList)
-  }, [ignoreList])
+    return new IgnoreEngine(
+      activeIgnoreList.map((pattern) => {
+        if (DEFAULT_IGNORE_LIST.includes(pattern)) {
+          return { pattern, source: IgnoreSource.DEFAULT }
+        }
+        return { pattern, source: IgnoreSource.MANUAL }
+      })
+    )
+  }, [activeIgnoreList])
 
   const isIgnored = useCallback(
     (path: string) => ignoreEngine.isIgnored(path),
     [ignoreEngine]
   )
 
+  const isExplicitlyNegated = useCallback(
+    (path: string) => ignoreEngine.isExplicitlyNegated(path),
+    [ignoreEngine]
+  )
+
   const [tokenBudget, setTokenBudget] = useLocalStorage<number>(
     'concat_token_budget',
     128000
+  )
+
+  const [tokenModel, setTokenModel] = useLocalStorage<string>(
+    'concat_token_model',
+    'o200k_base'
+  )
+
+  const hydrateFiles = useCallback(
+    (paths: string[]) => hydrateVFS(paths, ignoreEngine),
+    [ignoreEngine]
   )
 
   const handleModeChange = (newMode: AppMode) => {
@@ -229,25 +301,36 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
         mode,
         view,
         ignoreList,
+        suspendedRules,
         isIgnored,
         isSidebarOpen,
         compiledIgnores: ignoreEngine.patterns,
         forceMode,
         virtualFileSystem,
         tokenBudget,
+        tokenModel,
         autoSaveIgnore,
         setMode: handleModeChange,
         setView,
         setIgnoreList,
         addIgnorePattern,
         removeIgnorePattern,
+        suspendRule,
+        unsuspendRule,
         setSidebarOpen: setIsSidebarOpen,
         setForceMode,
         setVirtualFileSystem,
         setTokenBudget,
+        setTokenModel,
         setAutoSaveIgnore,
         resetWorkbench,
         isInitialized,
+        showIgnored,
+        setShowIgnored,
+        isExplicitlyNegated,
+        shouldRecurse: (path: string) => ignoreEngine.shouldRecurse(path),
+        getIgnoreResult: (path: string) => ignoreEngine.getIgnoreResult(path),
+        hydrateFiles,
       }}
     >
       {children}

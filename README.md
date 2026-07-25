@@ -1,7 +1,9 @@
 # Concatenator
 
 [![Release](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/release.yml/badge.svg)](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/release.yml)
+[![Release SEA Binaries](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/release-sea-binaries.yml/badge.svg)](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/release-sea-binaries.yml)
 [![CI & Quality Gate](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/ci.yml/badge.svg)](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/ci.yml)
+[![E2E Testing](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/e2e.yml/badge.svg)](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/e2e.yml)
 [![CodeQL](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/github-code-scanning/codeql/badge.svg)](https://github.com/Kolla-Engineering-Labs/concatenator/actions/workflows/github-code-scanning/codeql)
 [![codecov](https://codecov.io/gh/Kolla-Engineering-Labs/concatenator/graph/badge.svg?token=ubXyDShjEa)](https://codecov.io/gh/Kolla-Engineering-Labs/concatenator)
 [![Bundle Analysis](https://img.shields.io/badge/Bundle%20Analysis-View%20Report-blue)](https://app.codecov.io/gh/Kolla-Engineering-Labs/concatenator/bundles)
@@ -58,15 +60,36 @@ graph LR
   - **PDF**: Export concatenated files as a formatted PDF document with proper pagination and delimiters.
 - **Smart Ignore System**:
   - Exclude common noise (e.g., `node_modules`, `.git`, `package-lock.json`) using simple string matches or powerful Regular Expressions.
+  - **Discovery-First Traversal**: The core engine now prioritizes negations (e.g., `!core`). Files matching a negation pattern are discovered and included even if they reside within an ignored directory (e.g., `tests/`), ensuring complete visibility for "exception" files.
+  - **Heavy Directory Traversal Hardening**: To prevent catastrophic traversal times and event-loop lockups when scanning enormous dependency or build folders, unanchored negated patterns (e.g., `!core`) are **explicitly bypassed** inside heavy common directories (including `node_modules`, `.git`, `.next`, `.expo`, `.gradle`, `.terraform`, `.vagrant`, `bower_components`, `playwright-report`, `test-results`, `venv`, and `vendor`).
+  - **Anchored Negation Exceptions**: If you explicitly need to target and discover an exception file/folder inside a heavy ignored folder, you must use an **anchored negated pattern** (e.g., `!node_modules/core`), which allows the recursive engine to directly target the folder without wasting resources scanning the entire parent tree.
+  - **Right-Click Context Menu**: Right-clicking any ignored file row in the Workbench table opens a contextual menu allowing developers to **"Include this specific file"** via an automatic path-level negation override (`!path/to/file`) or **"Disable rule: [matchedRule]"** to suspend default/glob rules locally.
   - **Auto-Discovery**: CLI automatically respects `.concatignore` or `.gitignore` in your current working directory.
   - **CLI Persistence**: Use `-i, --ignore-file <path>` to leverage existing project configurations for both bundling and extraction.
   - **Web Auto-Save**: Toggle the **"Auto-Save to .concatenate-ignore"** option in the UI to keep your local workspace in sync with your project's ignore configuration automatically.
+- **File Status Indicators & Rule Management**:
+  - The Workbench uses visual badges to clarify how ignore rules are applied:
+    - **Ignored**: Explicitly matches a pattern in your ignore list.
+    - **Negated**: Re-included via a negation pattern (prefixed with `!`).
+    - **Inherited**: Automatically excluded because a parent directory is ignored.
+    - **Negated + Inherited**: A powerful hybrid state indicating an "exception" file that is included even though its containing folder is ignored.
+  - Each ignored row also renders an inline **reason badge** (e.g., `node_modules (default)`) derived from the `IgnoreSource` metadata. The badge suffix/tooltip disambiguates the ignore trigger:
+    - `(default)` — applied by a built-in engine default (e.g. `node_modules`, `.git`).
+    - `(file)` — applied by a `.concatenate-ignore` or `.gitignore` rule.
+    - `(session)` — applied by a pattern added in the current workbench session.
+    - `(manual override)` — applied when an individual file is manually toggled/ignored via the inline eye icon.
+  - **Ignore Files Pill & Rule Suspension**: The **"Ignore Files"** pill component displays both active ignore patterns and locally suspended rules. Suspended rules (disabled via context menu or rule toggles) are visually highlighted with a restore icon (`RotateCcw`), enabling quick re-enabling or fine-grained rule tuning.
 - **Structural Redundancy Fixes**:
   - **Root Pruning (Web)**: Automatically reconciles overlapping folder drops. If you drop a parent folder after a child, the workbench "absorbs" the child into the new structure and provides visual feedback via the **Absorption Toast**.
   - **Input Pruning (CLI)**: Normalizes and filters overlapping command-line arguments. If both `./src` and `./src/components` are passed, the redundant sub-path is automatically pruned.
 - **High-Velocity Directory Ingestion**:
   - **Concurrency Throttling**: Intelligent parallel discovery (batches of 20) ensures rapid folder scanning without overwhelming the browser's file handle pool.
-  - **Incremental Reading**: Eagerly consumes file content during traversal to prevent handle staleness and `InvalidStateError` during massive 1,000+ file imports.
+  - **Incremental & Eager Reading**: Eagerly consumes file content immediately during traversal to prevent handle staleness and `InvalidStateError` during massive 1,000+ file imports on Windows systems.
+  - **Aggressive Time-Based Yielding**: During folder drops and processing, the ingestion engine yields control back to the browser's main thread every 30ms (targeting a 30 FPS responsiveness rate). This keeps the UI, text entry, and page layouts fluid and responsive even during massive multi-thousand file crawls.
+  - **Throttled Progress UI Updates**: React state updates for the import progress are throttled to 100ms intervals, avoiding React re-rendering bottlenecks.
+  - **Incremental Size-Sorted Processing**: Files are sorted by size (smallest first) during import. When ignore rules are edited mid-import, the largest files (processed last) pick up the new rule, bypassing expensive reading entirely.
+  - **Memory Safety Guardrails**: Hard limits are enforced during live scans (default: 10,000 files). Exceeding this limit immediately aborts the crawl early to prevent browser memory exhaustion.
+  - **Deduplicated Directory Appends**: Prevents redundant folder entry nodes by validating directory existence against the active Virtual File System prior to insertion.
   - **Reserved Name Safety**: Automatically skips reserved Windows system filenames (`NUL`, `CON`, `PRN`, etc.) to guarantee a crash-free experience on all platforms.
   - **Isolated Error Recovery**: Each file operation is self-contained; if one file fails due to OS-level locks, the import continues for the rest of the tree.
 - **Root Pruning & Absorption Toast**:
@@ -74,9 +97,14 @@ graph LR
   - **Absorption Toast**: A non-blocking notification appears whenever files are merged or absorbed, providing clear feedback on how your workbench was reorganized.
   - **Minimum Common Root**: The Tree View automatically collapses single-child intermediate directories to ensure the displayed root always begins at the deepest common ancestor.
 - **Precise Token Analytics**:
-  - Real-time token counting using the **Tiktoken (BPE)** standard (`o200k_base`), matching GPT-4o and modern coding assistants.
+  - **Modern BPE Standard**: Real-time token counting using the **Tiktoken (BPE)** standard (`o200k_base`), matching GPT-4o and modern coding assistants, with automatic fallback to `cl100k_base` if unavailable.
+  - **Performance-Optimized Hybrid Tokenization**:
+    - **CPU Exhaustion Prevention & Bypassing**: Binary files (detected via extensions like `.zip`, `.tar`, `.exe`, `.so`, `.png`, `.jpg`, `.pdf`, etc.) and files larger than 500KB completely bypass the Web Worker BPE Tiktoken parser.
+    - **Fast Heuristic Mode**: These bypassed files fall back to an instantaneous, non-blocking heuristic (`Math.ceil(char count / 4)`). This provides highly accurate estimates for log dumps, database files, and media, without freezing the browser or Web Worker CPU.
+    - **Atomic 500ms Response Batching**: Web Worker results are batched every 500ms before React state commits, preventing high-frequency tree-rebuilding cycles from locking the UI thread.
+    - **Backtracking Protection**: The Web Worker tokenization divides large text inputs into 50KB chunks, preventing the Tiktoken RegExp engine from encountering catastrophic backtracking and lowering peak memory usage.
+    - **O(1) Sampled Content Hashing**: The cache system uses a sampling approach for strings exceeding 3,000 characters (hashing only the first, middle, and last 1000 characters) to keep cache-key creation extremely fast ($O(1)$) and prevent main-thread freeze-ups.
   - **Efficiency Metrics**: Automatically calculates "Context Gained" through BPE boundary optimization during concatenation.
-  - Aggregate token reporting for the entire bundle to help stay within context windows.
   - **Budget Guard**: Set token budgets in the CLI to receive warnings when bundles exceed target limits.
 - **Workbench Context & Quick Look**:
   - Switch between **List View** for flat file management and **Tree View** for hierarchical directory inspection.
@@ -116,10 +144,11 @@ graph LR
 ## Tech Stack
 
 - **Frontend**: [React 19](https://react.dev/), [TypeScript](https://www.typescriptlang.org/), [Tailwind CSS 4](https://tailwindcss.com/)
-- **Animations**: [Framer Motion](https://www.framer.com/motion/) (`motion/react`)
+- **Animations**: [Motion](https://motion.dev/) (`motion/react`)
 - **Icons**: [Lucide React](https://lucide.dev/)
 - **Backend**: [Express](https://expressjs.com/) (Node.js 22+)
 - **Build Tool**: [Vite 6](https://vitejs.dev/)
+- **Glob Matching**: [picomatch](https://github.com/micromatch/picomatch) (ESM-native, zero-dependency glob/path matcher powering `IgnoreEngine`)
 - **Utilities**: [JSZip](https://stuk.github.io/jszip/) for archive generation, [jsPDF](https://github.com/parallax/jsPDF) for PDF generation
 
 ### 🗺️ Architecture Map
@@ -311,10 +340,17 @@ You can compile Concatenator into a single standalone executable (SEA) for Windo
 
 ```bash
 # Build for your current platform
-npm run build:exe
+npm run build:sea
 ```
 
-The generated executable will be available in the `dist/v0.6.0/{platform}/` directory.
+The generated executable will be available in `dist/sea/`.
+
+#### Automated Multi-Job Matrix Release Pipeline
+
+On tagging a new release (`v*`), our GitHub Actions workflow ([`.github/workflows/release-sea-binaries.yml`](.github/workflows/release-sea-binaries.yml)) executes a 2-stage multi-job matrix pipeline:
+
+1. **Job 1 (Build Matrix)**: Compiles native SEA binaries in parallel on `ubuntu-latest`, `macos-latest`, and `windows-latest` (`npm run build:sea`) and uploads platform artifacts (`concatenator-linux-x64`, `concatenator-macos-x64`, `concatenator-windows-x64.exe`).
+2. **Job 2 (Publish & Cryptographic Signing)**: Downloads all platform binaries into `dist/sea/`, generates a `SHA256SUMS` manifest, attaches a GPG detached ASCII armor signature (`SHA256SUMS.asc`), and publishes all release assets directly to GitHub Releases via `gh release`.
 
 #### Distribution Structure
 
@@ -322,11 +358,12 @@ Concatenator follows a versioned distribution pattern to ensure reliable deploym
 
 ```
 dist/
-└── v0.6.0/
-    ├── win32/
-    │   └── concatenator.exe  (Signed binary)
-    └── darwin/
-        └── concatenator      (Signed & Notarized, or [Ad-Hoc](./docs/MACOS_SECURITY.md))
+└── sea/
+    ├── concatenator-linux-x64        (Linux SEA Binary)
+    ├── concatenator-macos-x64        (macOS SEA Binary)
+    ├── concatenator-windows-x64.exe  (Windows SEA Binary)
+    ├── SHA256SUMS                    (Checksum Manifest)
+    └── SHA256SUMS.asc                (GPG Detached Signature)
 ```
 
 #### Commands

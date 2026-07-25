@@ -1,23 +1,28 @@
 import React from 'react'
+import '@testing-library/jest-dom'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { TreeNode } from '../src/web/features/concatenator/components/TreeNode'
 import { TreeItem } from '../src/core/types'
 
 // Mock Lucide icons
-vi.mock('lucide-react', () => ({
-  ChevronRight: () => <div data-testid="icon-right" />,
-  ChevronDown: () => <div data-testid="icon-down" />,
-  Folder: () => <div data-testid="icon-folder" />,
-  Eye: () => <div data-testid="icon-eye" />,
-  EyeOff: () => <div data-testid="icon-eye-off" />,
-  FileCode: () => <div data-testid="icon-file-code" />,
-  FileText: () => <div data-testid="icon-file-text" />,
-  FileJson: () => <div data-testid="icon-file-json" />,
-  Image: () => <div data-testid="icon-image" />,
-  ExternalLink: () => <div data-testid="icon-external" />,
-  X: () => <div data-testid="icon-x" />,
-}))
+vi.mock('lucide-react', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('lucide-react')>()
+  return {
+    ...actual,
+    ChevronRight: () => <div data-testid="icon-right" />,
+    ChevronDown: () => <div data-testid="icon-down" />,
+    Folder: () => <div data-testid="icon-folder" />,
+    Eye: () => <div data-testid="icon-eye" />,
+    EyeOff: () => <div data-testid="icon-eye-off" />,
+    FileCode: () => <div data-testid="icon-file-code" />,
+    FileText: () => <div data-testid="icon-file-text" />,
+    FileJson: () => <div data-testid="icon-file-json" />,
+    Image: () => <div data-testid="icon-image" />,
+    ExternalLink: () => <div data-testid="icon-external" />,
+    X: () => <div data-testid="icon-x" />,
+  }
+})
 
 // Mock motion
 vi.mock('motion/react', () => ({
@@ -35,6 +40,9 @@ vi.mock('../src/web/hooks/useWorkbench', () => ({
   useWorkbench: () => ({
     addIgnorePattern: mockAddIgnorePattern,
     removeIgnorePattern: mockRemoveIgnorePattern,
+    ignoreList: ['src/**'],
+    isIgnored: (path: string) => path === 'src' || path.startsWith('src/'),
+    isExplicitlyNegated: () => false,
   }),
 }))
 
@@ -182,5 +190,47 @@ describe('TreeNode', () => {
       />
     )
     expect(screen.getByText('Inherited')).toBeDefined()
+  })
+
+  it('binds reason and ignoreSource to title attribute on Ignored badge when node is ignored', () => {
+    const ignoredNode = {
+      ...mockNode.children![0],
+      isIgnored: true,
+      reason: 'git-ignore-pattern',
+      ignoreSource: '.gitignore',
+    }
+    render(
+      <TreeNode
+        node={ignoredNode}
+        expandedPaths={new Set()}
+        setExpandedPaths={mockSetExpandedPaths}
+        onQuickLook={mockOnQuickLook}
+        onRemoveFile={mockOnRemoveFile}
+      />
+    )
+    const badge = screen.getByTitle('git-ignore-pattern (.gitignore)')
+    expect(badge).toBeDefined()
+    expect(badge).toHaveAttribute('title', 'git-ignore-pattern (.gitignore)')
+  })
+
+  it('displays (manual override) in title attribute when manually toggled in tree', () => {
+    const manualIgnoredNode = {
+      ...mockNode.children![0],
+      isIgnored: true,
+      reason: 'src/test.ts',
+      ignoreSource: 'manual override',
+    }
+    render(
+      <TreeNode
+        node={manualIgnoredNode}
+        expandedPaths={new Set()}
+        setExpandedPaths={mockSetExpandedPaths}
+        onQuickLook={mockOnQuickLook}
+        onRemoveFile={mockOnRemoveFile}
+      />
+    )
+    const badge = screen.getByTitle('src/test.ts (manual override)')
+    expect(badge).toBeDefined()
+    expect(badge).toHaveAttribute('title', 'src/test.ts (manual override)')
   })
 })

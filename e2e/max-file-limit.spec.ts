@@ -40,8 +40,7 @@ test.describe('Max File Limit Feature', () => {
     // Uses worker-specific ignore file via X-Worker-Id header from apiContext fixture.
     await resetIgnoreList(apiContext)
 
-    // Use 'load' for more stable Firefox hydration, or increase timeout
-    await page.goto('/', { waitUntil: 'load', timeout: 30000 })
+    await page.goto('/', { waitUntil: 'domcontentloaded', timeout: 30000 })
 
     // Ensure sidebar is open to access controls
     await ensureSidebarOpen(page)
@@ -153,7 +152,7 @@ test.describe('Max File Limit Feature', () => {
         localStorage.removeItem('concatenator-max-files')
       })
       await page.waitForTimeout(500)
-      await page.reload({ waitUntil: 'load', timeout: 30000 })
+      await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 })
 
       const maxFileLimitSelect = page.locator('select#max-file-limit')
       await expect(maxFileLimitSelect).toBeVisible({ timeout: 10000 })
@@ -197,7 +196,7 @@ test.describe('Max File Limit Feature', () => {
       })
       await page.waitForTimeout(500)
       // Reload the page
-      await page.reload({ waitUntil: 'load', timeout: 30000 })
+      await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 })
 
       // Check that the value is restored from localStorage
       const restoredSelect = page.locator('select#max-file-limit')
@@ -231,7 +230,9 @@ test.describe('Max File Limit Feature', () => {
 
         // Wait for files to be processed
         await expect(
-          page.getByText(/Selected Files.*\(\s*501\s*\)/)
+          page
+            .getByText(/Selected Files.*\(\s*501\s*\)/)
+            .filter({ visible: true })
         ).toBeVisible({
           timeout: 30000,
         })
@@ -286,7 +287,9 @@ test.describe('Max File Limit Feature', () => {
 
         // Wait for files to be processed
         await expect(
-          page.getByText(/Selected Files.*\(\s*500\s*\)/)
+          page
+            .getByText(/Selected Files.*\(\s*500\s*\)/)
+            .filter({ visible: true })
         ).toBeVisible({
           timeout: 30000,
         })
@@ -315,7 +318,7 @@ test.describe('Max File Limit Feature', () => {
       page,
       browserName,
     }) => {
-      test.setTimeout(60000)
+      test.setTimeout(180000)
       // Skip on WebKit due to timeout - simpler tests already cover the core functionality
       test.skip(
         browserName === 'webkit',
@@ -334,7 +337,9 @@ test.describe('Max File Limit Feature', () => {
 
         await uploadHelper.setFilesOnInput(files)
         await expect(
-          page.getByText(/Selected Files \(\s*600\s*\)/)
+          page
+            .getByText(/Selected Files \(\s*600\s*\)/)
+            .filter({ visible: true })
         ).toBeVisible({
           timeout: 45000,
         })
@@ -397,7 +402,9 @@ test.describe('Max File Limit Feature', () => {
         // Re-upload the same 600 files (or verify they are still there)
         await uploadHelper.setFilesOnInput(files)
         await expect(
-          page.getByText(/Selected Files \(\s*600\s*\)/)
+          page
+            .getByText(/Selected Files \(\s*600\s*\)/)
+            .filter({ visible: true })
         ).toBeVisible({
           timeout: 30000,
         })

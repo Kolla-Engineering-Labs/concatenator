@@ -12,6 +12,7 @@ test.describe('Workbench Features', () => {
     // Clear localStorage
     await page.addInitScript(() => {
       localStorage.clear()
+      localStorage.setItem('concat_show_ignored', 'true')
     })
 
     await page.goto('/', { waitUntil: 'domcontentloaded' })

@@ -1,0 +1,18 @@
+# .antigravityignore
+node_modules/
+.git/
+.next/
+.expo/
+.gradle/
+.terraform/
+.vagrant/
+bower_components/
+playwright-report/
+test-results/
+venv/
+vendor/
+dist/
+build/
+*.pdf
+*.zip
+*.map

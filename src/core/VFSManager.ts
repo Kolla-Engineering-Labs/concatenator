@@ -5,8 +5,8 @@
 
 import * as fsDefault from 'node:fs'
 import { join, resolve } from 'node:path'
-import micromatch from 'micromatch'
-import { DEFAULT_IGNORE_LIST } from './constants.js'
+import { DEFAULT_IGNORE_LIST, BINARY_EXTENSIONS } from './constants.js'
+import { IgnoreEngine } from './ignore/IgnoreEngine.js'
 
 export interface VFSFileSystem {
   lstatSync: typeof fsDefault.lstatSync
@@ -21,28 +21,16 @@ export interface VFSNode {
   size?: number
   isIgnored: boolean
   isNegated: boolean
+  reason?: string
   children?: VFSNode[]
 }
 
 export class VFSManager {
   private baseDir: string
-  private ignorePatterns: string[]
-  private ignoreRegexes: RegExp[]
-  private negationPatterns: string[]
+  private ignoreEngine: IgnoreEngine
   private maxFiles: number
 
-  private static HARD_IGNORED_EXTENSIONS = [
-    '.png',
-    '.jpg',
-    '.jpeg',
-    '.gif',
-    '.webp',
-    '.ico',
-    '.pdf',
-    '.zip',
-    '.exe',
-    '.dll',
-  ]
+  private static HARD_IGNORED_EXTENSIONS = BINARY_EXTENSIONS
 
   constructor(
     baseDir: string,
@@ -54,27 +42,7 @@ export class VFSManager {
     this.maxFiles = maxFiles
 
     const allPatterns = [...DEFAULT_IGNORE_LIST, ...additionalIgnores]
-
-    this.ignorePatterns = []
-    this.ignoreRegexes = []
-    this.negationPatterns = []
-
-    for (const rawPattern of allPatterns) {
-      const pattern = rawPattern.trim()
-      if (!pattern) continue
-
-      if (pattern.startsWith('!')) {
-        this.negationPatterns.push(pattern.substring(1))
-      } else if (pattern.startsWith('/') && pattern.endsWith('/')) {
-        try {
-          this.ignoreRegexes.push(new RegExp(pattern.slice(1, -1)))
-        } catch {
-          this.ignorePatterns.push(pattern)
-        }
-      } else {
-        this.ignorePatterns.push(pattern)
-      }
-    }
+    this.ignoreEngine = new IgnoreEngine(allPatterns)
   }
 
   private isHardIgnored(filename: string): boolean {
@@ -85,49 +53,33 @@ export class VFSManager {
   private checkNodeIgnoreState(
     relPath: string,
     name: string
-  ): { isIgnored: boolean; isNegated: boolean } {
+  ): { isIgnored: boolean; isNegated: boolean; reason?: string } {
     if (!relPath || relPath === '.')
       return { isIgnored: false, isNegated: false }
 
     if (this.isHardIgnored(name)) {
-      return { isIgnored: true, isNegated: false }
-    }
-
-    const matchesRegex = this.ignoreRegexes.some(
-      (r) => r.test(relPath) || r.test(name)
-    )
-    const matchesGlob =
-      micromatch.isMatch(relPath, this.ignorePatterns, {
-        matchBase: true,
-        dot: true,
-      }) || this.ignorePatterns.some((p) => relPath.startsWith(p + '/'))
-
-    if (matchesRegex || matchesGlob) {
-      if (this.negationPatterns.length > 0) {
-        const negated =
-          micromatch.isMatch(relPath, this.negationPatterns, {
-            matchBase: true,
-            dot: true,
-          }) || this.negationPatterns.some((p) => relPath.startsWith(p + '/'))
-        if (negated) {
-          return { isIgnored: false, isNegated: true }
-        }
-      }
-      return { isIgnored: true, isNegated: false }
-    }
-
-    // Not ignored — check if it explicitly matches a negation pattern
-    if (this.negationPatterns.length > 0) {
-      const negated = micromatch.isMatch(relPath, this.negationPatterns, {
-        matchBase: true,
-        dot: true,
-      })
-      if (negated) {
-        return { isIgnored: false, isNegated: true }
+      return {
+        isIgnored: true,
+        isNegated: false,
+        reason: 'Binary File Detected',
       }
     }
 
-    return { isIgnored: false, isNegated: false }
+    const { ignored, reason: matchedPattern } =
+      this.ignoreEngine.getIgnoreResult(relPath)
+    const isNegated = this.ignoreEngine.isExplicitlyNegated(relPath)
+
+    let reason: string | undefined = undefined
+    if (ignored && matchedPattern) {
+      const patternStr = String(matchedPattern)
+      if (patternStr.startsWith('/') && patternStr.endsWith('/')) {
+        reason = `Matched regex ${patternStr}`
+      } else {
+        reason = `Matched glob ${patternStr}`
+      }
+    }
+
+    return { isIgnored: ignored, isNegated, reason }
   }
 
   public getTree(): { tree: VFSNode; partial: boolean } {
@@ -148,7 +100,10 @@ export class VFSManager {
           ? this.baseDir.split(/[/\\]/).pop() || 'root'
           : currentPath.split(/[/\\]/).pop() || ''
 
-      const { isIgnored, isNegated } = this.checkNodeIgnoreState(relPath, name)
+      const { isIgnored, isNegated, reason } = this.checkNodeIgnoreState(
+        relPath,
+        name
+      )
 
       let kind: 'file' | 'directory'
       let size = 0
@@ -173,7 +128,7 @@ export class VFSManager {
           kind = 'directory'
           children = []
 
-          if (!isIgnored) {
+          if (this.ignoreEngine.shouldRecurse(relPath)) {
             try {
               const entries = this.fs.readdirSync(currentPath)
               for (const entry of entries) {
@@ -211,6 +166,7 @@ export class VFSManager {
         children: kind === 'directory' ? children : undefined,
         isIgnored,
         isNegated,
+        reason,
       }
     }
 

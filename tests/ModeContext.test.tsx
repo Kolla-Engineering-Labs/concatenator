@@ -490,4 +490,62 @@ describe('ModeContext (Workbench State)', () => {
     })
     consoleSpy.mockRestore()
   })
+
+  it('handles suspendRule and unsuspendRule', async () => {
+    const { result } = renderHook(() => useWorkbench(), { wrapper })
+
+    await act(async () => {
+      result.current.setIgnoreList(['*.svg'])
+    })
+
+    expect(result.current.isIgnored('logo.svg')).toBe(true)
+
+    await act(async () => {
+      result.current.suspendRule('*.svg')
+    })
+
+    expect(result.current.suspendedRules).toContain('*.svg')
+    expect(result.current.isIgnored('logo.svg')).toBe(false)
+
+    await act(async () => {
+      result.current.unsuspendRule('*.svg')
+    })
+
+    expect(result.current.suspendedRules).not.toContain('*.svg')
+    expect(result.current.isIgnored('logo.svg')).toBe(true)
+  })
+
+  it('ephemeral suspensions recalculate VFS tree instantly and do not persist to .concatenatorignore / server API', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true })
+    global.fetch = fetchMock
+
+    const { result, unmount } = renderHook(() => useWorkbench(), { wrapper })
+
+    await act(async () => {
+      result.current.setIgnoreList(['build', 'dist'])
+    })
+
+    // Initially 'build/index.js' is ignored
+    expect(result.current.isIgnored('build/index.js')).toBe(true)
+
+    fetchMock.mockClear()
+
+    // Suspend rule 'build'
+    await act(async () => {
+      result.current.suspendRule('build')
+    })
+
+    // Assert rule is suspended, VFS recalculates instantly (isIgnored is false)
+    expect(result.current.suspendedRules).toContain('build')
+    expect(result.current.isIgnored('build/index.js')).toBe(false)
+
+    // Unmount and remount component/provider
+    unmount()
+
+    // Assert that ApiClient / fetch POST to update ignore list (which writes .concatenatorignore) was NEVER called for suspended rule
+    const saveCalls = fetchMock.mock.calls.filter(
+      (c) => c[0] === '/api/ignore-list' && c[1]?.method === 'POST'
+    )
+    expect(saveCalls).toHaveLength(0)
+  })
 })

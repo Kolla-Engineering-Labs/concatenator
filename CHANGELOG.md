@@ -1,5 +1,65 @@
 # Changelog
 
+## [0.8.0] - 2026-07-23
+
+### Minor Changes
+
+- - ### 📦 Changeset: Discovery-First Traversal & Observability Layer Parity (v0.8.0)
+
+    This release implements a profound architectural overhaul of the Concatenator project, focused on **crawling correctness, UI/CLI path parity, and high-velocity UI performance**. By hardening the underlying ignore system, optimizing React main-thread yielding, and introducing smart Web Worker batching, Concatenator v0.8.0 effortlessly manages massive codebases (up to 10,000+ files) with a fluid, lag-free user experience.
+
+    ***
+
+    ### 🚀 Core Engine Upgrade (Ignore System 3.0)
+    - **Discovery-First Traversal**: The core traversal algorithm has been re-architected. Negated files (prefixed with `!`, e.g. `!core`) are now guaranteed to be discovered and displayed in the tree, even if they reside deep within heavily ignored parent directories (e.g. `tests/`).
+    - **Forced Recursion Logic**: The crawler now parses all loaded ignore patterns on the fly. When it encounters an ignored directory, it scans the active ignore list to see if any negated patterns target sub-directories or children of that branch. If a sub-pattern is detected, the engine forces recursion into that ignored folder instead of pruning the branch, enabling granular file inclusions.
+    - **Heavy Directory Traversal Hardening**: To prevent catastrophic scan times and potential thread lockups in modern JS runtimes, unanchored negated patterns (e.g., `!core`) are explicitly bypassed inside heavy system folders. The bypassed system folders include:
+      - `node_modules`, `.git`, `.next`, `.expo`, `.gradle`, `.terraform`, `.vagrant`, `bower_components`, `playwright-report`, `test-results`, `venv`, and `vendor`.
+    - **Anchored Overrides**: If you need to target a file inside a heavy ignored folder, you must use an **anchored negated pattern** (e.g., `!node_modules/core`). This allows the recursive crawler to directly target the folder, bypassing a massive wildcard scan of the rest of the parent tree.
+    - **Windows System-Name Isolation**: Automatically sanitizes and skips reserved Windows device filenames (`NUL`, `CON`, `PRN`, `AUX`, `COM1-9`, `LPT1-9`) during directory crawls, preventing low-level OS hangs and `InvalidStateError` failures.
+    - **Path Traversal Security Boundary**: Added explicit input sanitation on the CLI. If a user supplies arguments containing path traversal segments (e.g. `../../`), the process rejects the request and throws a comprehensive `UserError` to secure local files.
+
+    ***
+
+    ### 🌐 Workbench Observability & Stability
+    - **Negation Visibility**: Fully integrated negation states into the visual tree. Nodes that represent negated inclusion exceptions render with a green **"Negated"** badge.
+    - **Inherited Glob Details & Manual Overrides**: Ignored files and folders render with a gray **"Ignored"** badge. Hovering over the badge displays a precise tooltip showing exactly which rule triggered the ignore state (e.g., `node_modules (default)`, `Reason (file)`, or `(manual override)` when manually toggled via the inline eye icon).
+    - **Right-Click Context Menu**: Right-clicking any ignored file row opens a contextual menu with two immediate actions: **"Include this specific file"** (appends a path-level negation `!path`) and **"Disable rule: [matchedRule]"** (suspends default or glob rules locally via `suspendRule`).
+    - **Rule Suspension Pill**: Suspended/disabled rules are visually exposed in the **"Ignore Files"** pill interface with a quick `RotateCcw` restore button to reactivate suspended rules on demand.
+    - **State Stability Syncing (`syncIgnores`)**: Introduced an asynchronous, non-blocking sync runner in `App.tsx` that batches ignore state evaluation. If a user changes ignore configurations, the `isIgnored` property is synchronized across tens of thousands of loaded files dynamically without causing UI frames to drop.
+    - **Refined Toggle Mechanics**: Rewrote toggles in `TreeNode` and `FileTable` to cleanly add, remove, and resolve path-matching variants (`path`, `path/`, `path/**`), ensuring that toggling ignore states inside the Tree and List views performs perfectly.
+
+    ***
+
+    ### ⚡ High-Velocity Ingestion Performance
+    - **Aggressive Time-Based Yielding**: During drop ingestion and traversal, the crawler monitors execution time. Every 30ms, it yields execution back to the browser's main thread, maintaining fluid 30 FPS scrolling, mouse events, and live typing in the search/ignore fields.
+    - **Throttled Progress UI Updates**: React progress bar updates are throttled to 100ms intervals, avoiding React re-rendering bottlenecks.
+    - **Incremental Size-Sorted Ingestion**: Files are sorted by size (smallest first) during import. When ignore rules are edited mid-import, the largest files (processed last) instantly pick up the new rule, bypassing expensive reading entirely.
+    - **Memory Safety Guardrails**: Hard limits are enforced during live scans (default: 10,000 files). Exceeding this limit immediately aborts the crawl early to prevent browser memory exhaustion.
+    - **Aggressive File Size Safeguards**: The file reader skips files exceeding 30MB during upload, protecting the web context from V8 string memory crashes.
+    - **Deduplicated Directory Appends**: Directory nodes are deduplicated against the active Virtual File System prior to insertion, ensuring that multiple drops don't append redundant parent tree nodes.
+
+    ***
+
+    ### 🧠 Precise Hybrid Tokenization & Web Worker Efficiency
+    - **CPU Exhaustion Prevention**: Files larger than 500KB and common binary/archive extensions (`.zip`, `.tar`, `.exe`, `.so`, `.png`, `.jpg`, `.pdf`, etc.) completely bypass the CPU-heavy BPE `js-tiktoken` Web Worker.
+    - **Fast Heuristic Mode**: These bypassed files fall back to an instantaneous, non-blocking heuristic (`Math.ceil(char count / 4)`). This provides highly accurate estimates for log dumps, database files, and media, without freezing the browser or Web Worker CPU.
+    - **Atomic 500ms Response Batching**: Web Worker results are batched every 500ms before React state commits, preventing high-frequency tree-rebuilding cycles from locking the UI thread.
+    - **Backtracking Protection**: The Web Worker tokenization divides large text inputs into 50KB chunks, preventing the Tiktoken RegExp engine from encountering catastrophic backtracking and lowering peak memory usage.
+    - **O(1) Sampled Content Hashing**: The cache system uses a sampling approach for strings exceeding 3,000 characters (hashing only the first, middle, and last 1000 characters) to keep cache-key creation extremely fast ($O(1)$) and prevent main-thread freeze-ups.
+
+    ***
+
+    ### 🧪 Testing & Coverage Excellence
+    - **Unit Test Coverage Booster**: Added 5 dedicated coverage-booster test files, elevating unit, utility, and component branch coverage beyond the strict **85% project target**:
+      - `[IgnoreEngine.coverage.test.ts](file:///c:/Projects/Kolla-Engineering-Labs/concatenator/tests/IgnoreEngine.coverage.test.ts)` (fully covers ignore matching, regex compilation, and recursion overrides)
+      - `[token.worker.test.ts](file:///c:/Projects/Kolla-Engineering-Labs/concatenator/tests/token.worker.test.ts)` (covers worker fallbacks, BPE o200k/cl100k failure conditions, and chunking boundaries)
+      - `[useFileProcessing.coverage.test.ts](file:///c:/Projects/Kolla-Engineering-Labs/concatenator/tests/useFileProcessing.coverage.test.ts)` (tested drop edge cases, lazy reloads, and bounds)
+      - `[useFileTree_ignored_dir.test.ts](file:///c:/Projects/Kolla-Engineering-Labs/concatenator/tests/useFileTree_ignored_dir.test.ts)` (audited ignored directory tree rendering)
+      - `[useTokenAggregation.test.ts](file:///c:/Projects/Kolla-Engineering-Labs/concatenator/tests/useTokenAggregation.test.ts)` (tested hash mismatches, worker messages, and retries)
+    - **E2E Observability Suite**: Playwright end-to-end tests (`e2e/observability.spec.ts`) audit negation rules, token recalculations, and UI visibility toggles across viewports.
+    - **CLI Clean Reorganization**: Restructured all CLI-related tests by organizing them inside a clean `tests/cli/` folder, ensuring a professional testing workspace.
+
 ## [0.7.0] - 2026-05-13
 
 ### Minor Changes

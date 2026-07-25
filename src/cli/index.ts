@@ -21,8 +21,22 @@ import { IgnoreEngine } from '../core/ignore/IgnoreEngine.js'
 import { TokenService } from '../core/TokenService.js'
 import { formatFileSize } from '../lib/utils.js'
 
+import { getEncoding } from 'js-tiktoken'
+
+const loadCliPrecision = async () => {
+  try {
+    await TokenService.loadPrecisionStrategy(getEncoding('o200k_base'))
+  } catch {
+    try {
+      await TokenService.loadPrecisionStrategy(getEncoding('cl100k_base'))
+    } catch {
+      await TokenService.loadPrecisionStrategy()
+    }
+  }
+}
+
 // Initialize TokenService precision strategy in background for immediate CLI use
-TokenService.loadPrecisionStrategy().catch(() => {})
+loadCliPrecision().catch(() => {})
 import { UnifiedCrawler } from '../core/Crawler.js'
 import { PulseEmitter } from '../core/PulseEmitter.js'
 import {
@@ -115,8 +129,14 @@ program
     'Path to binary to verify, or "self" for the current executable',
     'self'
   )
-  .description('Verify the integrity of a binary against a GPG-signed manifest')
+  .summary('Cryptographically verify a standalone binary')
+  .description(
+    'Verify the integrity of a binary by checking its SHA256 hash against the GPG-signed SHA256SUMS.asc manifest.\n\n' +
+      'Example for deep cryptographic debugging:\n' +
+      '  $ npx @kolla/concatenator verify ./concatenator-windows-x64.exe --verbose'
+  )
   .option('-m, --manifest <path>', 'Explicit path to SHA256SUMS.asc')
+  .option('-v, --verbose', 'Show deeper cryptographic debugging output')
   .action(async (target, options) => {
     const { calculateFileHash } = await import('./cli-utils.js')
     const { OFFICIAL_MANIFEST_URL, ARCHITECT_PGP_FINGERPRINT } =
@@ -223,6 +243,11 @@ program
           logger.raw(
             '🛡️  Signature valid (manually verified via GPG keychain).'
           )
+        if (options.verbose) {
+          logger.raw(
+            `\n[DEBUG] Cryptographic details:\n  Target: ${targetPath}\n  Manifest: ${manifestPath}\n  Hash: ${manifestHash}`
+          )
+        }
       } else {
         logger.rawError('\n❌ Integrity: COMPROMISED')
         logger.rawError(
@@ -288,6 +313,7 @@ program
     'Mirror pulse data to stderr for headless CI environments',
     false
   )
+  .option('--show-ignored', 'Show ignored files and reasons in stderr', false)
   .action(
     async (
       paths: string[],
@@ -301,10 +327,11 @@ program
         followSymlinks: boolean
         quiet: boolean
         pulse: boolean
+        showIgnored: boolean
       }
     ) => {
       // Ensure high-precision BPE strategy is loaded before execution
-      await TokenService.loadPrecisionStrategy()
+      await loadCliPrecision()
       try {
         if (options.quiet) {
           logger._setLevel('error')
@@ -312,6 +339,15 @@ program
         if (options.pulse) {
           startPulseMirror()
         }
+        // Security Boundary: Reject explicit path traversal in input arguments
+        for (const p of paths) {
+          if (p.includes('..')) {
+            throw new UserError(
+              `Security Violation: Path traversal detected in input path: "${p}". Traversal segments (../) are forbidden for security reasons.`
+            )
+          }
+        }
+
         // Path Normalization & Pruning
         const absolutePaths = paths.map((p) => resolve(p))
         const { pruned, remaining } = prunePaths(absolutePaths)
@@ -357,41 +393,45 @@ program
           const dirTokens = new Map<string, number>()
 
           for (const entry of entries) {
-            if (entry.kind === 'file') {
-              try {
-                const content = readFileSync(entry.fullPath, 'utf-8')
-                const tokens = TokenService.getTokenCount(content)
-
-                allFiles.push({
-                  path: entry.path,
-                  content,
-                  tokens,
-                  size: entry.size,
-                })
-
-                totalTokens += tokens
-
-                if (options.verbose >= 2) {
-                  logger.info(
-                    `  [${tokens.toLocaleString().padStart(8)} tokens] ${entry.path}`
-                  )
-                }
-
-                // Roll tokens up to every ancestor directory
-                if (options.verbose >= 1) {
-                  const parts = entry.path.split('/')
-                  for (let depth = 1; depth < parts.length; depth++) {
-                    const dirPath = parts.slice(0, depth).join('/')
-                    dirTokens.set(
-                      dirPath,
-                      (dirTokens.get(dirPath) ?? 0) + tokens
-                    )
-                  }
-                  dirTokens.set('.', (dirTokens.get('.') ?? 0) + tokens)
-                }
-              } catch {
-                // Skip files that can't be read
+            if (entry.status === 'ignored' || entry.status === 'rejected') {
+              if (options.showIgnored) {
+                process.stderr.write(
+                  `[-] skipped ${entry.path} (${entry.reason})\n`
+                )
               }
+              continue
+            }
+
+            try {
+              const content = readFileSync(entry.fullPath, 'utf-8')
+              const tokens = TokenService.getTokenCount(content).count
+
+              allFiles.push({
+                path: entry.path,
+                content,
+                tokens,
+                size: entry.size,
+              })
+
+              totalTokens += tokens
+
+              if (options.verbose >= 2) {
+                logger.info(
+                  `  [${tokens.toLocaleString().padStart(8)} tokens] ${entry.path}`
+                )
+              }
+
+              // Roll tokens up to every ancestor directory
+              if (options.verbose >= 1) {
+                const parts = entry.path.split('/')
+                for (let depth = 1; depth < parts.length; depth++) {
+                  const dirPath = parts.slice(0, depth).join('/')
+                  dirTokens.set(dirPath, (dirTokens.get(dirPath) ?? 0) + tokens)
+                }
+                dirTokens.set('.', (dirTokens.get('.') ?? 0) + tokens)
+              }
+            } catch {
+              // Skip files that can't be read
             }
           }
 
@@ -443,15 +483,17 @@ program
           // Check for directory collision before writing
           checkOutputPath(options.output, options.force, 'file')
           writeFileSync(options.output, result)
-          const finalOutputTokens = TokenService.getTokenCount(result)
+          const finalTokenResult = TokenService.getTokenCount(result)
+          const finalOutputTokens = finalTokenResult.count
           const tokensSaved = Math.max(0, totalTokens - finalOutputTokens)
           const savedPercent =
             totalTokens > 0
               ? ((tokensSaved / totalTokens) * 100).toFixed(1)
               : '0'
 
+          const isPrecise = TokenService.isPrecise()
           logger.info(
-            `✔ Created ${options.output} (${formatFileSize(bundleSize)} | ${finalOutputTokens.toLocaleString()} precise tokens).`
+            `✔ Created ${options.output} (${formatFileSize(bundleSize)} | Total Tokens (${finalTokenResult.model}): ${finalOutputTokens.toLocaleString()}${isPrecise ? '' : ' [Heuristic Estimation]'}).`
           )
           if (tokensSaved > 0) {
             logger.info(
@@ -525,7 +567,7 @@ program
       }
     ) => {
       // Ensure high-precision BPE strategy is loaded before execution
-      await TokenService.loadPrecisionStrategy()
+      await loadCliPrecision()
       try {
         if (options.quiet) {
           logger._setLevel('error')
@@ -687,7 +729,7 @@ program
       }
     ) => {
       // Ensure high-precision BPE strategy is loaded before execution
-      await TokenService.loadPrecisionStrategy()
+      await loadCliPrecision()
       try {
         if (options.quiet) {
           logger._setLevel('error')
