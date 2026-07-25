@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.8.1] - 2026-07-25
+
+### Patch Changes
+
+- fix(build): enforce esbuild programmatic API and bypass Apple Gatekeeper for ad-hoc signatures
+
+  ### Architectural Context
+
+  The initial SEA release matrix fatally crashed on macOS and Windows runners due to two distinct pipeline vulnerabilities that compromised binary integrity and deployment workflows:
+  1. **Gatekeeper Collision (macOS):** The verification pipeline requested an Apple Gatekeeper trust evaluation (`spctl --assess`) on community builds utilizing ad-hoc signatures. Gatekeeper inherently rejects unnotarized binaries, causing the CI/CD pipeline to crash despite the binary possessing a cryptographically valid local seal.
+  2. **Shell-Escaping Vulnerability (Cross-Platform):** The CLI bundling process executed `esbuild` via a fragile shell command (`execSync('npx esbuild...')`). Environment variables and runner IDs were swallowed by the `--define` flag, forcing a fallback to `tsx`. This resulted in the pipeline silently minting hollow, corrupted executables that would immediately throw `MODULE_NOT_FOUND` exceptions upon execution.
+
+  ### Resolution & Hardening
+  - **Context-Aware Verification:** Refactored `scripts/sign-utils.ts` to intelligently decouple cryptographic integrity from the centralized Apple trust chain. Unsigned macOS community builds now strictly enforce `codesign -v` to verify structural integrity while bypassing `spctl`.
+  - **Deterministic Bundling:** Completely eliminated shell execution in `scripts/build-sea.js`. The build process now exclusively utilizes the programmatic `buildSync` API from `esbuild`, ensuring strict dependency resolution and correct environment variable injection.
+  - **Strict Pipeline Governance:** Configured a hard process exit (`process.exit(1)`) on any bundling failure. The pipeline will now loudly fail rather than silently falling back to an uncompiled string replacement state.
+
 ## [0.8.0] - 2026-07-23
 
 ### Minor Changes
