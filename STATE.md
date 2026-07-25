@@ -21,6 +21,8 @@
 - CI/CD Matrix Stabilization: Mathematically enforced Unix line endings (`* text=auto eol=lf`) in `.gitattributes` and configured `if-no-files-found: ignore` for the Playwright artifact upload in `.github/workflows/ci.yml` to prevent ghost artifact failures.
 - Dedicated E2E Workflow Separation: Created `.github/workflows/e2e.yml` for isolated Playwright E2E execution on `ubuntu-latest` (Node 22 LTS) with `if: always()` report artifact upload, removed all Playwright steps from `.github/workflows/ci.yml`, and updated documentation across `README.md`, `ARCHITECT.md`, `CONTRIBUTING.md`, and `e2e/README.md`.
 - CodeQL Workflow Permission Hardening: Configured explicit top-level read-only permissions boundary (`permissions: contents: read`) in `.github/workflows/e2e.yml` to adhere to CodeQL security requirements.
+- macOS Ad-Hoc Signature Verification Awareness: Updated `verifyBinary` in `scripts/sign-utils.ts` to check `isSigningEnabled(platform)`, executing `spctl` for certified builds and `codesign --verify --verbose` for ad-hoc builds with appropriate logging. Updated test suite in `tests/scripts_sign_utils.test.ts`.
+- Programmatic esbuild SEA Bundling Refactor: Refactored bundling in `scripts/build-sea.js` to use `buildSync` directly from `esbuild`, removing shell execution and tsx fallback, natively passing `define: { PROCESS_IS_UNSIGNED: String(isUnsigned) }`, and triggering `process.exit(1)` on bundling errors to halt CI/CD pipelines.
 
 ## Pending Roadmap Tasks (Immediate Focus)
 

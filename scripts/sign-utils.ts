@@ -162,9 +162,18 @@ export function verifyBinary(filePath, platform) {
     if (platform === 'win32') {
       execSync(`signtool verify /pa "${filePath}"`, { stdio: 'inherit' })
     } else if (platform === 'darwin') {
-      execSync(`spctl --assess --verbose --type execute "${filePath}"`, {
-        stdio: 'inherit',
-      })
+      if (isSigningEnabled(platform)) {
+        execSync(`spctl --assess --verbose --type execute "${filePath}"`, {
+          stdio: 'inherit',
+        })
+      } else {
+        execSync(`codesign --verify --verbose "${filePath}"`, {
+          stdio: 'inherit',
+        })
+        console.log(
+          'Ad-hoc signature integrity verified (Gatekeeper trust skipped).'
+        )
+      }
     }
     console.log('✅ Signature verified.')
   } catch (error) {

@@ -216,10 +216,23 @@ describe('sign-utils', () => {
       )
     })
 
-    it('should verify signature on darwin', () => {
+    it('should verify signature on darwin when signing is enabled (certified build)', () => {
+      process.env.APPLE_ID = 'id'
+      process.env.APPLE_ID_PASSWORD = 'pass'
+      process.env.APPLE_TEAM_ID = 'team'
+      process.env.MACOS_CERT_NAME = 'cert'
+
       signUtils.verifyBinary('test-bin', 'darwin')
       expect(mockExecSync).toHaveBeenCalledWith(
         expect.stringContaining('spctl --assess'),
+        expect.anything()
+      )
+    })
+
+    it('should verify signature on darwin when signing is disabled (ad-hoc build)', () => {
+      signUtils.verifyBinary('test-bin', 'darwin')
+      expect(mockExecSync).toHaveBeenCalledWith(
+        expect.stringContaining('codesign --verify --verbose'),
         expect.anything()
       )
     })
