@@ -20,6 +20,7 @@
 - CI/CD Pipeline Modernization: Pinned Node.js 22 LTS (`node-version: '22.x'`) globally across all workflow jobs, resolved coverage artifact failure by enforcing `npm run test:coverage` prior to `upload-artifact`, updated third-party actions to latest major versions, and added `vitest.config.ts`.
 - CI/CD Matrix Stabilization: Mathematically enforced Unix line endings (`* text=auto eol=lf`) in `.gitattributes` and configured `if-no-files-found: ignore` for the Playwright artifact upload in `.github/workflows/ci.yml` to prevent ghost artifact failures.
 - Dedicated E2E Workflow Separation: Created `.github/workflows/e2e.yml` for isolated Playwright E2E execution on `ubuntu-latest` (Node 22 LTS) with `if: always()` report artifact upload, removed all Playwright steps from `.github/workflows/ci.yml`, and updated documentation across `README.md`, `ARCHITECT.md`, `CONTRIBUTING.md`, and `e2e/README.md`.
+- CodeQL Workflow Permission Hardening: Configured explicit top-level read-only permissions boundary (`permissions: contents: read`) in `.github/workflows/e2e.yml` to adhere to CodeQL security requirements.
 
 ## Pending Roadmap Tasks (Immediate Focus)
 
