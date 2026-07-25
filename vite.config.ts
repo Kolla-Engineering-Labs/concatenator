@@ -29,11 +29,11 @@ export default defineConfig(({ mode }) => {
       exclude: ['e2e/**/*', 'node_modules/**/*'],
       reporters: env.CI ? ['default', 'junit'] : ['default'],
       outputFile: {
-        junit: './test-report.junit.xml',
+        junit: './coverage/test-report.junit.xml',
       },
       coverage: {
         provider: 'v8',
-        reporter: env.CI ? ['lcov', 'json-summary'] : ['text', 'html'],
+        reporter: env.CI ? ['lcov', 'json-summary', 'text'] : ['text', 'html'],
         reportsDirectory: './coverage',
         all: true,
         exclude: [

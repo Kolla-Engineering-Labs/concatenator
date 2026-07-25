@@ -36,7 +36,7 @@ jobs:
       - name: Setup Node.js 22 LTS
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: '22.x'
           cache: 'npm'
 
       - name: Install dependencies
@@ -68,6 +68,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Setup Node.js 22 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'npm'
 
       - name: Download all SEA binary artifacts
         uses: actions/download-artifact@v4

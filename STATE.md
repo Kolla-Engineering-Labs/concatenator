@@ -18,6 +18,7 @@
 - Multi-Job Matrix SEA Release Pipeline (`.github/workflows/release-sea-binaries.yml`) for automated cross-platform builds (Linux, macOS, Windows) with GPG detached signing (`SHA256SUMS.asc`) and GitHub Release automation.
 - v0.8.0 Audit Matrix test suite implementation across `VFSHydrator.ts` (15k node scale & DTO mapping), `IgnoreEngine.ts` (Discovery-First Traversal & forced recursion), `FileTable.tsx` (ephemeral rule suspensions), and `token.worker.ts` / `useTokenAggregation.ts` (500ms hybrid batch throttling).
 - Phase C Security Sprint: Implemented strict symlink rejection in `PathValidator.resolveAndJail()`, deterministic `SymlinkRejectedError` & `PathTraversalError` security errors, ENOENT trap handling for non-existent target files during extraction, and telemetry logging across the VFS de-concatenation engine.
+- CI/CD Pipeline Modernization: Pinned Node.js 22 LTS (`node-version: '22.x'`) globally across all workflow jobs, resolved coverage artifact failure by enforcing `npm run test:coverage` prior to `upload-artifact`, updated third-party actions to latest major versions, and added `vitest.config.ts`.
 
 ## Pending Roadmap Tasks (Immediate Focus)
 
