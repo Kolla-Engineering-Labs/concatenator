@@ -159,4 +159,61 @@ describe('useTokenAggregation', () => {
     const weighted = result.current.computeTreeWeights(tree)
     expect(weighted).toBeDefined()
   })
+
+  it('throttles worker message batch updates at 500ms intervals when flooded with 5,000 rapid worker file results', async () => {
+    const count = 5000
+    const floodFiles: FileItem[] = new Array(count)
+    const workerResults: Array<{
+      id: string
+      tokens: number
+      isPrecise: boolean
+      success: boolean
+      hash: string
+    }> = new Array(count)
+
+    for (let i = 0; i < count; i++) {
+      const path = `flood_${i}.ts`
+      floodFiles[i] = {
+        name: path,
+        path,
+        kind: 'file',
+        content: `code ${i}`,
+        size: 10,
+        tokens: 1,
+      }
+      workerResults[i] = {
+        id: path,
+        tokens: i + 10,
+        isPrecise: true,
+        success: true,
+        hash: `h_${i}`,
+      }
+    }
+
+    const { result } = renderHook(() => useTokenAggregation(floodFiles))
+    const workerInstance = (global.Worker as any).mock.results[0].value
+
+    // Fire 5,000 worker result messages in rapid succession
+    act(() => {
+      workerInstance.onmessage({
+        data: {
+          results: workerResults,
+        },
+      })
+    })
+
+    // Before timer advances 500ms, token map should still contain initial estimates (isPrecise: false)
+    expect(result.current.tokenMap['flood_0.ts'].isPrecise).toBe(false)
+
+    // Advance fake timers by 500ms to trigger single batch update flush
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(500)
+    })
+
+    // All 5,000 files should now be updated precisely in tokenMap
+    expect(result.current.tokenMap['flood_0.ts'].tokens).toBe(10)
+    expect(result.current.tokenMap['flood_0.ts'].isPrecise).toBe(true)
+    expect(result.current.tokenMap['flood_4999.ts'].tokens).toBe(5009)
+    expect(result.current.tokenMap['flood_4999.ts'].isPrecise).toBe(true)
+  })
 })

@@ -59,24 +59,24 @@ Thank you for your interest in contributing to Concatenator! This document provi
 
 ### ⌨️ Available Scripts
 
-| Command                   | Description                                    |
-| ------------------------- | ---------------------------------------------- |
-| `npm run dev`             | Start the development server with hot reload   |
-| `npm run build`           | Build the production bundle                    |
-| `npm run preview`         | Preview the production build locally           |
-| `npm run lint`            | Run TypeScript type checking                   |
-| `npm test`                | Run unit tests with Vitest                     |
-| `npm run test:coverage`   | Run unit tests with coverage report            |
-| `npm run test:e2e`        | Run E2E tests with Playwright                  |
-| `npm run test:e2e:ui`     | Run E2E tests with Playwright UI mode          |
-| `npm run test:e2e:debug`  | Run E2E tests in debug mode                    |
-| `npm run test:e2e:headed` | Run E2E tests in headed mode (visible browser) |
-| `npm run build:sea`       | Execute the SEA build pipeline for single executable application  |
-| `npm run build:exe`       | Build the single executable application (SEA) (alias) |
-| `npm run build:manifest`  | Generate SHA256SUMS for built artifacts        |
-| `npm run test:release`    | Audit release candidate (GPG + SHA256)         |
-| `npm run pre-release`     | Pre-release hook for local verification        |
-| `npm run clean`           | Remove build artifacts (dist/, web-assets.ts)  |
+| Command                   | Description                                                      |
+| ------------------------- | ---------------------------------------------------------------- |
+| `npm run dev`             | Start the development server with hot reload                     |
+| `npm run build`           | Build the production bundle                                      |
+| `npm run preview`         | Preview the production build locally                             |
+| `npm run lint`            | Run TypeScript type checking                                     |
+| `npm test`                | Run unit tests with Vitest                                       |
+| `npm run test:coverage`   | Run unit tests with coverage report                              |
+| `npm run test:e2e`        | Run E2E tests with Playwright                                    |
+| `npm run test:e2e:ui`     | Run E2E tests with Playwright UI mode                            |
+| `npm run test:e2e:debug`  | Run E2E tests in debug mode                                      |
+| `npm run test:e2e:headed` | Run E2E tests in headed mode (visible browser)                   |
+| `npm run build:sea`       | Execute the SEA build pipeline for single executable application |
+| `npm run build:exe`       | Build the single executable application (SEA) (alias)            |
+| `npm run build:manifest`  | Generate SHA256SUMS for built artifacts                          |
+| `npm run test:release`    | Audit release candidate (GPG + SHA256)                           |
+| `npm run pre-release`     | Pre-release hook for local verification                          |
+| `npm run clean`           | Remove build artifacts (dist/, web-assets.ts)                    |
 
 ---
 

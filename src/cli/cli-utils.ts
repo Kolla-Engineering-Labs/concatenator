@@ -21,9 +21,15 @@ import {
   generateSessionId,
 } from '../core/engine.js'
 import { isDirectoryTainted } from '../core/utils/fs-utils.js'
-import { UserError } from '../core/errors.js'
+import {
+  UserError,
+  SymlinkRejectedError,
+  PathTraversalError,
+} from '../core/errors.js'
 export { UserError }
+import { resolveAndJail } from '../core/PathValidator.js'
 import { logger } from '../lib/logger.js'
+
 import { IgnoreEngine } from '../core/ignore/IgnoreEngine.js'
 import { TokenService } from '../core/TokenService.js'
 
@@ -406,15 +412,27 @@ export function reconstructFiles(
   }
 
   for (const file of files) {
-    const fullPath = join(outputDir, file.path)
-    const dir = dirname(fullPath)
+    try {
+      const fullPath = resolveAndJail(file.path, outputDir)
+      const dir = dirname(fullPath)
 
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true })
+      if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true })
+      }
+
+      checkOutputPath(fullPath, force, 'file')
+      writeFileSync(fullPath, file.content, 'utf-8')
+    } catch (err: unknown) {
+      if (err instanceof SymlinkRejectedError) {
+        logger.warn(`Skipped symlink extraction: ${file.path}`)
+        continue
+      }
+      if (err instanceof PathTraversalError) {
+        logger.warn(`Skipped path traversal attempt: ${file.path}`)
+        continue
+      }
+      throw err
     }
-
-    checkOutputPath(fullPath, force, 'file')
-    writeFileSync(fullPath, file.content, 'utf-8')
   }
 }
 

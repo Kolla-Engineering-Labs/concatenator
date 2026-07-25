@@ -328,4 +328,45 @@ describe('token.worker', () => {
       hash: 'fatalstring',
     })
   })
+
+  it('should process a flood of 5,000 rapid file dispatches efficiently and accurately aggregate token counts', async () => {
+    await import('../src/web/workers/token.worker')
+
+    const fileCount = 5000
+    const files = new Array(fileCount)
+    for (let i = 0; i < fileCount; i++) {
+      files[i] = {
+        id: `file_${i}.ts`,
+        content: `const val_${i} = ${i};`,
+        hash: `hash_${i}`,
+      }
+    }
+
+    const event = {
+      data: {
+        files,
+        model: 'o200k_base',
+      },
+    } as MessageEvent
+
+    await onmessageHandler(event)
+
+    expect(postMessageMock).toHaveBeenCalledTimes(1)
+    const callArgs = postMessageMock.mock.calls[0][0]
+    expect(callArgs.results).toHaveLength(fileCount)
+    expect(callArgs.results[0]).toEqual({
+      id: 'file_0.ts',
+      tokens: expect.any(Number),
+      isPrecise: true,
+      success: true,
+      hash: 'hash_0',
+    })
+    expect(callArgs.results[4999]).toEqual({
+      id: 'file_4999.ts',
+      tokens: expect.any(Number),
+      isPrecise: true,
+      success: true,
+      hash: 'hash_4999',
+    })
+  })
 })

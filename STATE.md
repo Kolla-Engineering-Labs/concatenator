@@ -1,7 +1,8 @@
 # Project State: Concatenator
 
 **Current Version:** v0.8.0
-**Last Updated:** 2026-07-22
+**Last Updated:** 2026-07-24
+
 
 ## Active Context & Architecture
 
@@ -15,6 +16,8 @@
 - Implementation of the `VFSHydrator.ts` pure batch resolution layer for O(1) map lookups of ignore sources[cite: 1].
 - Integration of a decoupled `PulseEmitter.ts` to prevent synchronous I/O event loop blockages[cite: 1].
 - Multi-Job Matrix SEA Release Pipeline (`.github/workflows/release-sea-binaries.yml`) for automated cross-platform builds (Linux, macOS, Windows) with GPG detached signing (`SHA256SUMS.asc`) and GitHub Release automation.
+- v0.8.0 Audit Matrix test suite implementation across `VFSHydrator.ts` (15k node scale & DTO mapping), `IgnoreEngine.ts` (Discovery-First Traversal & forced recursion), `FileTable.tsx` (ephemeral rule suspensions), and `token.worker.ts` / `useTokenAggregation.ts` (500ms hybrid batch throttling).
+- Phase C Security Sprint: Implemented strict symlink rejection in `PathValidator.resolveAndJail()`, deterministic `SymlinkRejectedError` & `PathTraversalError` security errors, ENOENT trap handling for non-existent target files during extraction, and telemetry logging across the VFS de-concatenation engine.
 
 ## Pending Roadmap Tasks (Immediate Focus)
 

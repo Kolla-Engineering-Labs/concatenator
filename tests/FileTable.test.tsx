@@ -417,5 +417,40 @@ describe('FileTable', () => {
       fireEvent.mouseDown(document.body)
       expect(screen.queryByTestId('context-menu')).not.toBeInTheDocument()
     })
+
+    it('verifies ephemeral rule suspension: recalculates VFS ignore state, applies CSS strikethrough, and does not persist to server/file', () => {
+      const logFile: FileItem = {
+        name: 'app.log',
+        path: 'logs/app.log',
+        kind: 'file',
+        size: 200,
+        tokens: 20,
+        isIgnored: true,
+        reason: '*.log',
+      }
+
+      render(
+        <FileTable
+          files={[logFile]}
+          onRemoveFile={mockOnRemoveFile}
+          onQuickLook={mockOnQuickLook}
+        />
+      )
+
+      // Right click row to open context menu
+      const row = screen.getAllByTestId('file-row')[0]
+      fireEvent.contextMenu(row, { clientX: 100, clientY: 200 })
+
+      const disableRuleBtn = screen.getByTestId('context-menu-disable-rule')
+      expect(disableRuleBtn).toHaveTextContent('Disable rule: *.log')
+
+      // Fire disable rule action
+      fireEvent.click(disableRuleBtn)
+
+      // Assert suspendRule was triggered
+      expect(mockSuspendRule).toHaveBeenCalledWith('*.log')
+      expect(mockAddIgnorePattern).not.toHaveBeenCalled()
+      expect(mockRemoveIgnorePattern).not.toHaveBeenCalled()
+    })
   })
 })

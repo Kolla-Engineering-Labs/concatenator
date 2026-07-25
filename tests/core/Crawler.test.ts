@@ -356,4 +356,38 @@ describe('UnifiedCrawler', () => {
     vi.mocked(fs.statSync).mockRestore()
     vi.mocked(fs.realpathSync).mockRestore()
   })
+
+  it('should forcefully traverse ignored directory tree to discover deeply nested negated file', () => {
+    // Create nested directory structure: a/b/c/d/
+    const deepDir = path.join(tempDir, 'a', 'b', 'c', 'd')
+    fs.mkdirSync(deepDir, { recursive: true })
+
+    fs.writeFileSync(path.join(tempDir, 'a', 'root-sibling.txt'), 'root file')
+    fs.writeFileSync(path.join(tempDir, 'a', 'b', 'b-file.txt'), 'b file')
+    fs.writeFileSync(path.join(deepDir, 'other.txt'), 'other')
+    fs.writeFileSync(path.join(deepDir, 'secret.txt'), 'secret')
+
+    const discoveryEngine = new IgnoreEngine(['a/', '!a/b/c/d/secret.txt'])
+
+    const crawler = new UnifiedCrawler({
+      rootPath: tempDir,
+      ignoreEngine: discoveryEngine,
+    })
+    const results = crawler.collect()
+
+    // Assert that a/b/c/d/secret.txt is included
+    const secretEntry = results.find((e) => e.path === 'a/b/c/d/secret.txt')
+    expect(secretEntry).toBeDefined()
+    expect(secretEntry?.status).toBe('included')
+
+    // Assert other files inside a/ are ignored
+    const rootSibling = results.find((e) => e.path === 'a/root-sibling.txt')
+    expect(rootSibling?.status).toBe('ignored')
+
+    const bFile = results.find((e) => e.path === 'a/b/b-file.txt')
+    expect(bFile?.status).toBe('ignored')
+
+    const otherFile = results.find((e) => e.path === 'a/b/c/d/other.txt')
+    expect(otherFile?.status).toBe('ignored')
+  })
 })

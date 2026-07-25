@@ -1,6 +1,6 @@
 /** @vitest-environment node */
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 // Mocking Node built-ins
 const mockFs = {
@@ -502,12 +502,12 @@ describe('cli-utils', () => {
 
       expect(mockFs.mkdirSync).toHaveBeenCalledWith('/out', expect.anything())
       expect(mockFs.writeFileSync).toHaveBeenCalledWith(
-        join('/out', 'a.txt'),
+        resolve('/out', 'a.txt'),
         'content a',
         'utf-8'
       )
       expect(mockFs.writeFileSync).toHaveBeenCalledWith(
-        join('/out', 'b/c.txt'),
+        resolve('/out', 'b/c.txt'),
         'content c',
         'utf-8'
       )

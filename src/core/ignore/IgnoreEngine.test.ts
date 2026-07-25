@@ -144,6 +144,27 @@ describe('IgnoreEngine', () => {
       expect(engine.isExplicitlyNegated('tests/schema.ts')).toBe(false)
       expect(engine.isIgnored('tests/schema.ts')).toBe(true)
     })
+
+    it('forces traversal into ignored directory tree for deeply nested negated file (discovery-first traversal)', () => {
+      // Ignore a/ globally, but negate !a/b/c/d/secret.txt
+      const engine = new IgnoreEngine(['a/', '!a/b/c/d/secret.txt'])
+
+      // Forced recursion assertions on all intermediate parent directories
+      expect(engine.shouldRecurse('a')).toBe(true)
+      expect(engine.shouldRecurse('a/b')).toBe(true)
+      expect(engine.shouldRecurse('a/b/c')).toBe(true)
+      expect(engine.shouldRecurse('a/b/c/d')).toBe(true)
+
+      // Other files under a/ are ignored
+      expect(engine.isIgnored('a/ignored.txt')).toBe(true)
+      expect(engine.isIgnored('a/b/other.txt')).toBe(true)
+      expect(engine.isIgnored('a/b/c/other.txt')).toBe(true)
+      expect(engine.isIgnored('a/b/c/d/other.txt')).toBe(true)
+
+      // The negated file is explicitly NOT ignored
+      expect(engine.isIgnored('a/b/c/d/secret.txt')).toBe(false)
+      expect(engine.isExplicitlyNegated('a/b/c/d/secret.txt')).toBe(true)
+    })
   })
 
   describe('Edge Cases', () => {
