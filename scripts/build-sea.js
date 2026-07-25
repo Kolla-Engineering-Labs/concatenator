@@ -4,7 +4,7 @@
  * Requires Node.js 22+
  */
 
-import { createHash } from 'crypto'
+import { buildSync } from 'esbuild'
 import { execSync } from 'child_process'
 import {
   writeFileSync,
@@ -96,43 +96,25 @@ try {
   process.exit(1)
 }
 
-// Step 1: Bundle the CLI with esbuild or similar
+// Step 1: Bundle the CLI with esbuild
 console.log('\n📦 Bundling CLI...')
 const isUnsigned = platform === 'darwin' && !isSigningEnabled(platform)
 
 try {
-  const pkg = JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf-8'))
-  const lockfileContent = readFileSync(
-    join(rootDir, 'package-lock.json'),
-    'utf-8'
-  )
-  const lockfileHash = createHash('sha256')
-    .update(lockfileContent)
-    .digest('hex')
-
-  const defineArgs = [
-    `--define:PROCESS_IS_UNSIGNED=${isUnsigned}`,
-    `--define:PROCESS_VERSION=${JSON.stringify(pkg.version).replace(/"/g, '\\"')}`,
-    `--define:LOCKFILE_HASH=${JSON.stringify(lockfileHash)}`,
-  ]
-
-  execSync(
-    `npx esbuild src/cli/index.ts --bundle --platform=node --format=cjs --outfile=dist/sea/concatenator.js --external:fs --external:path --external:url --external:os ${defineArgs.join(' ')}`,
-    {
-      cwd: rootDir,
-      stdio: 'inherit',
-    }
-  )
-} catch {
-  console.log('⚠️  esbuild not found, trying with tsx...')
-  // Fallback: just copy and mark as ESM
-  let cliContent = readFileSync(join(rootDir, 'src/cli/index.ts'), 'utf-8')
-  // Simple replacement for fallback
-  cliContent = cliContent.replace(
-    'globalThis.IS_UNSIGNED_BUILD_FLAG',
-    String(isUnsigned)
-  )
-  writeFileSync(join(seaDir, 'concatenator.js'), cliContent)
+  buildSync({
+    entryPoints: [join(rootDir, 'src/cli/index.ts')],
+    bundle: true,
+    platform: 'node',
+    format: 'cjs',
+    outfile: join(seaDir, 'concatenator.js'),
+    external: ['fs', 'path', 'url', 'os'],
+    define: {
+      PROCESS_IS_UNSIGNED: String(isUnsigned),
+    },
+  })
+} catch (error) {
+  console.error('❌ Failed to bundle CLI with esbuild:', error.message)
+  process.exit(1)
 }
 
 // Step 2: Generate SEA configuration
