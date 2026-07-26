@@ -8,13 +8,13 @@ import {
   END_DELIMITER,
   FILE_END_DELIMITER,
   MANIFEST_PREFIX,
-  MANIFEST_SUFFIX,
 } from './constants.js'
 import type { IContextParser } from './parsers/IContextParser.js'
 import { extractSessionId } from './parsers/ParserUtils.js'
 import { SessionParser } from './parsers/SessionParser.js'
 import { LegacyParser } from './parsers/LegacyParser.js'
 import { HeaderParser } from './parsers/HeaderParser.js'
+import { Neutralizer } from './shared/Neutralizer.js'
 
 export { sanitizePath, dedupePath } from './parsers/ParserUtils.js'
 
@@ -50,91 +50,20 @@ export interface DeconcatenateResult {
   telemetry: TelemetryPayload
 }
 
-/**
- * Input file for concatenation
- */
-export interface ConcatenateInputFile {
-  path: string
-  content: string
-}
-
-/**
- * Generate a short, unique 6-character hex session ID
- *
- * Uses cryptographically secure random number generation via Web Crypto API,
- * which is available in both modern browsers and Node.js 15+.
- *
- * @returns 6-character hexadecimal string
- */
-export function generateSessionId(): string {
-  const bytes = new Uint8Array(3)
-  crypto.getRandomValues(bytes)
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
-}
-
-/**
- * Check if session ID would cause marker collisions within file contents
- *
- * Only checks for complete marker patterns that would actually cause parsing issues:
- * 1. The session-specific manifest header pattern
- * 2. The session-specific file start marker pattern
- *
- * Raw session ID substrings or individual delimiter components are ignored
- * to avoid false positives in source code with hex strings, variable names, etc.
- *
- * @param sessionId - The session ID to check
- * @param files - Array of files to check against
- * @returns true if collision detected, false otherwise
- */
-function checkSessionIdCollision(
-  sessionId: string,
-  files: ConcatenateInputFile[]
-): boolean {
-  // Build the patterns that would actually cause issues if they existed in source
-  const manifestPattern = `${MANIFEST_PREFIX}${sessionId}${MANIFEST_SUFFIX}`
-  const sessionMarkerCore = `(ID: ${sessionId})${END_DELIMITER}`
-
-  for (const file of files) {
-    // Defensive check: if content is not a string (e.g. ArrayBuffer from binary file), skip collision check
-    if (typeof file.content !== 'string') continue
-
-    // Check for manifest header collision
-    if (file.content.includes(manifestPattern)) return true
-
-    // Check for session-specific marker collision
-    // This pattern includes the session ID and would cause the deconcatenator
-    // to mistakenly identify this as a file boundary
-    if (file.content.includes(sessionMarkerCore)) return true
-  }
-  return false
-}
-
-/**
- * Generate a collision-free session ID
- *
- * @param files - Array of files to check for collisions
- * @returns A unique session ID guaranteed not to exist in content
- */
-function generateCollisionFreeSessionId(files: ConcatenateInputFile[]): string {
-  let sessionId = generateSessionId()
-  let attempts = 0
-  const maxAttempts = 100
-
-  while (checkSessionIdCollision(sessionId, files) && attempts < maxAttempts) {
-    sessionId = generateSessionId()
-    attempts++
-  }
-
-  if (attempts >= maxAttempts) {
-    throw new Error(
-      'Failed to generate collision-free session ID after 100 attempts'
-    )
-  }
-
-  return sessionId
-}
+export type {
+  ConcatenateInputFile,
+  FormatterOptions,
+  IFormatter,
+} from './builder/contracts/IFormatter.js'
+export type { INeutralizer } from './shared/contracts/INeutralizer.js'
+export { Neutralizer }
+export {
+  generateSessionId,
+  generateCollisionFreeSessionId,
+  checkSessionIdCollision,
+  generateFileTimestamp,
+} from './builder/BuilderUtils.js'
+export { concatenate, ConcatenationBuilder } from './builder/builder.js'
 
 /**
  * Registry of available parser strategies evaluated in order of specificity
@@ -186,92 +115,6 @@ export function deconcatenate(
       pathTraversalsRejected: 0,
     },
   }
-}
-
-/**
- * Build session-specific file start marker
- *
- * @param path - File path
- * @param sessionId - Session ID
- * @returns Formatted marker string
- */
-function buildFileStartMarker(path: string, sessionId: string): string {
-  return `${START_DELIMITER}${path} (ID: ${sessionId})${END_DELIMITER}`
-}
-
-/**
- * Concatenate multiple files into a single text output with session-based delimiters
- *
- * Format:
- *   --- CONCATENATOR_SESSION_ID: [######] ---
- *   Concatenated on: {timestamp}
- *
- *   <<<<< FILE_START: {path} (ID: ######) >>>>>
- *   {content}
- *   <<<<< FILE_END >>>>>
- *
- * @param files - Array of files to concatenate
- * @param timestamp - Optional timestamp string (defaults to current locale time)
- * @param sessionId - Optional session ID (generated if not provided, collision-checked)
- * @returns Concatenated text content with manifest header
- */
-export function concatenate(
-  files: ConcatenateInputFile[],
-  timestamp?: string,
-  sessionId?: string,
-  onProgress?: (progress: number) => void,
-  tokenBudget?: number
-): string {
-  const ts = timestamp || new Date().toLocaleString()
-  const sid = sessionId || generateCollisionFreeSessionId(files)
-
-  // Validate provided session ID doesn't collide
-  if (sessionId && checkSessionIdCollision(sessionId, files)) {
-    throw new Error(
-      `Provided session ID '${sessionId}' collides with file content`
-    )
-  }
-
-  // Manifest header with session ID
-  let result = `${MANIFEST_PREFIX}${sid}${MANIFEST_SUFFIX}\n`
-  result += `Concatenated on: ${ts}\n`
-  if (tokenBudget) {
-    result += `Budget: ${tokenBudget.toLocaleString()}\n`
-  }
-  result += `\n`
-
-  const totalFiles = files.length
-  for (let i = 0; i < totalFiles; i++) {
-    const file = files[i]
-    result += `${buildFileStartMarker(file.path, sid)}\n`
-    result += typeof file.content === 'string' ? file.content : ''
-    result += `\n${FILE_END_DELIMITER}\n\n`
-
-    if (onProgress) {
-      onProgress(Math.round(((i + 1) / totalFiles) * 100))
-    }
-  }
-
-  return result
-}
-
-/**
- * Generate a filename-safe timestamp for output files
- *
- * Format: YYYYMMDD_HHIISS
- *
- * @param date - Optional date (defaults to now)
- * @returns Timestamp string safe for filenames
- */
-export function generateFileTimestamp(date: Date = new Date()): string {
-  const YYYY = date.getFullYear()
-  const MM = String(date.getMonth() + 1).padStart(2, '0')
-  const DD = String(date.getDate()).padStart(2, '0')
-  const HH = String(date.getHours()).padStart(2, '0')
-  const II = String(date.getMinutes()).padStart(2, '0')
-  const SS = String(date.getSeconds()).padStart(2, '0')
-
-  return `${YYYY}${MM}${DD}_${HH}${II}${SS}`
 }
 
 /**
@@ -531,17 +374,10 @@ export function parseBundle(content: string): {
 } {
   const { files, skippedPaths } = deconcatenate(content)
   const fileMap: Record<string, string> = {}
+  const neutralizer = new Neutralizer()
 
   for (const file of files) {
-    // Un-neutralize:
-    // 1. Backticks: \` -> ` (Reverse of common LLM/Markdown escaping)
-    // 2. Delimiter parts: \<<<<< or \>>>>> (Reverse of common manual escaping)
-    const processedContent = file.content
-      .replace(/\\`/g, '`')
-      .replace(/\\<{5}/g, '<<<<<')
-      .replace(/\\>{5}/g, '>>>>>')
-
-    fileMap[file.path] = processedContent
+    fileMap[file.path] = neutralizer.unneutralize(file.content)
   }
 
   return { fileMap, skippedPaths }
