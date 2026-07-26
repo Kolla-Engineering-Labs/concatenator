@@ -7,6 +7,7 @@
 - refactor(core): Phase C Core Isolation — Strategy Pattern Context Parsers
 
   ### Architectural Context
+
   Monolithic text parsing logic inside `engine.ts` has been refactored into isolated, pure Strategy Pattern components under `src/core/parsers/` following strict Clean Architecture guidelines.
 
   ### Key Changes
