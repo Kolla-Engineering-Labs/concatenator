@@ -75,6 +75,69 @@ function safeJoin(base: string, part: string): string {
 }
 
 /**
+ * Safe path relative helper working across Node.js and browser environments.
+ */
+function safeRelative(from: string, to: string): string {
+  let relativeFn: unknown = undefined
+  try {
+    if (pathMod && typeof pathMod === 'object') {
+      relativeFn = pathMod['relative']
+    }
+  } catch {
+    /* Vitest mock proxy safety */
+  }
+
+  if (typeof relativeFn === 'function') {
+    try {
+      return (relativeFn as (f: string, t: string) => string)(from, to)
+    } catch {
+      /* fallthrough to browser fallback */
+    }
+  }
+  const normFrom = from.replace(/\\/g, '/').replace(/\/$/, '')
+  const normTo = to.replace(/\\/g, '/').replace(/\/$/, '')
+  if (normFrom === normTo) return ''
+  const fromParts = normFrom.split('/').filter(Boolean)
+  const toParts = normTo.split('/').filter(Boolean)
+  let common = 0
+  while (
+    common < fromParts.length &&
+    common < toParts.length &&
+    fromParts[common] === toParts[common]
+  ) {
+    common++
+  }
+  const upCount = fromParts.length - common
+  const upParts = Array(upCount).fill('..')
+  const downParts = toParts.slice(common)
+  return [...upParts, ...downParts].join('/')
+}
+
+/**
+ * Safe path isAbsolute helper working across Node.js and browser environments.
+ */
+function safeIsAbsolute(p: string): boolean {
+  let isAbsFn: unknown = undefined
+  try {
+    if (pathMod && typeof pathMod === 'object') {
+      isAbsFn = pathMod['isAbsolute']
+    }
+  } catch {
+    /* Vitest mock proxy safety */
+  }
+
+  if (typeof isAbsFn === 'function') {
+    try {
+      return (isAbsFn as (path: string) => boolean)(p)
+    } catch {
+      /* fallthrough to browser fallback */
+    }
+  }
+  const normalized = p.replace(/\\/g, '/')
+  return normalized.startsWith('/') || /^[a-zA-Z]:/.test(normalized)
+}
+
+/**
  * Pure PathValidator utility for enforcing path jail boundaries and strict symlink rejection.
  * Works seamlessly in both Node.js environment (with fs checks) and browser environment (virtual files).
  *
@@ -82,11 +145,27 @@ function safeJoin(base: string, part: string): string {
  * @param rootDir - The root directory boundary.
  * @returns The resolved, safe absolute path within the root directory jail.
  * @throws {SymlinkRejectedError} If any existing path component evaluates to a symbolic link.
- * @throws {PathTraversalError} If the target path escapes the root directory boundary.
+ * @throws {PathTraversalError} If the target path escapes the root directory boundary or contains null bytes.
  */
 export function resolveAndJail(targetPath: string, rootDir: string): string {
   if (!targetPath) {
     throw new PathTraversalError('Invalid target path: path cannot be empty')
+  }
+
+  if (targetPath.includes('\0') || (rootDir && rootDir.includes('\0'))) {
+    throw new PathTraversalError('Security Violation: Path contains null bytes')
+  }
+
+  // Reject absolute path injections (POSIX leading slash, Windows drive letter, or UNC)
+  if (
+    safeIsAbsolute(targetPath) ||
+    targetPath.startsWith('/') ||
+    targetPath.startsWith('\\') ||
+    /^[a-zA-Z]:/.test(targetPath)
+  ) {
+    throw new PathTraversalError(
+      `Security Violation: Absolute path injection rejected: ${targetPath}`
+    )
   }
 
   let lstatFn: unknown = undefined
@@ -114,11 +193,8 @@ export function resolveAndJail(targetPath: string, rootDir: string): string {
       ? (realpathFn as (p: string) => string)(safeResolve(rootDir))
       : safeResolve(rootDir)
 
-  // Remove null bytes and normalize backslashes
-  const sanitized = targetPath
-    .replace(new RegExp(String.fromCharCode(0), 'g'), '')
-    .replace(/\\/g, '/')
-    .replace(/^\/+/, '')
+  // Normalize backslashes without mutating percent symbols
+  const sanitized = targetPath.replace(/\\/g, '/')
 
   // Component-by-component walk for symlink checking (Node environment only)
   if (hasFs) {
@@ -161,18 +237,10 @@ export function resolveAndJail(targetPath: string, rootDir: string): string {
   // Calculate candidate path
   const candidatePath = safeResolve(resolvedRoot, sanitized)
 
-  // Normalize slashes for boundary assertion
-  const normalizedCandidate = candidatePath.replace(/\\/g, '/')
-  const normalizedRoot = resolvedRoot.replace(/\\/g, '/')
-  const rootWithSlash = normalizedRoot.endsWith('/')
-    ? normalizedRoot
-    : `${normalizedRoot}/`
+  // Mathematically guarantee containment within root boundary using path.relative
+  const relativePath = safeRelative(resolvedRoot, candidatePath)
 
-  // Assert containment strictly within root boundary
-  if (
-    normalizedCandidate !== normalizedRoot &&
-    !normalizedCandidate.startsWith(rootWithSlash)
-  ) {
+  if (relativePath.startsWith('..') || safeIsAbsolute(relativePath)) {
     throw new PathTraversalError(
       `Security Violation: Path traversal outside root boundary: ${targetPath}`
     )
