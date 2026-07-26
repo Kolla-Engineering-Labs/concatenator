@@ -1,7 +1,7 @@
 # Project State: Concatenator
 
-**Current Version:** v0.8.0
-**Last Updated:** 2026-07-24
+**Current Version:** v0.9.0
+**Last Updated:** 2026-07-26
 
 ## Active Context & Architecture
 
@@ -16,12 +16,13 @@
 - Integration of a decoupled `PulseEmitter.ts` to prevent synchronous I/O event loop blockages[cite: 1].
 - Multi-Job Matrix SEA Release Pipeline (`.github/workflows/release-sea-binaries.yml`) for automated cross-platform builds (Linux, macOS, Windows) with GPG detached signing (`SHA256SUMS.asc`) and GitHub Release automation.
 - v0.8.0 Audit Matrix test suite implementation across `VFSHydrator.ts` (15k node scale & DTO mapping), `IgnoreEngine.ts` (Discovery-First Traversal & forced recursion), `FileTable.tsx` (ephemeral rule suspensions), and `token.worker.ts` / `useTokenAggregation.ts` (500ms hybrid batch throttling).
-- Phase C Security Sprint: Implemented strict symlink rejection in `PathValidator.resolveAndJail()`, deterministic `SymlinkRejectedError` & `PathTraversalError` security errors, ENOENT trap handling for non-existent target files during extraction, and telemetry logging across the VFS de-concatenation engine.
+- Phase C Security Sprint: Implemented strict symlink rejection in `PathValidator.resolveAndJail()`, deterministic `SymlinkRejectedError` & `PathTraversalError` security errors, mathematical `path.relative()` boundary enforcement, null byte sanitization, percent character preservation, ENOENT trap handling for non-existent target files during extraction, and comprehensive unit tests (`PathValidator.test.ts`). Verified across 60 test files / 807 total tests.
 - CI/CD Pipeline Modernization: Pinned Node.js 22 LTS (`node-version: '22.x'`) globally across all workflow jobs, resolved coverage artifact failure by enforcing `npm run test:coverage` prior to `upload-artifact`, updated third-party actions to latest major versions, and added `vitest.config.ts`.
 - CI/CD Matrix Stabilization: Mathematically enforced Unix line endings (`* text=auto eol=lf`) in `.gitattributes` and configured `if-no-files-found: ignore` for the Playwright artifact upload in `.github/workflows/ci.yml` to prevent ghost artifact failures.
 - Dedicated E2E Workflow Separation: Created `.github/workflows/e2e.yml` for isolated Playwright E2E execution on `ubuntu-latest` (Node 22 LTS) with `if: always()` report artifact upload, removed all Playwright steps from `.github/workflows/ci.yml`, and updated documentation across `README.md`, `ARCHITECT.md`, `CONTRIBUTING.md`, and `e2e/README.md`.
 - CodeQL Workflow Permission Hardening: Configured explicit top-level read-only permissions boundary (`permissions: contents: read`) in `.github/workflows/e2e.yml` to adhere to CodeQL security requirements.
 - macOS Ad-Hoc Signature Verification Awareness: Updated `verifyBinary` in `scripts/sign-utils.ts` to check `isSigningEnabled(platform)`, executing `spctl` for certified builds and `codesign --verify --verbose` for ad-hoc builds with appropriate logging. Updated test suite in `tests/scripts_sign_utils.test.ts`.
+- Phase C Core Isolation: Decoupled monolithic text parsing logic from `engine.ts` God Class into Strategy Pattern components (`IContextParser.ts` interface contract, `ParserUtils.ts` shared perimeter, `SessionParser.ts`, `LegacyParser.ts`, `HeaderParser.ts`). Refactored `engine.ts` into a lightweight factory orchestrator and re-exported path utilities for full backward compatibility.
 - Programmatic esbuild SEA Bundling Refactor: Refactored bundling in `scripts/build-sea.js` to use `buildSync` directly from `esbuild`, removing shell execution and tsx fallback, natively passing `define: { PROCESS_IS_UNSIGNED: String(isUnsigned) }`, and triggering `process.exit(1)` on bundling errors to halt CI/CD pipelines.
 
 ## Pending Roadmap Tasks (Immediate Focus)

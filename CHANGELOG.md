@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.9.0] - 2026-07-26
+
+### Minor Changes
+
+- refactor(core): Phase C Core Isolation — Strategy Pattern Context Parsers
+
+  ### Architectural Context
+  Monolithic text parsing logic inside `engine.ts` has been refactored into isolated, pure Strategy Pattern components under `src/core/parsers/` following strict Clean Architecture guidelines.
+
+  ### Key Changes
+  - **Interface Contract (`IContextParser.ts`)**: Established a pure structural interface with zero runtime code (`canParse`, `parse`) to prevent circular dependency issues.
+  - **Shared Perimeter (`ParserUtils.ts`)**: Extracted all shared runtime functions (`sanitizePath`, `dedupePath`, `extractSessionId`, `buildFileStartRegex`, `processExtractedFile`) into an isolated utility module.
+  - **Parser Strategies**: Implemented pure `SessionParser`, `LegacyParser`, and `HeaderParser` strategy classes.
+  - **Orchestrator (`engine.ts`)**: Refactored `engine.ts` into a lightweight factory & orchestrator evaluating signature payloads and instantiating matching parser strategies.
+  - **Backward Compatibility**: Re-exported `sanitizePath` and `dedupePath` from `ParserUtils.js` to ensure all 807 Vitest assertions pass without modification.
+
 ## [0.8.1] - 2026-07-25
 
 ### Patch Changes
