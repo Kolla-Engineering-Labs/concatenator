@@ -15,9 +15,19 @@ export class UserError extends Error {
 }
 
 /**
+ * Custom error class for security violations (e.g. path traversal, symlink rejection).
+ */
+export class SecurityViolation extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'SecurityViolation'
+  }
+}
+
+/**
  * Custom error class for path traversal security violations.
  */
-export class PathTraversalError extends Error {
+export class PathTraversalError extends SecurityViolation {
   constructor(message: string) {
     super(message)
     this.name = 'PathTraversalError'
@@ -27,19 +37,9 @@ export class PathTraversalError extends Error {
 /**
  * Custom error class for symbolic link security violations.
  */
-export class SymlinkRejectedError extends Error {
+export class SymlinkRejectedError extends SecurityViolation {
   constructor(message: string) {
     super(message)
     this.name = 'SymlinkRejectedError'
-  }
-}
-
-/**
- * Custom error class for security violations (e.g. path traversal).
- */
-export class SecurityViolation extends PathTraversalError {
-  constructor(message: string) {
-    super(message)
-    this.name = 'SecurityViolation'
   }
 }
