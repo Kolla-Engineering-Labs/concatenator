@@ -10,8 +10,13 @@ import {
   MANIFEST_PREFIX,
   MANIFEST_SUFFIX,
 } from './constants.js'
-import { resolveAndJail } from './PathValidator.js'
-import { SymlinkRejectedError, PathTraversalError } from './errors.js'
+import type { IContextParser } from './parsers/IContextParser.js'
+import { extractSessionId } from './parsers/ParserUtils.js'
+import { SessionParser } from './parsers/SessionParser.js'
+import { LegacyParser } from './parsers/LegacyParser.js'
+import { HeaderParser } from './parsers/HeaderParser.js'
+
+export { sanitizePath, dedupePath } from './parsers/ParserUtils.js'
 
 import type { ValidationResult } from './types.js'
 
@@ -132,104 +137,31 @@ function generateCollisionFreeSessionId(files: ConcatenateInputFile[]): string {
 }
 
 /**
- * Extract session ID from manifest header
- *
- * Format: --- CONCATENATOR_SESSION_ID: [######] ---
- *
- * @param content - The concatenated content
- * @returns Session ID or null if not found
+ * Registry of available parser strategies evaluated in order of specificity
  */
-function extractSessionId(content: string): string | null {
-  // Regex: --- CONCATENATOR_SESSION_ID: ###### ---
-  // Flexible with whitespace and case
-  const manifestRegex = /---\s*CONCATENATOR_SESSION_ID:\s*([a-zA-Z0-9]+)\s*---/i
-  const match = content.match(manifestRegex)
-  return match ? match[1] : null
-}
+const PARSER_STRATEGIES: IContextParser[] = [
+  new SessionParser(),
+  new LegacyParser(),
+  new HeaderParser(),
+]
 
 /**
- * Build session-specific file start marker regex
+ * Factory function to evaluate payload signature and instantiate/select the matching parser strategy
  *
- * @param sessionId - The session ID
- * @returns RegExp to match file start markers with this session ID
+ * @param content - Concatenated text content to evaluate
+ * @returns The matching IContextParser strategy or null if no strategy matches
  */
-function buildFileStartRegex(sessionId: string): RegExp {
-  // Escape special chars in delimiters for regex
-  const escapedStart = START_DELIMITER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const escapedEnd = END_DELIMITER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-
-  // Pattern: START_DELIMITER + (path) + " (ID: " + sessionId + ")" + END_DELIMITER
-  // We use a capturing group for the path portion
-  // Flexible whitespace around the ID part
-  return new RegExp(
-    `${escapedStart}(.+?)\\s*\\(ID:\\s*${sessionId}\\s*\\)\\s*${escapedEnd}`,
-    'g'
-  )
-}
-
-/**
- * Parse concatenated content and extract individual files using session-aware parsing
- *
- * Handles fault tolerance for:
- * - Missing FILE_END_DELIMITER (LLM hallucinations, deletions, truncation)
- * - Malformed markers or nested delimiters
- * - Path traversal attempts (sanitizes paths)
- * - Duplicate paths (renames with counter suffix)
- * - Legacy/foreign delimiters from other sessions (ignored)
- *
- * @param content - The concatenated text content to parse
- * @returns DeconcatenateResult with extracted files and skipped paths
- */
-function processExtractedFile(
-  rawPath: string,
-  fileContent: string,
-  rootDir: string,
-  files: VirtualFile[],
-  skippedPaths: string[],
-  addedPaths: Set<string>,
-  telemetry: TelemetryPayload
-): boolean {
-  const sanitizedPath = sanitizePath(rawPath)
-  if (!sanitizedPath) return false
-
-  try {
-    // Assert path security and boundary containment against root directory
-    resolveAndJail(sanitizedPath, rootDir)
-
-    const finalPath = dedupePath(sanitizedPath, addedPaths)
-    addedPaths.add(finalPath)
-    files.push({ path: finalPath, content: fileContent })
-    return true
-  } catch (err: unknown) {
-    if (err instanceof SymlinkRejectedError) {
-      skippedPaths.push(rawPath)
-      telemetry.skipped.push({ path: rawPath, reason: 'Symlink Rejected' })
-      telemetry.symlinksRejected++
-      return false
+export function getParserStrategy(content: string): IContextParser | null {
+  for (const strategy of PARSER_STRATEGIES) {
+    if (strategy.canParse(content)) {
+      return strategy
     }
-    if (err instanceof PathTraversalError) {
-      skippedPaths.push(rawPath)
-      telemetry.skipped.push({
-        path: rawPath,
-        reason: 'Path Traversal Rejected',
-      })
-      telemetry.pathTraversalsRejected++
-      return false
-    }
-    throw err
   }
+  return null
 }
 
 /**
- * Parse concatenated content and extract individual files using session-aware parsing
- *
- * Handles fault tolerance for:
- * - Missing FILE_END_DELIMITER (LLM hallucinations, deletions, truncation)
- * - Malformed markers or nested delimiters
- * - Path traversal attempts (sanitizes paths)
- * - Symbolic link rejections
- * - Duplicate paths (renames with counter suffix)
- * - Legacy/foreign delimiters from other sessions (ignored)
+ * Parse concatenated content and extract individual files using strategy pattern orchestration
  *
  * @param content - The concatenated text content to parse
  * @param rootDir - Root jail boundary directory (defaults to current working dir '.')
@@ -239,310 +171,21 @@ export function deconcatenate(
   content: string,
   rootDir = '.'
 ): DeconcatenateResult {
-  const files: VirtualFile[] = []
-  const skippedPaths: string[] = []
-  const addedPaths = new Set<string>()
-  const telemetry: TelemetryPayload = {
-    skipped: [],
-    symlinksRejected: 0,
-    pathTraversalsRejected: 0,
+  const strategy = getParserStrategy(content)
+  if (strategy) {
+    return strategy.parse(content, rootDir)
   }
 
-  // Extract session ID from manifest
-  const sessionId = extractSessionId(content)
-  if (!sessionId) {
-    // No manifest found - could be legacy format or invalid
-    // Try to detect if this looks like old format
-    const hasOldFormat = content.includes('<<<<< FILE_START:')
-    if (hasOldFormat) {
-      // Try legacy parsing (no session ID filtering)
-      return deconcatenateLegacy(content, rootDir)
-    }
-
-    // Check for Header format (--- FILE: path/to/file ---)
-    if (content.includes('--- FILE:')) {
-      return deconcatenateHeader(content, rootDir)
-    }
-
-    return { files: [], skippedPaths: [], foundAny: false, telemetry }
+  return {
+    files: [],
+    skippedPaths: [],
+    foundAny: false,
+    telemetry: {
+      skipped: [],
+      symlinksRejected: 0,
+      pathTraversalsRejected: 0,
+    },
   }
-
-  // Build regex for finding all file start markers with this session ID
-  const fileStartRegex = buildFileStartRegex(sessionId)
-  const fileEndDelimiter = FILE_END_DELIMITER
-
-  // Find all potential file markers with their positions
-  const matches: Array<{
-    path: string
-    contentStart: number
-    fullMatchEnd: number
-    index: number
-  }> = []
-  let match
-
-  while ((match = fileStartRegex.exec(content)) !== null) {
-    matches.push({
-      path: match[1].trim(),
-      contentStart: match.index + match[0].length,
-      fullMatchEnd: match.index + match[0].length,
-      index: match.index,
-    })
-  }
-
-  let foundAny = false
-  const totalMatches = matches.length
-
-  for (let i = 0; i < totalMatches; i++) {
-    const { path, contentStart } = matches[i]
-    const nextMatchStart = i < totalMatches - 1 ? matches[i + 1].index : null
-
-    // Find the end delimiter for this file
-    const fileEndIndex = content.indexOf(fileEndDelimiter, contentStart)
-
-    // Partial File Detection
-    // Valid if we find an end delimiter AND it's before the next file start (if any)
-    if (
-      fileEndIndex === -1 ||
-      (nextMatchStart !== null && fileEndIndex > nextMatchStart)
-    ) {
-      skippedPaths.push(path || '(unknown path)')
-      telemetry.skipped.push({
-        path: path || '(unknown path)',
-        reason: 'Missing End Delimiter',
-      })
-      continue
-    }
-
-    // Extract and clean file content
-    let fileContent = content.substring(contentStart, fileEndIndex)
-    fileContent = fileContent.replace(/^[\r\n]+|[\r\n]+$/g, '')
-
-    if (
-      processExtractedFile(
-        path,
-        fileContent,
-        rootDir,
-        files,
-        skippedPaths,
-        addedPaths,
-        telemetry
-      )
-    ) {
-      foundAny = true
-    }
-  }
-
-  return { files, skippedPaths, foundAny, telemetry }
-}
-
-/**
- * Legacy deconcatenate parser for backwards compatibility
- * Handles old format without session IDs
- *
- * @param content - Legacy concatenated content
- * @param rootDir - Root jail boundary directory
- * @returns DeconcatenateResult
- */
-function deconcatenateLegacy(
-  content: string,
-  rootDir = '.'
-): DeconcatenateResult {
-  const files: VirtualFile[] = []
-  const skippedPaths: string[] = []
-  const addedPaths = new Set<string>()
-  const telemetry: TelemetryPayload = {
-    skipped: [],
-    symlinksRejected: 0,
-    pathTraversalsRejected: 0,
-  }
-
-  let searchIndex = 0
-  let foundAny = false
-
-  while (true) {
-    const startIndex = content.indexOf(START_DELIMITER, searchIndex)
-    if (startIndex === -1) break
-
-    const pathStart = startIndex + START_DELIMITER.length
-    const pathEnd = content.indexOf(END_DELIMITER, pathStart)
-    if (pathEnd === -1) break
-
-    const nextStartDelimiter = content.indexOf(START_DELIMITER, pathStart)
-    const contentStartRaw = pathEnd + END_DELIMITER.length
-    const fileEndIndex = content.indexOf(FILE_END_DELIMITER, contentStartRaw)
-
-    const path = content.substring(pathStart, pathEnd).trim()
-
-    if (
-      fileEndIndex === -1 ||
-      (nextStartDelimiter !== -1 && nextStartDelimiter < fileEndIndex)
-    ) {
-      skippedPaths.push(path || '(unknown path)')
-      telemetry.skipped.push({
-        path: path || '(unknown path)',
-        reason: 'Missing End Delimiter',
-      })
-      searchIndex =
-        nextStartDelimiter !== -1 ? nextStartDelimiter : content.length
-      continue
-    }
-
-    let fileContent = content.substring(contentStartRaw, fileEndIndex)
-    fileContent = fileContent.replace(/^[\r\n]+|[\r\n]+$/g, '')
-
-    if (
-      processExtractedFile(
-        path,
-        fileContent,
-        rootDir,
-        files,
-        skippedPaths,
-        addedPaths,
-        telemetry
-      )
-    ) {
-      foundAny = true
-    }
-
-    searchIndex = fileEndIndex + FILE_END_DELIMITER.length
-  }
-
-  return { files, skippedPaths, foundAny, telemetry }
-}
-
-/**
- * Header deconcatenate parser
- * Handles markers like: --- FILE: path/to/file ---
- *
- * @param content - Header concatenated content
- * @param rootDir - Root jail boundary directory
- * @returns DeconcatenateResult
- */
-function deconcatenateHeader(
-  content: string,
-  rootDir = '.'
-): DeconcatenateResult {
-  const files: VirtualFile[] = []
-  const skippedPaths: string[] = []
-  const addedPaths = new Set<string>()
-  const telemetry: TelemetryPayload = {
-    skipped: [],
-    symlinksRejected: 0,
-    pathTraversalsRejected: 0,
-  }
-
-  // Regex for --- FILE: path/to/file ---
-  const startRegex = /--- FILE: (.+?) ---/g
-  let match: RegExpExecArray | null
-  const matches: { path: string; start: number; end: number }[] = []
-
-  while ((match = startRegex.exec(content)) !== null) {
-    matches.push({
-      path: match[1].trim(),
-      start: match.index,
-      end: match.index + match[0].length,
-    })
-  }
-
-  for (let i = 0; i < matches.length; i++) {
-    const startPos = matches[i].end
-    const nextStartPos =
-      i < matches.length - 1 ? matches[i + 1].start : content.length
-
-    let fileContent = content.substring(startPos, nextStartPos)
-
-    // Clean up content: remove leading/trailing newlines
-    // Also remove trailing '---' if it exists before the next marker or EOF
-    fileContent = fileContent.replace(/[\r\n]+---[\r\n]*$/, '')
-    fileContent = fileContent.replace(/^[\r\n]+|[\r\n]+$/g, '')
-
-    processExtractedFile(
-      matches[i].path,
-      fileContent,
-      rootDir,
-      files,
-      skippedPaths,
-      addedPaths,
-      telemetry
-    )
-  }
-
-  return { files, skippedPaths, foundAny: files.length > 0, telemetry }
-}
-
-/**
- * Sanitize a file path to prevent path traversal attacks
- *
- * - Removes null bytes
- * - Normalizes backslashes to forward slashes
- * - Removes leading slashes (absolute path prevention)
- * - Removes Windows drive letters
- * - Resolves ../ sequences
- *
- * @param path - The raw path from the concatenated file
- * @returns Sanitized path safe for use
- */
-export function sanitizePath(path: string): string {
-  const sanitized = path
-    // Remove null bytes (using char code to avoid ESLint control-regex error)
-    .replace(new RegExp(String.fromCharCode(0), 'g'), '')
-    // Normalize backslashes to forward slashes for security
-    .replace(/\\/g, '/')
-    // Remove leading slashes (absolute path prevention)
-    .replace(/^\/+/, '')
-    // Remove Windows drive letters (C:, D:, etc.)
-    .replace(/^[a-zA-Z]:\//, '')
-    // Remove UNC path prefixes (\\?\)
-    .replace(/^\\?\//, '')
-
-  // Resolve all ../ sequences throughout the path using stack-based normalization
-  const parts = sanitized.split('/')
-  const safeParts: string[] = []
-  for (const part of parts) {
-    if (part === '..') {
-      // Attempt to traverse up - pop the last safe directory if possible
-      if (safeParts.length > 0) {
-        safeParts.pop()
-      }
-      // If at root, ignore the .. (can't go above root)
-    } else if (part === '.' || part === '') {
-      // Skip current directory references and empty parts
-      continue
-    } else {
-      safeParts.push(part)
-    }
-  }
-
-  return safeParts.join('/')
-}
-
-/**
- * Generate a unique path by appending a counter suffix if the path already exists
- *
- * Example: file.js -> file(1).js, file(2).js, etc.
- *
- * @param path - The desired file path
- * @param existingPaths - Set of already used paths
- * @returns A unique path (original or with counter suffix)
- */
-export function dedupePath(path: string, existingPaths: Set<string>): string {
-  if (!existingPaths.has(path)) {
-    return path
-  }
-
-  let counter = 1
-  const lastDotIndex = path.lastIndexOf('.')
-  const hasExtension = lastDotIndex > path.lastIndexOf('/')
-  const baseName = hasExtension ? path.slice(0, lastDotIndex) : path
-  const extension = hasExtension ? path.slice(lastDotIndex) : ''
-
-  let finalPath = path
-  while (existingPaths.has(finalPath)) {
-    finalPath = `${baseName}(${counter})${extension}`
-    counter++
-  }
-
-  return finalPath
 }
 
 /**

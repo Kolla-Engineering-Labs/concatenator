@@ -1,4 +1,4 @@
-# System Knowledge Document: Concatenator (v0.8.0)
+# System Knowledge Document: Concatenator (v0.9.0)
 
 ## 1. Executive System Overview
 
@@ -127,6 +127,14 @@ The entire application adheres to a strict Core-First / Thin-Consumer software p
 │ ├── SecretScanner.ts # PII extraction blocks; encapsulates regex masking standards
 │ ├── VFSManager.ts # Virtual directory state mapping and depth-absorbed file trees
 │ ├── VFSHydrator.ts # Pure hydration layer — single source of truth for ignore resolution (returns Map<string, HydratedFile>)
+│ ├── PathValidator.ts # Path traversal and boundary security containment assertion
+│ ├── engine.ts # Lightweight parser strategy factory & orchestrator
+│ ├── parsers/ # Context extraction strategy pattern domain
+│ │ ├── IContextParser.ts # Pure structural interface contract for context extraction (zero runtime logic)
+│ │ ├── ParserUtils.ts # Shared perimeter holding path sanitization, deduplication, and extraction guards
+│ │ ├── SessionParser.ts # Strategy for session-aware concatenated text payloads
+│ │ ├── LegacyParser.ts # Strategy for position-based legacy format payloads
+│ │ └── HeaderParser.ts # Strategy for regex-based header format payloads
 │ ├── types.ts # Core type definitions including IgnoreSource enum (DEFAULT / FILE / SESSION)
 │ ├── LifecycleManager.ts # Graceful server shutdowns, pid management, and lockfile sweeps
 │ └── ignore/
@@ -199,6 +207,14 @@ During the development, hardening, and testing phases of the Concatenator projec
 17. **Synchronous I/O Event Loop Blockage (The Liveliness Paradox)**:
     - _Problem_: Performing heavy file serialization or deep JSZip processes blocked the local Node event loop. This caused standard `/api/heartbeat` requests to fail, firing false-positive "Server Disconnected" UI overlays.
     - _Solution_: Implemented a decoupled, progress-based **Engine Pulse**. The core writes operational metadata to a local `.concatenator/pulse.json` file. The server provides a lightweight, non-blocking `/api/pulse` stream route that runs on a native browser fallback loop to detect actual thread liveness.
+
+18. **Phase C Core Isolation (Strategy Pattern Context Parsers)**:
+    - _Problem_: `engine.ts` had grown into a monolithic God Class containing inline text parsing logic for session manifests, legacy position-based delimiters, header protocols, path sanitization, duplicate resolution, and security jailing assertions.
+    - _Solution_: Dismantled `engine.ts` into isolated, pure-function strategy implementations in `src/core/parsers/` following strict Clean Architecture guidelines:
+      - `IContextParser.ts`: Pure structural interface contract (`canParse`, `parse`) with zero runtime code to prevent circular dependency issues.
+      - `ParserUtils.ts`: Shared perimeter utility module holding pure helper functions (`sanitizePath`, `dedupePath`, `extractSessionId`, `buildFileStartRegex`, `processExtractedFile`).
+      - `SessionParser.ts`, `LegacyParser.ts`, `HeaderParser.ts`: Pure strategies implementing `IContextParser` and consuming `ParserUtils.ts`.
+      - `engine.ts`: Lightweight factory & orchestrator evaluating signature payloads and instantiating the matching parser strategy, while re-exporting `sanitizePath` and `dedupePath` for full backward compatibility across the Vitest suite.
 
 ---
 
