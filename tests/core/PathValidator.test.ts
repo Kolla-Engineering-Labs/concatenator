@@ -60,6 +60,44 @@ describe('PathValidator (resolveAndJail)', () => {
     }).toThrow(SymlinkRejectedError)
   })
 
+  it('preserves valid filenames containing percent (%) symbols without mutating them', () => {
+    const filePath = 'reports/100%_growth.png'
+    const result = resolveAndJail(filePath, tempDir)
+
+    expect(result).toBe(path.resolve(tempDir, filePath))
+    expect(result).toContain('100%_growth.png')
+  })
+
+  it('detects and rejects prefix collision attempts (e.g. /app/root vs /app/root-evil)', () => {
+    // Attempt escape via sibling folder matching root prefix
+    expect(() => {
+      resolveAndJail(
+        '../' + path.basename(tempDir) + '-evil/payload.sh',
+        tempDir
+      )
+    }).toThrow(PathTraversalError)
+  })
+
+  it('rejects null byte (\\0) injections with deterministic PathTraversalError', () => {
+    expect(() => {
+      resolveAndJail('file.txt\0.png', tempDir)
+    }).toThrow(PathTraversalError)
+
+    expect(() => {
+      resolveAndJail('sub/\0/payload.sh', tempDir)
+    }).toThrow(PathTraversalError)
+  })
+
+  it('rejects absolute path injections with PathTraversalError', () => {
+    expect(() => {
+      resolveAndJail('/etc/passwd', tempDir)
+    }).toThrow(PathTraversalError)
+
+    expect(() => {
+      resolveAndJail('C:\\Windows\\System32\\cmd.exe', tempDir)
+    }).toThrow(PathTraversalError)
+  })
+
   it('rejects path traversal attempts escaping root directory with PathTraversalError', () => {
     expect(() => {
       resolveAndJail('../../etc/passwd', tempDir)
@@ -67,6 +105,10 @@ describe('PathValidator (resolveAndJail)', () => {
 
     expect(() => {
       resolveAndJail('../outside.txt', tempDir)
+    }).toThrow(PathTraversalError)
+
+    expect(() => {
+      resolveAndJail('.../../../outside.txt', tempDir)
     }).toThrow(PathTraversalError)
   })
 
