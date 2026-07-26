@@ -6,6 +6,8 @@
 export interface ConcatenateInputFile {
   path: string
   content: string
+  hash?: string
+  mode?: string
 }
 
 export interface FormatterOptions {

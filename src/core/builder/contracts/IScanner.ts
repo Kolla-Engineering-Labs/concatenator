@@ -18,4 +18,7 @@ export interface ScanOptions {
  */
 export interface IScanner {
   scanDirectory(options: ScanOptions): ConcatenateInputFile[]
+  scanDirectoryStream?(
+    options: ScanOptions
+  ): AsyncGenerator<ConcatenateInputFile>
 }

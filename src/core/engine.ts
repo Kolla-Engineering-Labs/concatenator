@@ -8,6 +8,7 @@ import {
   END_DELIMITER,
   FILE_END_DELIMITER,
   MANIFEST_PREFIX,
+  POST_MATTER_MANIFEST_START,
 } from './constants.js'
 import type { IContextParser } from './parsers/IContextParser.js'
 import { extractSessionId } from './parsers/ParserUtils.js'
@@ -62,6 +63,10 @@ export {
   generateCollisionFreeSessionId,
   checkSessionIdCollision,
   generateFileTimestamp,
+  computeHash,
+  normalizeFileMode,
+  formatPostMatterManifest,
+  type PostMatterLedgerItem,
 } from './builder/BuilderUtils.js'
 export { concatenate, ConcatenationBuilder } from './builder/builder.js'
 
@@ -302,7 +307,10 @@ export function validateConcatenation(input: string): ValidationResult {
           .trim()
         if (postMarkerContent.length > 0) {
           // We only flag this if it's not another marker starting (which shouldn't happen here anyway as we use nextTargetMarkerStart)
-          if (!postMarkerContent.startsWith(START_DELIMITER)) {
+          if (
+            !postMarkerContent.startsWith(START_DELIMITER) &&
+            !postMarkerContent.startsWith(POST_MATTER_MANIFEST_START)
+          ) {
             errors.push(
               `Unauthorized data detected after end of file: ${marker.path}`
             )

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { PassThrough } from 'node:stream'
 import { describe, it, expect, vi } from 'vitest'
 import { SessionFormatter } from '../../src/core/builder/SessionFormatter.js'
 import { Neutralizer } from '../../src/core/shared/Neutralizer.js'
@@ -17,7 +18,11 @@ import {
   checkSessionIdCollision,
   generateCollisionFreeSessionId,
   generateFileTimestamp,
+  computeHash,
+  normalizeFileMode,
+  formatPostMatterManifest,
 } from '../../src/core/builder/BuilderUtils.js'
+import { validateConcatenation } from '../../src/core/engine.js'
 
 describe('Builder Domain & Strategies', () => {
   describe('BuilderUtils', () => {
@@ -48,6 +53,30 @@ describe('Builder Domain & Strategies', () => {
       const ts = generateFileTimestamp(date)
       expect(ts).toBe('20260726_123045')
     })
+
+    it('computes deterministic 8-character xxHash32 hex digest on buffers and strings', () => {
+      const buf = Buffer.from('hello world raw buffer content')
+      const hash1 = computeHash(buf)
+      const hash2 = computeHash('hello world raw buffer content')
+      expect(hash1).toMatch(/^[0-9a-f]{8}$/)
+      expect(hash1).toBe(hash2)
+    })
+
+    it('safely normalizes cross-platform file modes', () => {
+      expect(normalizeFileMode({ mode: 0o100644 })).toBe('0644')
+      expect(normalizeFileMode({ mode: 0o100755 })).toBe('0755')
+      expect(normalizeFileMode(undefined)).toBe('0644')
+    })
+
+    it('formats pipe-delimited Post-Matter manifest block', () => {
+      const ledger = [{ path: 'src/app.ts', mode: '0644', hash: 'a1b2c3d4' }]
+      const manifest = formatPostMatterManifest(ledger, '999888')
+      expect(manifest).toContain(
+        '<<<<< POST_MATTER_MANIFEST_START (ID: 999888) >>>>>'
+      )
+      expect(manifest).toContain('src/app.ts|0644|a1b2c3d4')
+      expect(manifest).toContain('<<<<< POST_MATTER_MANIFEST_END >>>>>')
+    })
   })
 
   describe('Neutralizer', () => {
@@ -69,7 +98,7 @@ describe('Builder Domain & Strategies', () => {
   describe('SessionFormatter', () => {
     const formatter = new SessionFormatter()
 
-    it('formats input files into session concatenation bundle', () => {
+    it('formats input files into session concatenation bundle without EOF manifest logic', () => {
       const files = [{ path: 'src/index.ts', content: 'console.log("hello")' }]
       const onProgress = vi.fn()
       const output = formatter.format(files, {
@@ -87,6 +116,7 @@ describe('Builder Domain & Strategies', () => {
       )
       expect(output).toContain('console.log("hello")')
       expect(output).toContain('<<<<< FILE_END >>>>>')
+      expect(output).not.toContain('POST_MATTER_MANIFEST_START')
       expect(onProgress).toHaveBeenCalledWith(100)
     })
 
@@ -119,8 +149,8 @@ describe('Builder Domain & Strategies', () => {
     })
   })
 
-  describe('ConcatenationBuilder Orchestrator', () => {
-    it('orchestrates scanning, neutralization, and formatting', () => {
+  describe('ConcatenationBuilder Orchestrator & Streaming Pipeline', () => {
+    it('orchestrates scanning, neutralization, formatting, and Post-Matter manifest flushing', () => {
       const builder = new ConcatenationBuilder()
       const result = builder.buildFromFiles(
         [{ path: 'a.txt', content: 'sample content' }],
@@ -129,6 +159,83 @@ describe('Builder Domain & Strategies', () => {
 
       expect(result).toContain('--- CONCATENATOR_SESSION_ID: abc123 ---')
       expect(result).toContain('sample content')
+      expect(result).toContain(
+        '<<<<< POST_MATTER_MANIFEST_START (ID: abc123) >>>>>'
+      )
+      expect(result).toContain('a.txt|0644|')
+      expect(result).toContain('<<<<< POST_MATTER_MANIFEST_END >>>>>')
+    })
+
+    it('streams files via AsyncGenerator yielding Post-Matter EOF manifest chunk', async () => {
+      const builder = new ConcatenationBuilder()
+      const inputFiles = [
+        { path: 'src/main.ts', content: 'const x = 42;' },
+        { path: 'src/utils.ts', content: 'export const y = 100;' },
+      ]
+
+      const chunks: string[] = []
+      for await (const chunk of builder.buildStreamFromFiles(inputFiles, {
+        sessionId: 'stream123',
+      })) {
+        chunks.push(chunk)
+      }
+
+      expect(chunks.length).toBe(4) // Header, File 1, File 2, Post-Matter Manifest
+      expect(chunks[0]).toContain('--- CONCATENATOR_SESSION_ID: stream123 ---')
+      expect(chunks[1]).toContain(
+        '<<<<< FILE_START: src/main.ts (ID: stream123) >>>>>'
+      )
+      expect(chunks[2]).toContain(
+        '<<<<< FILE_START: src/utils.ts (ID: stream123) >>>>>'
+      )
+      expect(chunks[3]).toContain(
+        '<<<<< POST_MATTER_MANIFEST_START (ID: stream123) >>>>>'
+      )
+      expect(chunks[3]).toContain('src/main.ts|0644|')
+      expect(chunks[3]).toContain('src/utils.ts|0644|')
+    })
+
+    it('streams files directly to a Writable stream', async () => {
+      const builder = new ConcatenationBuilder()
+      const passThrough = new PassThrough()
+      let fullStreamOutput = ''
+
+      passThrough.on('data', (chunk) => {
+        fullStreamOutput += chunk.toString('utf8')
+      })
+
+      const writePromise = builder.buildToWritable(
+        passThrough,
+        [{ path: 'b.txt', content: 'test stream content' }],
+        { sessionId: 'writestream1' }
+      )
+
+      await writePromise
+      passThrough.end()
+
+      expect(fullStreamOutput).toContain(
+        '--- CONCATENATOR_SESSION_ID: writestream1 ---'
+      )
+      expect(fullStreamOutput).toContain(
+        '<<<<< FILE_START: b.txt (ID: writestream1) >>>>>'
+      )
+      expect(fullStreamOutput).toContain(
+        '<<<<< POST_MATTER_MANIFEST_START (ID: writestream1) >>>>>'
+      )
+      expect(fullStreamOutput).toContain('b.txt|0644|')
+    })
+
+    it('validates concatenated bundle with Post-Matter EOF manifest successfully', () => {
+      const builder = new ConcatenationBuilder()
+      const result = builder.buildFromFiles(
+        [{ path: 'demo.txt', content: 'hello world' }],
+        { sessionId: 'val1234' }
+      )
+
+      const validation = validateConcatenation(result)
+      expect(validation.isValid).toBe(true)
+      expect(validation.errors).toEqual([])
+      expect(validation.targetFiles).toEqual(['demo.txt'])
     })
 
     it('maintains 100% backward compatibility with concatenate() function export', () => {

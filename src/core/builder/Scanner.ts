@@ -10,7 +10,11 @@ import { IgnoreEngine } from '../ignore/IgnoreEngine.js'
 import type { ConcatenateInputFile } from './contracts/IFormatter.js'
 import type { IFilterStrategy } from './contracts/IFilterStrategy.js'
 import type { IScanner, ScanOptions } from './contracts/IScanner.js'
-import { normalizeInputFiles } from './BuilderUtils.js'
+import {
+  normalizeInputFiles,
+  computeHash,
+  normalizeFileMode,
+} from './BuilderUtils.js'
 
 export type { ScanOptions } from './contracts/IScanner.js'
 
@@ -30,6 +34,65 @@ export class Scanner implements IScanner {
    */
   public addFilterStrategy(strategy: IFilterStrategy): void {
     this.filterStrategies.push(strategy)
+  }
+
+  /**
+   * Scan directory using asynchronous non-blocking I/O and yield ConcatenateInputFile DTOs
+   */
+  public async *scanDirectoryStream(
+    options: ScanOptions
+  ): AsyncGenerator<ConcatenateInputFile> {
+    const rootPath = resolve(options.rootPath)
+    const ignoreEngine =
+      (options.ignoreEngine as IgnoreEngine) ?? new IgnoreEngine([])
+    const crawler = new UnifiedCrawler({
+      rootPath,
+      ignoreEngine,
+      followSymlinks: options.followSymlinks ?? false,
+    })
+
+    const activeFilters = [
+      ...this.filterStrategies,
+      ...(options.filterStrategies ?? []),
+    ]
+
+    const entries = crawler.collect(rootPath)
+
+    for (const entry of entries) {
+      if (entry.kind === 'file' && entry.status === 'included') {
+        let stats: fs.Stats | undefined
+        try {
+          stats = await fs.promises.stat(entry.fullPath)
+        } catch {
+          // Ignore un-stattable entry
+        }
+
+        const shouldInclude = activeFilters.every((filter) =>
+          filter.shouldInclude(entry.path, stats)
+        )
+
+        if (!shouldInclude) {
+          continue
+        }
+
+        try {
+          const rawBuffer = await fs.promises.readFile(entry.fullPath)
+          const hash = computeHash(rawBuffer)
+          const mode = normalizeFileMode(stats)
+          const content = rawBuffer.toString('utf8')
+
+          yield {
+            path: entry.path,
+            content,
+            hash,
+            mode,
+          }
+        } catch {
+          // Skip unreadable file gracefully
+          continue
+        }
+      }
+    }
   }
 
   /**
@@ -71,10 +134,16 @@ export class Scanner implements IScanner {
         }
 
         try {
-          const content = fs.readFileSync(entry.fullPath, 'utf8')
+          const rawBuffer = fs.readFileSync(entry.fullPath)
+          const hash = computeHash(rawBuffer)
+          const mode = normalizeFileMode(stats)
+          const content = rawBuffer.toString('utf8')
+
           files.push({
             path: entry.path,
             content,
+            hash,
+            mode,
           })
         } catch {
           // Skip unreadable file gracefully
