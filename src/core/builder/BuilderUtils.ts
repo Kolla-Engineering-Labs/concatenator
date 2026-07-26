@@ -8,8 +8,161 @@ import {
   END_DELIMITER,
   MANIFEST_PREFIX,
   MANIFEST_SUFFIX,
+  POST_MATTER_MANIFEST_START,
+  POST_MATTER_MANIFEST_END,
 } from '../constants.js'
 import type { ConcatenateInputFile } from './contracts/IFormatter.js'
+
+export interface PostMatterLedgerItem {
+  path: string
+  mode: string
+  hash: string
+}
+
+/**
+ * Compute an xxHash32 8-character hexadecimal string digest on raw buffer or string
+ *
+ * @param input - Buffer, Uint8Array, or string input to hash
+ * @returns 8-character hex digest
+ */
+export function computeHash(input: Buffer | Uint8Array | string): string {
+  const data =
+    typeof input === 'string'
+      ? new TextEncoder().encode(input)
+      : new Uint8Array(input.buffer, input.byteOffset, input.byteLength)
+
+  const len = data.length
+  const seed = 0
+
+  const PRIME32_1 = 2654435761
+  const PRIME32_2 = 2246822519
+  const PRIME32_3 = 3266489917
+  const PRIME32_4 = 668265261
+  const PRIME32_5 = 374761393
+
+  let h32 = 0
+
+  if (len >= 16) {
+    let v1 = (seed + PRIME32_1 + PRIME32_2) >>> 0
+    let v2 = (seed + PRIME32_2) >>> 0
+    let v3 = (seed + 0) >>> 0
+    let v4 = (seed - PRIME32_1) >>> 0
+
+    const limit = len - 16
+    let i = 0
+
+    while (i <= limit) {
+      const read32 = (offset: number) =>
+        (data[offset] |
+          (data[offset + 1] << 8) |
+          (data[offset + 2] << 16) |
+          (data[offset + 3] << 24)) >>>
+        0
+
+      v1 =
+        Math.imul((v1 + Math.imul(read32(i), PRIME32_2)) >>> 0, PRIME32_1) >>> 0
+      v1 = ((v1 << 13) | (v1 >>> 19)) >>> 0
+
+      v2 =
+        Math.imul(
+          (v2 + Math.imul(read32(i + 4), PRIME32_2)) >>> 0,
+          PRIME32_1
+        ) >>> 0
+      v2 = ((v2 << 13) | (v2 >>> 19)) >>> 0
+
+      v3 =
+        Math.imul(
+          (v3 + Math.imul(read32(i + 8), PRIME32_2)) >>> 0,
+          PRIME32_1
+        ) >>> 0
+      v3 = ((v3 << 13) | (v3 >>> 19)) >>> 0
+
+      v4 =
+        Math.imul(
+          (v4 + Math.imul(read32(i + 12), PRIME32_2)) >>> 0,
+          PRIME32_1
+        ) >>> 0
+      v4 = ((v4 << 13) | (v4 >>> 19)) >>> 0
+
+      i += 16
+    }
+
+    h32 =
+      (((v1 << 1) | (v1 >>> 31)) +
+        ((v2 << 7) | (v2 >>> 25)) +
+        ((v3 << 12) | (v3 >>> 20)) +
+        ((v4 << 18) | (v4 >>> 14))) >>>
+      0
+  } else {
+    h32 = (seed + PRIME32_5) >>> 0
+  }
+
+  h32 = (h32 + len) >>> 0
+
+  let p = len >= 16 ? len - (len % 16) : 0
+  while (p + 4 <= len) {
+    const lane =
+      (data[p] |
+        (data[p + 1] << 8) |
+        (data[p + 2] << 16) |
+        (data[p + 3] << 24)) >>>
+      0
+    h32 = (h32 + Math.imul(lane, PRIME32_3)) >>> 0
+    h32 = Math.imul(((h32 << 17) | (h32 >>> 15)) >>> 0, PRIME32_4) >>> 0
+    p += 4
+  }
+
+  while (p < len) {
+    h32 = (h32 + Math.imul(data[p], PRIME32_5)) >>> 0
+    h32 = Math.imul(((h32 << 11) | (h32 >>> 21)) >>> 0, PRIME32_1) >>> 0
+    p++
+  }
+
+  h32 = Math.imul(h32 ^ (h32 >>> 15), PRIME32_2) >>> 0
+  h32 = Math.imul(h32 ^ (h32 >>> 13), PRIME32_3) >>> 0
+  h32 = (h32 ^ (h32 >>> 16)) >>> 0
+
+  return (h32 >>> 0).toString(16).padStart(8, '0')
+}
+
+/**
+ * Safely normalize file mode cross-platform (Windows vs POSIX)
+ *
+ * @param stats - Optional file stats containing mode integer
+ * @returns Octal mode string ('0644' or '0755')
+ */
+export function normalizeFileMode(stats?: { mode?: number }): string {
+  if (!stats || typeof stats.mode !== 'number') {
+    return '0644'
+  }
+  const posixBits = stats.mode & 0o777
+  if (posixBits === 0) {
+    return '0644'
+  }
+  const isExecutable = (posixBits & 0o111) !== 0
+  return isExecutable ? '0755' : '0644'
+}
+
+/**
+ * Generate pipe-delimited Post-Matter EOF manifest block
+ *
+ * @param ledger - Array of PostMatterLedgerItem tuples
+ * @param sessionId - Optional session ID
+ * @returns Formatted Post-Matter EOF manifest chunk
+ */
+export function formatPostMatterManifest(
+  ledger: PostMatterLedgerItem[],
+  sessionId?: string
+): string {
+  const sidPart = sessionId ? ` (ID: ${sessionId})` : ''
+  let result = `${POST_MATTER_MANIFEST_START}${sidPart} >>>>>\n`
+  for (const item of ledger) {
+    const normalizedPath = item.path.replace(/\\/g, '/')
+    result += `${normalizedPath}|${item.mode}|${item.hash}\n`
+  }
+  result += `${POST_MATTER_MANIFEST_END}\n`
+  return result
+}
 
 /**
  * Generate a short, unique 6-character hex session ID
@@ -112,5 +265,7 @@ export function normalizeInputFiles(
   return files.map((f) => ({
     path: f.path.replace(/\\/g, '/'),
     content: typeof f.content === 'string' ? f.content : '',
+    hash: f.hash,
+    mode: f.mode,
   }))
 }
