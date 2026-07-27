@@ -37,7 +37,11 @@ class MockWorker {
   }
 
   public postMessage(message: unknown) {
-    const data = message as { type: string; file?: File; targetDirHandle?: unknown }
+    const data = message as {
+      type: string
+      file?: File
+      targetDirHandle?: unknown
+    }
     if (data.type === 'BUILD_START') {
       setTimeout(() => {
         this.dispatchToClient({
@@ -63,7 +67,11 @@ class MockWorker {
       }, 10)
     } else if (data.type === 'PARSE_START') {
       setTimeout(() => {
-        if (!data.targetDirHandle && data.file && data.file.size > 500 * 1024 * 1024) {
+        if (
+          !data.targetDirHandle &&
+          data.file &&
+          data.file.size > 500 * 1024 * 1024
+        ) {
           this.dispatchToClient({
             type: 'ERROR',
             error:
@@ -105,7 +113,9 @@ describe('concatenator.worker & ConcatenatorWorkerClient', () => {
 
   it('should handle exportConcatenation user-gesture stream fallback gracefully', async () => {
     const client = new ConcatenatorWorkerClient()
-    const files = [{ path: 'test.ts', content: 'console.log("hello world")', mode: '0644' }]
+    const files = [
+      { path: 'test.ts', content: 'console.log("hello world")', mode: '0644' },
+    ]
     const onProgress = vi.fn()
     const onSync = vi.fn()
     const onComplete = vi.fn()
@@ -134,7 +144,9 @@ describe('concatenator.worker & ConcatenatorWorkerClient', () => {
 
   it('should enforce 500MB circuit breaker on fallback parse extraction', async () => {
     const client = new ConcatenatorWorkerClient()
-    const largeFile = new File(['a'.repeat(100)], 'large.txt', { type: 'text/plain' })
+    const largeFile = new File(['a'.repeat(100)], 'large.txt', {
+      type: 'text/plain',
+    })
     Object.defineProperty(largeFile, 'size', { value: 600 * 1024 * 1024 })
 
     const onError = vi.fn()
