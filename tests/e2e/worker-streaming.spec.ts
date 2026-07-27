@@ -5,8 +5,55 @@
 
 import { test, expect } from '@playwright/test'
 import { FileUploadHelper } from '../../e2e/helpers/file-upload'
+import fs from 'fs'
+import path from 'path'
 
 test.describe('Worker & RPC Client Integration Suite', () => {
+  test.afterEach(async ({ page }, testInfo) => {
+    const pageCoverage = await page.evaluate(
+      () => (window as unknown as Record<string, unknown>).__coverage__
+    )
+
+    let workerCoverage: unknown = null
+    const workers = page.workers()
+    if (workers.length > 0) {
+      try {
+        workerCoverage = await workers[0].evaluate(
+          () => (self as unknown as Record<string, unknown>).__coverage__
+        )
+      } catch (err) {
+        console.warn('Could not extract worker coverage:', err)
+      }
+    }
+
+    const playwrightCoverageDir = path.resolve(
+      process.cwd(),
+      'coverage-playwright'
+    )
+    if (!fs.existsSync(playwrightCoverageDir)) {
+      fs.mkdirSync(playwrightCoverageDir, { recursive: true })
+    }
+
+    if (pageCoverage) {
+      fs.writeFileSync(
+        path.join(
+          playwrightCoverageDir,
+          `page-${testInfo.testId.replace(/[^a-z0-9]/gi, '_')}-${Date.now()}.json`
+        ),
+        JSON.stringify(pageCoverage, null, 2)
+      )
+    }
+
+    if (workerCoverage) {
+      fs.writeFileSync(
+        path.join(
+          playwrightCoverageDir,
+          `worker-${testInfo.testId.replace(/[^a-z0-9]/gi, '_')}-${Date.now()}.json`
+        ),
+        JSON.stringify(workerCoverage, null, 2)
+      )
+    }
+  })
   test.beforeEach(async ({ page }) => {
     // Clear localStorage state before each run
     await page.addInitScript(() => {
