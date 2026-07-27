@@ -819,7 +819,9 @@ program
                 error instanceof SecurityViolation ||
                 (error instanceof Error && error.name === 'TamperDetectedError')
               ) {
-                logger.rawError('\n❌ CRYPTOGRAPHIC VALIDATION FAILURE: Tampered Bundle Detected!')
+                logger.rawError(
+                  '\n❌ CRYPTOGRAPHIC VALIDATION FAILURE: Tampered Bundle Detected!'
+                )
                 logger.rawError(
                   `⚠️  ${error instanceof Error ? error.message : String(error)}`
                 )

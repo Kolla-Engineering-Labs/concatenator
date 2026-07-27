@@ -200,7 +200,7 @@ Content C
   describe('cryptographic tamper rejection', () => {
     it('throws TamperDetectedError when data is appended after Post-Matter Manifest', () => {
       const files = [
-        { path: 'test.js', content: 'console.log("hello world");' }
+        { path: 'test.js', content: 'console.log("hello world");' },
       ]
       let bundle = concatenate(files, '2024-01-01', 'xyz123')
       bundle += '\nCORRUPT_DATA_INJECTED\n'
@@ -211,9 +211,7 @@ Content C
     })
 
     it('throws TamperDetectedError when file content is modified', () => {
-      const files = [
-        { path: 'test.js', content: 'original content' }
-      ]
+      const files = [{ path: 'test.js', content: 'original content' }]
       let bundle = concatenate(files, '2024-01-01', 'xyz123')
       bundle = bundle.replace('original content', 'tampered content')
 

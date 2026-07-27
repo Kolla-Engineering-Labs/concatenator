@@ -116,14 +116,16 @@ export class ManifestValidator {
       }
 
       let rawContent = content.substring(contentStart, fileEndIdx)
-      
-      // Surgically strip ONLY the single structural newlines injected by the Builder, 
+
+      // Surgically strip ONLY the single structural newlines injected by the Builder,
       // preserving any authentic leading/trailing whitespace native to the source file.
       if (rawContent.startsWith('\r\n')) rawContent = rawContent.substring(2)
       else if (rawContent.startsWith('\n')) rawContent = rawContent.substring(1)
-      
-      if (rawContent.endsWith('\r\n')) rawContent = rawContent.substring(0, rawContent.length - 2)
-      else if (rawContent.endsWith('\n')) rawContent = rawContent.substring(0, rawContent.length - 1)
+
+      if (rawContent.endsWith('\r\n'))
+        rawContent = rawContent.substring(0, rawContent.length - 2)
+      else if (rawContent.endsWith('\n'))
+        rawContent = rawContent.substring(0, rawContent.length - 1)
 
       const unneutralizedContent = this.neutralizer.unneutralize(rawContent)
       const computedHash = computeHash(unneutralizedContent)

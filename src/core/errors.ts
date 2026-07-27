@@ -55,4 +55,3 @@ export class TamperDetectedError extends SecurityViolation {
 }
 
 export { TamperDetectedError as SecurityError }
-
