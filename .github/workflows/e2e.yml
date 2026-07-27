@@ -30,6 +30,8 @@ jobs:
 
       - name: Run E2E Tests (Playwright)
         run: npm run test:e2e
+        env:
+          CONCATENATOR_API_TOKEN: ci-mock-token-998877
 
       - name: Upload Playwright Report
         if: always()

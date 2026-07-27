@@ -35,6 +35,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install Playwright Browsers with Dependencies
+        run: npx playwright install --with-deps
+
       - name: Build Project
         run: npm run build
 
@@ -49,6 +52,8 @@ jobs:
 
       - name: Run Unit Tests with Coverage (Vitest)
         run: npm run test:coverage
+        env:
+          CONCATENATOR_API_TOKEN: ci-mock-token-998877
 
       - name: Archive coverage results
         if: matrix.os == 'ubuntu-latest' && !cancelled()

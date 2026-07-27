@@ -1,0 +1,305 @@
+{
+  "version": 1,
+  "skills": {
+    "Good Skill": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/_fixtures/good-skill/SKILL.md",
+      "computedHash": "c75ce9d8f05e9baa6137775a56542ab6bcee49f8e2d5772272d5136617815479"
+    },
+    "account-rotation": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/account-rotation/SKILL.md",
+      "computedHash": "241b91eb66dae4be4abb6008022030b89097ac5e7bae77db0b26117b0fc4d8f9"
+    },
+    "agent-mail": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/agent-mail/SKILL.md",
+      "computedHash": "8e38881786dc249397c0597c3bce111d7bbf25fb3bfee65fe3db9e956c31e64f"
+    },
+    "agent-native": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/agent-native/SKILL.md",
+      "computedHash": "424e76d40f66cdf0b486cce1d8e9d7829c3b4dd611d4e6cfa3df5bb91c82f306"
+    },
+    "agy-native": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/agy-native/SKILL.md",
+      "computedHash": "ac98f12eb0a4be7398beaf09fd66ca85de2a88b18b7519b5db58caae8e1b81b1"
+    },
+    "automation-shape-routing": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/automation-shape-routing/SKILL.md",
+      "computedHash": "5ac7ddc544f9b60ba603d624b4c4e8b8210a26afa5450132e1752e06355984c3"
+    },
+    "bootstrap": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/bootstrap/SKILL.md",
+      "computedHash": "0ce68c7db95a337e52f15de858fed01157e864b25ea3667fb469c6d90fb46d0c"
+    },
+    "cass": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/cass/SKILL.md",
+      "computedHash": "076c812ec6ad0fcb8aedcb68911ab295ff4cad04df5c936e02ed6ae1cfc1efc9"
+    },
+    "cc-hooks": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/cc-hooks/SKILL.md",
+      "computedHash": "463e944800a7404832077b9c301d9f4cd393d679fac4ed45d95858fd5d23c834"
+    },
+    "codebase-recon": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/codebase-recon/SKILL.md",
+      "computedHash": "6dcade53c40745e9f6eb98adab7a456eec539c75dcfc62e9a59a54f0f91023d3"
+    },
+    "codex-exec": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/codex-exec/SKILL.md",
+      "computedHash": "3ed4d85e5a1e929af439ef047c6ec4c2c990e27fbc0cf98801442b89fd510f09"
+    },
+    "converter": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/converter/SKILL.md",
+      "computedHash": "fafdde843d2c94b90e22b44adb2f4d7d808e94fe4921d589e674c6b1f7bd5642"
+    },
+    "council": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/council/SKILL.md",
+      "computedHash": "37e173db1770586fa2c6a3285b2cbfd1617684c6cd141fd5a1b346beaeca151a"
+    },
+    "craft-goal": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/craft-goal/SKILL.md",
+      "computedHash": "b9245ca1bfbab07240ff4a8c520864fab055ffa8df5b8346dbd0719b23d78358"
+    },
+    "dcg": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/dcg/SKILL.md",
+      "computedHash": "95fd34b4eba2783291aa14dd6fadebc3b5521a486843b0e6c7858edf4e82533d"
+    },
+    "doc": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/doc/SKILL.md",
+      "computedHash": "9c8efbd4862e91f6b5468e18b589c13630d3994d64254f629ed2a21b978739e4"
+    },
+    "domain": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/domain/SKILL.md",
+      "computedHash": "78a6764f190f4498190edb185fe30432b7e324c355949e21a657abf735e3ff82"
+    },
+    "goals": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/goals/SKILL.md",
+      "computedHash": "13c9061ba391595f71575da99ba9afc69a36b89ddd55244b1312dacc0eea2dbd"
+    },
+    "handoff": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/handoff/SKILL.md",
+      "computedHash": "656aa8aa8caedbee75147d2285288d2400b416eda4c1baa8f0c659d83fb09f6f"
+    },
+    "idea-genie": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/idea-genie/SKILL.md",
+      "computedHash": "29b3e67cb725c9e742788e83e4c6b5d03023b8f16a6ef024900b023fabca569c"
+    },
+    "implement": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/implement/SKILL.md",
+      "computedHash": "96957a9e2b4c13f2e5eeb3f0a0b8a328cf44798998a5725ad242577c016a4f87"
+    },
+    "learn": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/learn/SKILL.md",
+      "computedHash": "c0240553e03e834f8df30865fbf43e83608c9c45ad25ae585d9f85f748658dac"
+    },
+    "ms": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/ms/SKILL.md",
+      "computedHash": "59d46a667ba9fd4821b4e35cc6e179d6fec0fe07fd8bb1ff94fa20196bcef415"
+    },
+    "ntm": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/ntm/SKILL.md",
+      "computedHash": "1bd4efd57d486814578d116c37c16c4bf0e9d9ecebe44cee46ff58b39fc9b13f"
+    },
+    "operationalize": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/operationalize/SKILL.md",
+      "computedHash": "9f1b69f0e6d027d634a7deacc1677fc223a7131c64cbbd94b0fedad1be047293"
+    },
+    "pattern-mining": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/pattern-mining/SKILL.md",
+      "computedHash": "57a6abc6a4f371e649652605038878789dbb1f79f14b7ee33e3f6b9c54a58647"
+    },
+    "plan": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/plan/SKILL.md",
+      "computedHash": "609480f2cc9c8bdfc58920db20338913ec0850f39eb0e45cb9edd0050fbd7324"
+    },
+    "postmortem": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/postmortem/SKILL.md",
+      "computedHash": "a04a4fd50f613d6903e1c2072c6c7995c089d428fa61954bc10f12cb21d00574"
+    },
+    "premortem": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/premortem/SKILL.md",
+      "computedHash": "4b3daa6eab77882037e29a25d43d281138038a5107deeda2f1b3b8884f3b3007"
+    },
+    "product": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/product/SKILL.md",
+      "computedHash": "44f996047daf8162c968ed96a9b4614e88e9189458e2fc908ccebd5606a00f73"
+    },
+    "rch": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/rch/SKILL.md",
+      "computedHash": "882cc41252be7456382129bf42d14ed24957fb21b4d8ef780129c5917050c44d"
+    },
+    "reality-check": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/reality-check/SKILL.md",
+      "computedHash": "6a746d44df5bb230a20d9441f901cf5de905123e21a282bd110078c942dd3977"
+    },
+    "refactor": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/refactor/SKILL.md",
+      "computedHash": "d0b286c33043dd2c7a46c40faf71952bb45b98a64d1fa438b8da8b07ed55b090"
+    },
+    "research": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/research/SKILL.md",
+      "computedHash": "4b609a855684ffdbcd4bdc7230ed419a466d10283fb833f1327c3fc8cd0d4a7d"
+    },
+    "reverse-engineer": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/reverse-engineer/SKILL.md",
+      "computedHash": "b0258c0cb689ad7bf715e6190cc320e74095b5074065bd315dec0ab122746a2e"
+    },
+    "rpi": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/rpi/SKILL.md",
+      "computedHash": "344fbfab0059eedc8a13bb1297d1d5220928161ee562974f0e1f4ced12b01329"
+    },
+    "sbh": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/sbh/SKILL.md",
+      "computedHash": "7e3d3bf8d80576dc31144d791dd435ea13cc15a8b8b8cd9575d68a6d43a42c05"
+    },
+    "scaffold": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/scaffold/SKILL.md",
+      "computedHash": "6167f57da5def7190276b2cef550ab2f730c8c5b9935c1542d88ac1424491790"
+    },
+    "scope": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/scope/SKILL.md",
+      "computedHash": "4ce164d5686ee16c914b853d57c45fe6b8ecb5787116ab4fb6c4f550d9324940"
+    },
+    "security": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/security/SKILL.md",
+      "computedHash": "b41a5132cdf12b869325b1aa32480f2874003ebfaa7b8a923dda72dadc026ade"
+    },
+    "shared": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/shared/SKILL.md",
+      "computedHash": "c54b6fc955719e891f82aa64c7066f6063a2c7095fd64e805fc86ff77474567d"
+    },
+    "skill-builder": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/skill-builder/SKILL.md",
+      "computedHash": "c888272af910dee043aa3b0770112650a0de27b86c83fd3b394821cbb049c735"
+    },
+    "standards": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/standards/SKILL.md",
+      "computedHash": "a013ca6122c095ddfca34127d4f9cdd2663295b182ba2cd52ed175686dc341ce"
+    },
+    "status": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/status/SKILL.md",
+      "computedHash": "965cd48ce400769db95af790937c07e386b4f1e3bcb314880032f56110857c94"
+    },
+    "swarm": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/swarm/SKILL.md",
+      "computedHash": "89f2ad29b25f253c07da33b67845044cf86589b81b2c7c6eaa2599441bf35c68"
+    },
+    "test": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/test/SKILL.md",
+      "computedHash": "2f3a22e170c7acd275cfc69111c28eed535620c6a5493b078db59c92b7e202d5"
+    },
+    "toil-mining": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/toil-mining/SKILL.md",
+      "computedHash": "694ec21a981c15002e06320c4a09c682d9300aab2b66052a6a9be8f63b997d52"
+    },
+    "using-gc": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/using-gc/SKILL.md",
+      "computedHash": "fa54340184a8afcb1efd88aaec0ae58634a0d93e398177e1c90c92d6ddd290f9"
+    },
+    "validate": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/validate/SKILL.md",
+      "computedHash": "4f8d3f393862202c5d65b7396ee164dd1a3c286d7a2dabf9f61df71896c863cb"
+    },
+    "workflow-builder": {
+      "source": "boshu2/agentops",
+      "sourceType": "github",
+      "skillPath": "skills/workflow-builder/SKILL.md",
+      "computedHash": "77facf75e4f56839584858fe55ff67c73486957e790cba8edec86582785947bd"
+    }
+  }
+}

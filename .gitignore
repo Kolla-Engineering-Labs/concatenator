@@ -13,6 +13,7 @@ coverage/
 .windsurfrules
 
 # Test artifacts
+coverage-playwright/
 playwright-report/
 test-results/
 blob-report/
