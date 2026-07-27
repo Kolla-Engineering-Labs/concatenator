@@ -21,11 +21,10 @@ async function mergeCoverage() {
     process.cwd(),
     'coverage/coverage-final.json'
   )
+  let vitestCoverage: Record<string, unknown> | null = null
   if (fs.existsSync(vitestReportPath)) {
     try {
-      const vitestCoverage = JSON.parse(
-        fs.readFileSync(vitestReportPath, 'utf-8')
-      )
+      vitestCoverage = JSON.parse(fs.readFileSync(vitestReportPath, 'utf-8'))
       coverageMap.merge(vitestCoverage)
       console.log('Successfully loaded Vitest coverage map.')
     } catch (err) {
@@ -36,18 +35,51 @@ async function mergeCoverage() {
   }
 
   // 2. Merge Playwright page & worker reports
-  const playwrightDir = path.resolve(process.cwd(), 'coverage-playwright')
+  const playwrightDir = path.resolve(process.cwd(), 'coverage/raw-playwright')
   if (fs.existsSync(playwrightDir)) {
     const files = fs
       .readdirSync(playwrightDir)
       .filter((f) => f.endsWith('.json'))
     let count = 0
+    const vitestKeys = vitestCoverage ? Object.keys(vitestCoverage) : []
     for (const file of files) {
       try {
         const content = JSON.parse(
           fs.readFileSync(path.join(playwrightDir, file), 'utf-8')
         )
-        coverageMap.merge(content)
+        const normalizedContent: Record<string, unknown> = {}
+        for (const [key, value] of Object.entries(content)) {
+          if (!value || typeof value !== 'object') continue
+
+          // Extract base filename from Playwright coverage key
+          const cleanKey = key
+            .replace(/\?.*$/, '')
+            .replace(/^https?:\/\/[^/]+/, '')
+            .replace(/^\//, '')
+          const baseName = path.basename(cleanKey)
+
+          // Search Object.keys(vitestCoverage) for a path that ends with that exact base filename
+          const matchedVitestPath = vitestKeys.find(
+            (vk) =>
+              vk.endsWith(`/${baseName}`) ||
+              vk.endsWith(`\\${baseName}`) ||
+              vk.endsWith(baseName)
+          )
+
+          const targetPath =
+            matchedVitestPath ||
+            (path.isAbsolute(cleanKey) && !key.startsWith('http')
+              ? cleanKey
+              : path.resolve(process.cwd(), cleanKey))
+
+          const fileCoverage = {
+            ...(value as Record<string, unknown>),
+            path: targetPath,
+          }
+
+          normalizedContent[targetPath] = fileCoverage
+        }
+        coverageMap.merge(normalizedContent)
         count++
       } catch (err) {
         console.warn(`Failed to parse Playwright coverage file ${file}:`, err)

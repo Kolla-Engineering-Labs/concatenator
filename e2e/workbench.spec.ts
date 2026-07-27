@@ -156,6 +156,8 @@ test.describe('Workbench Features', () => {
         .getByTestId('file-row')
         .filter({ visible: true })
         .first()
+      await expect(visibleRow).toBeVisible({ timeout: 10000 })
+
       // Hover only on desktop where actions are hidden by default
       if (page.viewportSize() && page.viewportSize()!.width >= 640) {
         await visibleRow.hover()

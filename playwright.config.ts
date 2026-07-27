@@ -11,7 +11,8 @@ import { defineConfig, devices } from '@playwright/test'
  * @see https://playwright.dev/docs/test-configuration
  */
 export default defineConfig({
-  testDir: './tests/e2e',
+  testDir: './e2e',
+  testMatch: '**/*.spec.ts',
 
   /* Base URL for all navigation */
   use: {

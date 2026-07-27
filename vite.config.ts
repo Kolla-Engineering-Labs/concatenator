@@ -33,8 +33,8 @@ export default defineConfig(({ mode }) => {
         junit: './coverage/test-report.junit.xml',
       },
       coverage: {
-        provider: 'v8',
-        reporter: env.CI ? ['lcov', 'json-summary', 'text'] : ['text', 'html'],
+        provider: 'istanbul',
+        reporter: ['json'],
         reportsDirectory: './coverage',
         all: true,
         exclude: [

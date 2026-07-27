@@ -4,7 +4,7 @@
  */
 
 import { test, expect } from '@playwright/test'
-import { FileUploadHelper } from '../../e2e/helpers/file-upload'
+import { FileUploadHelper } from './helpers/file-upload'
 import fs from 'fs'
 import path from 'path'
 
@@ -28,7 +28,7 @@ test.describe('Worker & RPC Client Integration Suite', () => {
 
     const playwrightCoverageDir = path.resolve(
       process.cwd(),
-      'coverage-playwright'
+      'coverage/raw-playwright'
     )
     if (!fs.existsSync(playwrightCoverageDir)) {
       fs.mkdirSync(playwrightCoverageDir, { recursive: true })
