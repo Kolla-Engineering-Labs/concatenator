@@ -4,13 +4,20 @@
  */
 
 import React from 'react'
+import { SecurityStatusBadge } from '../../../components/SecurityStatusBadge'
+
+interface FooterProps {
+  degradedMode?: boolean
+}
 
 /**
  * The application footer.
  */
-export const Footer: React.FC = () => {
+export const Footer: React.FC<FooterProps> = ({ degradedMode = false }) => {
   return (
     <footer className="text-center space-y-4 px-4">
+      <SecurityStatusBadge degradedMode={degradedMode} />
+
       <div className="space-y-1">
         <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold tracking-wide uppercase opacity-80">
           Built with React & Tailwind

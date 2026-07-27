@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react'
 import { useWorkbench } from '../hooks/useWorkbench'
-import { Zap, AlertTriangle } from 'lucide-react'
+import { Zap, AlertTriangle, CheckCircle2 } from 'lucide-react'
 
 interface StatusBarProps {
   totalTokens: number
@@ -129,21 +129,26 @@ export const StatusBar: React.FC<StatusBarProps> = ({
         <div className="flex items-center gap-2">
           <span className="opacity-60">Total Tokens:</span>
           <div className="flex items-center gap-1.5">
-            <span className="text-slate-900 dark:text-slate-100 font-bold tabular-nums">
+            <span
+              className={`text-slate-900 dark:text-slate-100 font-bold tabular-nums ${
+                !isPrecise ? 'italic opacity-80' : ''
+              }`}
+            >
               {!isPrecise && '~'}
               {totalTokens.toLocaleString()}
             </span>
             {isPrecise ? (
               <span
-                className="px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[8px] font-black uppercase tracking-wider border border-emerald-200/50 dark:border-emerald-500/20 shadow-sm"
-                title="BPE Precision Mode (cl100k_base)"
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-[8px] font-black uppercase tracking-wider border border-emerald-200/50 dark:border-emerald-500/20 shadow-sm"
+                title="Locked Deterministic Precision Sync"
               >
+                <CheckCircle2 className="w-2.5 h-2.5 text-emerald-500" />
                 Precision
               </span>
             ) : (
               <span
                 className="px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[8px] font-black uppercase tracking-wider border border-amber-200/50 dark:border-amber-500/20 shadow-sm animate-pulse"
-                title="Fast Heuristic Mode (estimating...)"
+                title="Pass 1 Fast Heuristic Physics (~1/4 byte estimation)"
               >
                 Heuristic
               </span>

@@ -28,6 +28,7 @@ interface SidebarProps {
   ignoredIsPrecise?: boolean
   filterText: string
   setFilterText: (text: string) => void
+  degradedMode?: boolean
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -43,6 +44,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   ignoredIsPrecise,
   filterText,
   setFilterText,
+  degradedMode = false,
 }) => {
   const {
     mode: appMode,
@@ -199,7 +201,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         <div className="pt-8 pb-12">
-          <Footer />
+          <Footer degradedMode={degradedMode} />
         </div>
       </nav>
     </aside>
