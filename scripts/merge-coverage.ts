@@ -25,7 +25,10 @@ async function mergeCoverage() {
   if (fs.existsSync(vitestReportPath)) {
     try {
       vitestCoverage = JSON.parse(fs.readFileSync(vitestReportPath, 'utf-8'))
-      coverageMap.merge(vitestCoverage)
+      if (vitestCoverage) {
+        const vitestMap = createCoverageMap(vitestCoverage)
+        coverageMap.merge(vitestMap)
+      }
       console.log('Successfully loaded Vitest coverage map.')
     } catch (err) {
       console.warn('Failed to parse Vitest coverage report:', err)
@@ -79,7 +82,8 @@ async function mergeCoverage() {
 
           normalizedContent[targetPath] = fileCoverage
         }
-        coverageMap.merge(normalizedContent)
+        const playwrightMap = createCoverageMap(normalizedContent)
+        coverageMap.merge(playwrightMap)
         count++
       } catch (err) {
         console.warn(`Failed to parse Playwright coverage file ${file}:`, err)

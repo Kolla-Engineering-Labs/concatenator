@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Page, Locator } from '@playwright/test'
+import { test, expect, Page, Locator } from '@playwright/test'
 
 /**
  * Helper function to click an element using JavaScript for better cross-browser compatibility
@@ -54,18 +54,18 @@ export async function ensureSidebarOpen(page: Page): Promise<void> {
     )
     await page.waitForTimeout(500)
   } else {
-    // On desktop, just ensure aside is visible.
-    // If it's not visible here but we passed the race, it might have flickered.
-    await aside
-      .waitFor({ state: 'visible', timeout: 15000 })
-      .catch(async () => {
-        // One last try: check if it's actually mobile after all or just slow
+    // On desktop, just ensure aside is visible deterministically
+    await test.step('Ensure sidebar is open', async () => {
+      const isHidden = await aside.isHidden()
+
+      if (isHidden) {
         if (await openButton.isVisible()) {
-          await jsClick(openButton)
-        } else {
-          await aside.waitFor({ state: 'visible', timeout: 5000 })
+          await openButton.click()
         }
-      })
+      }
+
+      await expect(aside).toBeVisible({ timeout: 10000 })
+    })
   }
 }
 

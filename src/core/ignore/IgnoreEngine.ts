@@ -33,7 +33,7 @@ interface CompiledPattern {
  *   2. When a rule matches the path, set `isIgnored = !rule.negated`.
  *   3. A later negation rule (`!pattern`) can un-ignore what a prior rule matched.
  *
- * This mirrors standard `.gitignore` / `.concatenate-ignore` behaviour.
+ * This mirrors standard `.gitignore` / `.concatenate-ignore` behavior.
  */
 export class IgnoreEngine {
   private rules: CompiledPattern[]
@@ -197,12 +197,16 @@ export class IgnoreEngine {
 
     const heavyDirs = [
       'node_modules',
+      '.agentops',
+      '.agents',
+      '.claude',
       '.git',
       '.next',
       '.expo',
       '.gradle',
       '.terraform',
       '.vagrant',
+      'agentops',
       'bower_components',
       'playwright-report',
       'test-results',

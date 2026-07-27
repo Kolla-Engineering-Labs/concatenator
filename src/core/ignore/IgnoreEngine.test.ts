@@ -5,6 +5,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { IgnoreEngine } from './IgnoreEngine'
+import { DEFAULT_IGNORE_LIST } from '../constants'
 
 describe('IgnoreEngine', () => {
   describe('exact matching', () => {
@@ -183,6 +184,48 @@ describe('IgnoreEngine', () => {
       const engine = new IgnoreEngine(['src/**'])
       expect(engine.isIgnored('src')).toBe(true)
       expect(engine.isIgnored('src/file.js')).toBe(true)
+    })
+  })
+
+  describe('AgentOps and Agent Directory Sealing', () => {
+    it('explicitly seals .agentops, .agents, .claude, and agentops directories from default ignore evaluation', () => {
+      const engine = new IgnoreEngine(DEFAULT_IGNORE_LIST)
+
+      // .agentops
+      expect(engine.isIgnored('.agentops')).toBe(true)
+      expect(engine.isIgnored('.agentops/logs/session.log')).toBe(true)
+      expect(engine.isIgnored('.agentops/telemetry.json')).toBe(true)
+
+      // .agents
+      expect(engine.isIgnored('.agents')).toBe(true)
+      expect(engine.isIgnored('.agents/ao/logs/run.log')).toBe(true)
+      expect(engine.isIgnored('.agents/ao/verdicts/sha256/abc')).toBe(true)
+      expect(engine.isIgnored('.agents/skills/validate/SKILL.md')).toBe(true)
+
+      // .claude
+      expect(engine.isIgnored('.claude')).toBe(true)
+      expect(engine.isIgnored('.claude/settings.json')).toBe(true)
+      expect(engine.isIgnored('.claude/history/session.json')).toBe(true)
+
+      // agentops
+      expect(engine.isIgnored('agentops')).toBe(true)
+      expect(engine.isIgnored('agentops/logs')).toBe(true)
+      expect(engine.isIgnored('agentops/telemetry.log')).toBe(true)
+    })
+
+    it('bypasses unanchored recursion in heavyDirs for .agentops, .agents, .claude, and agentops', () => {
+      const engine = new IgnoreEngine([
+        ...DEFAULT_IGNORE_LIST,
+        '!log',
+        '!SKILL.md',
+        '!settings.json',
+      ])
+
+      expect(engine.shouldRecurse('.agentops')).toBe(false)
+      expect(engine.shouldRecurse('.agents')).toBe(false)
+      expect(engine.shouldRecurse('.agents/ao/logs')).toBe(false)
+      expect(engine.shouldRecurse('.claude')).toBe(false)
+      expect(engine.shouldRecurse('agentops')).toBe(false)
     })
   })
 })
