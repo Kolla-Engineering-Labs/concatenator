@@ -11,6 +11,13 @@ coverage/
 .antigravityrules
 .cursorrules
 .windsurfrules
+.agents/
+.claude/
+
+# AgentOps telemetry logs
+.agentops/
+agentops/
+
 
 # Test artifacts
 coverage-playwright/

@@ -167,6 +167,9 @@ export const MANIFEST_PREFIX = MANIFEST_PREFIX_PARTS.join('')
 export const MANIFEST_SUFFIX = MANIFEST_SUFFIX_PARTS.join('')
 
 export const DEFAULT_IGNORE_LIST = [
+  '.agentops',
+  '.agents',
+  '.claude',
   '.concatenate-ignore',
   '.DS_Store',
   '.env',
@@ -194,6 +197,7 @@ export const DEFAULT_IGNORE_LIST = [
   '*.tiff',
   '/^__.*cache__$/',
   '/^\\..*_cache$/',
+  'agentops',
   'bin',
   'build',
   'desktop.ini',
