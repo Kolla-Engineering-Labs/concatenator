@@ -362,6 +362,7 @@ export default function App() {
       {/* Sidebar Overlay */}
       {isSidebarOpen && (
         <div
+          data-testid="sidebar-backdrop"
           className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 lg:hidden animate-in fade-in duration-300"
           onClick={() => setSidebarOpen(false)}
         />

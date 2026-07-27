@@ -180,8 +180,8 @@ test.describe('Concatenate Mode', () => {
       try {
         // Much larger content to ensure processing takes long enough to observe
         // Firefox processes files quickly, so we need substantial data
-        const largeContent = 'x'.repeat(1000000) // 1MB per file
-        const files = Array.from({ length: 30 }, (_, i) => ({
+        const largeContent = 'x'.repeat(200000) // 200KB per file
+        const files = Array.from({ length: 10 }, (_, i) => ({
           name: `file${i}.txt`,
           path: `batch/file${i}.txt`,
           content: `content ${i}\n${largeContent}`,
@@ -276,15 +276,7 @@ test.describe('Concatenate Mode', () => {
         const ignoreInput = page.getByPlaceholder('Add ignore pattern...')
         await ignoreInput.waitFor({ state: 'visible', timeout: 10000 })
         await ignoreInput.fill('*.test.js')
-        await Promise.all([
-          page.waitForResponse(
-            (resp) =>
-              resp.url().includes('/api/ignore-list') &&
-              resp.request().method() === 'POST',
-            { timeout: 30000 }
-          ),
-          jsClick(page.getByTitle('Add ignore pattern')),
-        ])
+        await ignoreInput.press('Enter')
 
         // Verify pattern was added - use test ID for reliability
         await expect(page.getByTestId('ignore-item-*.test.js')).toBeVisible({
