@@ -20,9 +20,11 @@ import { Neutralizer } from './shared/Neutralizer.js'
 export { sanitizePath, dedupePath } from './parsers/ParserUtils.js'
 
 import type { ValidationResult } from './types.js'
+import { ManifestValidator } from './ManifestValidator.js'
 
 // Re-export types for convenience
 export type { ValidationResult } from './types.js'
+export { ManifestValidator }
 
 /**
  * Represents a virtual file with path and content
@@ -135,6 +137,9 @@ export function deconcatenate(
  * @returns ValidationResult with detailed findings
  */
 export function validateConcatenation(input: string): ValidationResult {
+  // Enforce Two-Key Cryptographic Verification via Post-Matter Manifest
+  new ManifestValidator().validate(input)
+
   const errors: string[] = []
   const warnings: string[] = []
   const detectedFiles: string[] = []

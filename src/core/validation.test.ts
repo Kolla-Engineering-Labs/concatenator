@@ -149,24 +149,25 @@ Content
       expect(result.errors).toContain('No valid session manifest header found')
     })
 
-    it('handles multiple files with mixed validity', () => {
-      const files = [
-        { path: 'valid1.txt', content: 'First valid file' },
-        { path: 'valid2.txt', content: 'Second valid file' },
-      ]
-      let concatenated = concatenate(files, '2024-01-01', 'abc789')
+    it('handles multiple files with mixed validity in legacy format', () => {
+      const concatenated = `--- CONCATENATOR_SESSION_ID: abc789 ---
+Concatenated on: 2024-01-01
 
-      // Inject a malformed file without end marker
-      concatenated = concatenated.replace(
-        '<<<<< FILE_START: valid2.txt (ID: abc789) >>>>>',
-        '<<<<< FILE_START: invalid.txt (ID: abc789) >>>>>\nNo end marker here\n\n<<<<< FILE_START: valid2.txt (ID: abc789) >>>>>'
-      )
+<<<<< FILE_START: valid1.txt (ID: abc789) >>>>>
+First valid file
+<<<<< FILE_END >>>>>
+
+<<<<< FILE_START: invalid.txt (ID: abc789) >>>>>
+No end marker here
+
+<<<<< FILE_START: valid2.txt (ID: abc789) >>>>>
+Second valid file
+<<<<< FILE_END >>>>>
+`
 
       const result = validateConcatenation(concatenated)
 
       expect(result.isValid).toBe(false)
-      // 2 valid files (valid1 and valid2 still have their end markers)
-      // 1 invalid file (invalid.txt has no end marker)
       expect(result.fileCount).toBe(2)
       expect(result.detectedFiles).toHaveLength(3)
       expect(result.errors).toContain(
@@ -193,6 +194,32 @@ Content C
       expect(result.detectedFiles).toEqual(['a.txt', 'b.txt', 'c.txt'])
       expect(result.errors).toHaveLength(1)
       expect(result.errors[0]).toContain('b.txt')
+    })
+  })
+
+  describe('cryptographic tamper rejection', () => {
+    it('throws TamperDetectedError when data is appended after Post-Matter Manifest', () => {
+      const files = [
+        { path: 'test.js', content: 'console.log("hello world");' }
+      ]
+      let bundle = concatenate(files, '2024-01-01', 'xyz123')
+      bundle += '\nCORRUPT_DATA_INJECTED\n'
+
+      expect(() => validateConcatenation(bundle)).toThrowError(
+        /Cryptographic Tampering Detected/
+      )
+    })
+
+    it('throws TamperDetectedError when file content is modified', () => {
+      const files = [
+        { path: 'test.js', content: 'original content' }
+      ]
+      let bundle = concatenate(files, '2024-01-01', 'xyz123')
+      bundle = bundle.replace('original content', 'tampered content')
+
+      expect(() => validateConcatenation(bundle)).toThrowError(
+        /Cryptographic Hash Mismatch/
+      )
     })
   })
 })

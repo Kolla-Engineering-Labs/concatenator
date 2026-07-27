@@ -51,6 +51,7 @@ import {
   type FileWithMetadata,
   UserError,
 } from './cli-utils.js'
+import { TamperDetectedError, SecurityViolation } from '../core/errors.js'
 
 // Build-time flags injected by esbuild
 declare const PROCESS_IS_UNSIGNED: boolean
@@ -805,11 +806,26 @@ program
             }
           } else {
             // File validation
-            const content = readFileSync(inputPath, 'utf-8')
-            const result = validateConcatenation(content)
-            formatValidationReport(result, inputPath, options.verbose, false)
-            if (!result.isValid) {
-              process.exit(1)
+            try {
+              const content = readFileSync(inputPath, 'utf-8')
+              const result = validateConcatenation(content)
+              formatValidationReport(result, inputPath, options.verbose, false)
+              if (!result.isValid) {
+                process.exit(1)
+              }
+            } catch (error: unknown) {
+              if (
+                error instanceof TamperDetectedError ||
+                error instanceof SecurityViolation ||
+                (error instanceof Error && error.name === 'TamperDetectedError')
+              ) {
+                logger.rawError('\n❌ CRYPTOGRAPHIC VALIDATION FAILURE: Tampered Bundle Detected!')
+                logger.rawError(
+                  `⚠️  ${error instanceof Error ? error.message : String(error)}`
+                )
+                process.exit(1)
+              }
+              throw error
             }
           }
         }

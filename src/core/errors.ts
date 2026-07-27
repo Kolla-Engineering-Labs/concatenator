@@ -43,3 +43,16 @@ export class SymlinkRejectedError extends SecurityViolation {
     this.name = 'SymlinkRejectedError'
   }
 }
+
+/**
+ * Custom error class for bundle cryptographic tampering / hash mismatch violations.
+ */
+export class TamperDetectedError extends SecurityViolation {
+  constructor(message: string) {
+    super(message)
+    this.name = 'TamperDetectedError'
+  }
+}
+
+export { TamperDetectedError as SecurityError }
+
