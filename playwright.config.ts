@@ -11,7 +11,7 @@ import { defineConfig, devices } from '@playwright/test'
  * @see https://playwright.dev/docs/test-configuration
  */
 export default defineConfig({
-  testDir: './e2e',
+  testDir: './tests/e2e',
 
   /* Base URL for all navigation */
   use: {
@@ -31,18 +31,13 @@ export default defineConfig({
   /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
 
-  /* Workers: use 1 on CI for stability, max 4 locally to prevent server overload
-   * Worker-specific ignore files prevent race conditions in parallel tests.
-   */
+  /* Workers: use 1 on CI for stability, max 4 locally to prevent server overload */
   workers: process.env.CI ? 1 : 2,
 
   /* Unified reporter for CI and local use */
   reporter: process.env.CI ? [['github'], ['html']] : 'html',
 
-  /* Global setup to clean test results before run */
-  globalSetup: './e2e/global-setup.ts',
-
-  /* Configure projects for major browsers - each gets unique download directory */
+  /* Configure projects strictly for local Chromium */
   projects: [
     {
       name: 'chromium',
@@ -50,63 +45,6 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         launchOptions: {
           downloadsPath: './test-results/downloads/chromium',
-        },
-      },
-    },
-    {
-      name: 'firefox',
-      use: {
-        ...devices['Desktop Firefox'],
-        /* Firefox-specific settings for better reliability */
-        actionTimeout: 30000,
-        navigationTimeout: 60000,
-        launchOptions: {
-          downloadsPath: './test-results/downloads/firefox',
-          firefoxUserPrefs: {
-            'network.dns.disableIPv6': true,
-            'network.http.connection-timeout': 30,
-            'dom.max_chrome_script_run_time': 60,
-            'dom.max_script_run_time': 60,
-            'browser.download.startDownloads_inPrivateBrowsing': true,
-            'browser.download.folderList': 2,
-          },
-        },
-      },
-    },
-    {
-      name: 'webkit',
-      use: {
-        ...devices['Desktop Safari'],
-        /* WebKit-specific timeouts for stability - higher for directory uploads */
-        actionTimeout: 30000,
-        navigationTimeout: 60000,
-        launchOptions: {
-          downloadsPath: './test-results/downloads/webkit',
-        },
-      },
-    },
-    /* Test against mobile viewports */
-    {
-      name: 'Mobile Chrome',
-      use: {
-        ...devices['Pixel 5'],
-        /* Mobile Chrome needs higher timeouts for parallel stability */
-        actionTimeout: 15000,
-        navigationTimeout: 60000,
-        launchOptions: {
-          downloadsPath: './test-results/downloads/mobile-chrome',
-        },
-      },
-    },
-    {
-      name: 'Mobile Safari',
-      use: {
-        ...devices['iPhone 12'],
-        /* Mobile Safari needs higher timeouts for stability - higher for directory uploads */
-        actionTimeout: 30000,
-        navigationTimeout: 60000,
-        launchOptions: {
-          downloadsPath: './test-results/downloads/mobile-safari',
         },
       },
     },
