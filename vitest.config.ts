@@ -7,6 +7,13 @@ export default defineConfig((configEnv) =>
     typeof viteConfig === 'function' ? viteConfig(configEnv) : viteConfig,
     defineConfig({
       test: {
+        exclude: [
+          '**/node_modules/**',
+          '**/dist/**',
+          '**/cypress/**',
+          'e2e/**',
+          'tests/e2e/**',
+        ],
         coverage: {
           provider: 'v8',
           reportsDirectory: './coverage',
@@ -22,6 +29,7 @@ export default defineConfig((configEnv) =>
             '**/*.test.tsx',
             '**/*.spec.ts',
             'e2e/**',
+            'tests/e2e/**',
           ],
         },
       },
