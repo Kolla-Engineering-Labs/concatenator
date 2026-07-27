@@ -7,13 +7,15 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
-import { resolveAndJail, PathValidator } from '../../src/core/PathValidator.js'
-import { SymlinkRejectedError, PathTraversalError } from '../../src/core/errors.js'
+import { resolveAndJail } from '../../src/core/PathValidator.js'
+import {
+  SymlinkRejectedError,
+  PathTraversalError,
+} from '../../src/core/errors.js'
 import {
   TokenService,
   PrecisionStrategy,
   ITiktokenEncoder,
-  HeuristicStrategy,
 } from '../../src/core/TokenService.js'
 import { TreeItem } from '../../src/core/types.js'
 
@@ -70,9 +72,9 @@ describe('VFS Security Boundaries & TokenService Edge-Case Audit Suite', () => {
     })
 
     it('rejects Windows drive letter absolute path injections', () => {
-      expect(() => resolveAndJail('C:\\Windows\\explorer.exe', tempDir)).toThrow(
-        PathTraversalError
-      )
+      expect(() =>
+        resolveAndJail('C:\\Windows\\explorer.exe', tempDir)
+      ).toThrow(PathTraversalError)
       expect(() => resolveAndJail('E:/secret/payload.bin', tempDir)).toThrow(
         PathTraversalError
       )
@@ -102,9 +104,9 @@ describe('VFS Security Boundaries & TokenService Edge-Case Audit Suite', () => {
       expect(() => resolveAndJail('../outside.txt', tempDir)).toThrow(
         PathTraversalError
       )
-      expect(() => resolveAndJail('a/b/../../../../etc/passwd', tempDir)).toThrow(
-        PathTraversalError
-      )
+      expect(() =>
+        resolveAndJail('a/b/../../../../etc/passwd', tempDir)
+      ).toThrow(PathTraversalError)
     })
   })
 
@@ -141,7 +143,10 @@ describe('VFS Security Boundaries & TokenService Edge-Case Audit Suite', () => {
       const metaWithoutBudget = TokenService.generateContextMetadata(1234567)
       expect(metaWithoutBudget).toBe('--- METADATA: Tokens: 1,234,567 ---')
 
-      const metaWithBudget = TokenService.generateContextMetadata(1234567, 2000000)
+      const metaWithBudget = TokenService.generateContextMetadata(
+        1234567,
+        2000000
+      )
       expect(metaWithBudget).toBe(
         '--- METADATA: Tokens: 1,234,567 | Budget: 2,000,000 ---'
       )
