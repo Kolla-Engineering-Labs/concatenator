@@ -174,16 +174,16 @@ export const TreeNode: React.FC<TreeNodeProps> = ({
           <div className="flex items-center gap-1 opacity-0 group-hover/node:opacity-100 transition-opacity pointer-events-auto">
             {(node.kind === 'file' ||
               (node.tokenWeight !== undefined && node.tokenWeight > 0)) && (
-              <div className="flex items-center gap-2 mr-2 text-[10px] font-mono whitespace-nowrap border-r border-slate-200 dark:border-slate-700 pr-2 h-4 flex-shrink-0">
+              <div className="flex items-center gap-2 mr-2 text-[10px] font-mono tabular-nums whitespace-nowrap border-r border-slate-200 dark:border-slate-700 pr-2 h-4 flex-shrink-0 min-w-[3.5rem] justify-end">
                 {node.kind === 'file' && node.file && (
-                  <span className="text-slate-400">
+                  <span className="text-slate-400 tabular-nums">
                     {formatFileSize(node.file.size)}
                   </span>
                 )}
                 <span
                   className={cn(
-                    'text-brand-500/70 transition-opacity',
-                    !node.isPrecise && 'opacity-60'
+                    'text-brand-500/70 transition-opacity tabular-nums font-mono',
+                    !node.isPrecise && 'opacity-60 italic'
                   )}
                 >
                   {!node.isPrecise && '~'}
