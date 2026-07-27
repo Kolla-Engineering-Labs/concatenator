@@ -4,6 +4,7 @@
  */
 
 import { PassThrough } from 'node:stream'
+import { EventEmitter } from 'node:events'
 import { describe, it, expect, vi } from 'vitest'
 import { SessionFormatter } from '../../src/core/builder/SessionFormatter.js'
 import { Neutralizer } from '../../src/core/shared/Neutralizer.js'
@@ -76,6 +77,13 @@ describe('Builder Domain & Strategies', () => {
       )
       expect(manifest).toContain('src/app.ts|0644|a1b2c3d4')
       expect(manifest).toContain('<<<<< POST_MATTER_MANIFEST_END >>>>>')
+    })
+
+    it('formats Post-Matter manifest without session ID when omitted', () => {
+      const ledger = [{ path: 'lib/core.ts', mode: '0755', hash: '87654321' }]
+      const manifest = formatPostMatterManifest(ledger)
+      expect(manifest).toContain('<<<<< POST_MATTER_MANIFEST_START >>>>>')
+      expect(manifest).toContain('lib/core.ts|0755|87654321')
     })
   })
 
@@ -166,6 +174,89 @@ describe('Builder Domain & Strategies', () => {
       expect(result).toContain('<<<<< POST_MATTER_MANIFEST_END >>>>>')
     })
 
+    it('throws error when buildFromDirectory is called without a scanner strategy instance', () => {
+      const builder = new ConcatenationBuilder()
+      expect(() => builder.buildFromDirectory({ rootPath: '/mock' })).toThrow(
+        'Scanner strategy instance is required for directory scanning.'
+      )
+    })
+
+    it('throws error when buildStreamFromDirectory is called without a scanner strategy instance', async () => {
+      const builder = new ConcatenationBuilder()
+      await expect(async () => {
+        for await (const _ of builder.buildStreamFromDirectory({
+          rootPath: '/mock',
+        })) {
+          // unreachable
+        }
+      }).rejects.toThrow(
+        'Scanner strategy instance is required for directory scanning.'
+      )
+    })
+
+    it('builds bundle from directory using scanner strategy instance', () => {
+      const mockScanner = {
+        scanDirectory: vi
+          .fn()
+          .mockReturnValue([{ path: 'src/main.ts', content: 'const a = 1;' }]),
+      }
+
+      const builder = new ConcatenationBuilder({ scanner: mockScanner as any })
+      const result = builder.buildFromDirectory({ rootPath: '/app' })
+
+      expect(mockScanner.scanDirectory).toHaveBeenCalledWith({
+        rootPath: '/app',
+      })
+      expect(result).toContain('const a = 1;')
+      expect(result).toContain('POST_MATTER_MANIFEST_START')
+    })
+
+    it('streams from directory using scanner.scanDirectoryStream', async () => {
+      async function* mockScanStream() {
+        yield { path: 'src/stream.ts', content: 'export const s = true;' }
+      }
+
+      const mockScanner = {
+        scanDirectoryStream: vi.fn().mockImplementation(mockScanStream),
+        scanDirectory: vi.fn(),
+      }
+
+      const builder = new ConcatenationBuilder({ scanner: mockScanner as any })
+      const chunks: string[] = []
+
+      for await (const chunk of builder.buildStreamFromDirectory({
+        rootPath: '/app',
+      })) {
+        chunks.push(chunk)
+      }
+
+      expect(chunks.length).toBe(3) // Header, File Chunk, Post-Matter Manifest
+      expect(chunks[1]).toContain('src/stream.ts')
+      expect(chunks[2]).toContain('POST_MATTER_MANIFEST_START')
+    })
+
+    it('streams from directory falling back to scanner.scanDirectory when scanDirectoryStream is undefined', async () => {
+      const mockScanner = {
+        scanDirectory: vi
+          .fn()
+          .mockReturnValue([
+            { path: 'fallback.ts', content: 'fallback content' },
+          ]),
+      }
+
+      const builder = new ConcatenationBuilder({ scanner: mockScanner as any })
+      const chunks: string[] = []
+
+      for await (const chunk of builder.buildStreamFromDirectory({
+        rootPath: '/app',
+      })) {
+        chunks.push(chunk)
+      }
+
+      expect(chunks.length).toBe(3)
+      expect(chunks[1]).toContain('fallback.ts')
+    })
+
     it('streams files via AsyncGenerator yielding Post-Matter EOF manifest chunk', async () => {
       const builder = new ConcatenationBuilder()
       const inputFiles = [
@@ -193,6 +284,51 @@ describe('Builder Domain & Strategies', () => {
       )
       expect(chunks[3]).toContain('src/main.ts|0644|')
       expect(chunks[3]).toContain('src/utils.ts|0644|')
+    })
+
+    it('streams files from AsyncIterable generator and formats tokenBudget in header', async () => {
+      async function* generateAsyncFiles() {
+        yield { path: 'async1.ts', content: 'const a = 1;' }
+        yield { path: 'async2.ts', content: 'const b = 2;' }
+      }
+
+      const builder = new ConcatenationBuilder()
+      const chunks: string[] = []
+
+      for await (const chunk of builder.buildStreamFromFiles(
+        generateAsyncFiles(),
+        {
+          tokenBudget: 50000,
+          sessionId: 'budget1',
+        }
+      )) {
+        chunks.push(chunk)
+      }
+
+      expect(chunks[0]).toContain('Budget: 50,000')
+      expect(chunks[1]).toContain('async1.ts')
+      expect(chunks[2]).toContain('async2.ts')
+      expect(chunks[3]).toContain('POST_MATTER_MANIFEST_START')
+    })
+
+    it('throws error when buildStreamFromFiles detects session ID collision in array input', async () => {
+      const builder = new ConcatenationBuilder()
+      const collidingFiles = [
+        {
+          path: 'bad.ts',
+          content: '--- CONCATENATOR_SESSION_ID: COLLID ---',
+        },
+      ]
+
+      await expect(async () => {
+        for await (const _ of builder.buildStreamFromFiles(collidingFiles, {
+          sessionId: 'COLLID',
+        })) {
+          // unreachable
+        }
+      }).rejects.toThrow(
+        "Provided session ID 'COLLID' collides with file content"
+      )
     })
 
     it('streams files directly to a Writable stream', async () => {
@@ -223,6 +359,69 @@ describe('Builder Domain & Strategies', () => {
         '<<<<< POST_MATTER_MANIFEST_START (ID: writestream1) >>>>>'
       )
       expect(fullStreamOutput).toContain('b.txt|0644|')
+    })
+
+    it('handles Writable backpressure during buildToWritable when write returns false', async () => {
+      class BackpressureWritable extends EventEmitter {
+        public written: string[] = []
+        private firstWrite = true
+
+        public write(chunk: string): boolean {
+          this.written.push(chunk)
+          if (this.firstWrite) {
+            this.firstWrite = false
+            // Simulate backpressure on first write
+            setTimeout(() => {
+              this.emit('drain')
+            }, 10)
+            return false
+          }
+          return true
+        }
+      }
+
+      const mockWritable = new BackpressureWritable() as any
+      const builder = new ConcatenationBuilder()
+
+      await builder.buildToWritable(
+        mockWritable,
+        [{ path: 'bp.ts', content: 'backpressure content' }],
+        { sessionId: 'bp123' }
+      )
+
+      expect(mockWritable.written.length).toBeGreaterThanOrEqual(3)
+      expect(mockWritable.written.join('')).toContain('backpressure content')
+    })
+
+    it('streams directory directly to Writable stream via buildToWritableFromDirectory', async () => {
+      async function* mockScanStream() {
+        yield { path: 'dir/stream.ts', content: 'dir stream content' }
+      }
+
+      const mockScanner = {
+        scanDirectoryStream: vi.fn().mockImplementation(mockScanStream),
+        scanDirectory: vi.fn(),
+      }
+
+      const builder = new ConcatenationBuilder({ scanner: mockScanner as any })
+      const passThrough = new PassThrough()
+      let output = ''
+
+      passThrough.on('data', (chunk) => {
+        output += chunk.toString('utf8')
+      })
+
+      await builder.buildToWritableFromDirectory(
+        passThrough,
+        { rootPath: '/mock' },
+        { sessionId: 'dirwritestream' }
+      )
+      passThrough.end()
+
+      expect(output).toContain('dir stream content')
+      expect(output).toContain(
+        'POST_MATTER_MANIFEST_START (ID: dirwritestream)'
+      )
     })
 
     it('validates concatenated bundle with Post-Matter EOF manifest successfully', () => {

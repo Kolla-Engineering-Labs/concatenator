@@ -29,7 +29,7 @@ test.describe('Responsive UI - Sidebar', () => {
     await expect(sidebar).toHaveClass(/translate-x-0/)
 
     // Verify backdrop exists and is visible
-    const backdrop = page.locator('div.fixed.inset-0.bg-slate-900\\/50')
+    const backdrop = page.getByTestId('sidebar-backdrop')
     await expect(backdrop).toBeVisible()
 
     // Click backdrop to close sidebar
