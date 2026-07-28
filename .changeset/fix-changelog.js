@@ -1,7 +1,11 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
-const date = new Date().toISOString().split('T')[0] // Ensure it's just YYYY-MM-DD
+// Offset the UTC date by the local timezone difference before extracting the string
+const now = new Date()
+const offsetMs = now.getTimezoneOffset() * 60 * 1000
+const localDate = new Date(now.getTime() - offsetMs)
+const date = localDate.toISOString().split('T')[0]
 const changelogPath = path.resolve('CHANGELOG.md')
 
 if (fs.existsSync(changelogPath)) {
