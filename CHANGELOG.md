@@ -1,21 +1,83 @@
 # Changelog
 
-## [0.9.0] - 2026-07-26
+## [0.9.0] - 2026-07-27
 
 ### Minor Changes
 
-- refactor(core): Phase C Core Isolation — Strategy Pattern Context Parsers
+- ## 🚀 Overview
 
-  ### Architectural Context
+  The **v0.9.0 release** is a major architectural milestone for Concatenator, introducing stream-first VFS ingestion, Strategy Pattern core isolation, Two-Key Cryptographic Verification, 2-pass BPE token physics, Web Worker offloading, and unified coverage reporting across Vitest and Playwright.
 
-  Monolithic text parsing logic inside `engine.ts` has been refactored into isolated, pure Strategy Pattern components under `src/core/parsers/` following strict Clean Architecture guidelines.
+  ***
 
-  ### Key Changes
-  - **Interface Contract (`IContextParser.ts`)**: Established a pure structural interface with zero runtime code (`canParse`, `parse`) to prevent circular dependency issues.
-  - **Shared Perimeter (`ParserUtils.ts`)**: Extracted all shared runtime functions (`sanitizePath`, `dedupePath`, `extractSessionId`, `buildFileStartRegex`, `processExtractedFile`) into an isolated utility module.
-  - **Parser Strategies**: Implemented pure `SessionParser`, `LegacyParser`, and `HeaderParser` strategy classes.
-  - **Orchestrator (`engine.ts`)**: Refactored `engine.ts` into a lightweight factory & orchestrator evaluating signature payloads and instantiating matching parser strategies.
-  - **Backward Compatibility**: Re-exported `sanitizePath` and `dedupePath` from `ParserUtils.js` to ensure all 807 Vitest assertions pass without modification.
+  ## 🔑 Key Features & Enhancements
+
+  ### 1. Two-Key Verification & Cryptographic Rejection (`src/core/ManifestValidator.ts`)
+  - **Post-Matter EOF Manifest Enforcement**: Bundles append a pipe-delimited ledger (`path|mode|hash`) sealed between `POST_MATTER_MANIFEST_START` and `POST_MATTER_MANIFEST_END` delimiters.
+  - **Strict Hash Verification**: Recalculates file chunk SHA-256 digests upon extraction and validates against manifest entries using strict `===` string equality.
+  - **Precision Structural Trimming**: Strips only the single structural newlines (`\n` or `\r\n`) inserted by the Builder, preserving native source whitespace and byte-for-byte hash fidelity.
+  - **Unauthorized Data Rejection**: Instantly throws if data is appended after the Post-Matter Manifest end marker.
+  - **Security Exception Hierarchy (`src/core/errors.ts`)**: Added `TamperDetectedError` and `SecurityError` extending `SecurityViolation`.
+  - **CLI Exit Behavior (`src/cli/index.ts`)**: Catches `TamperDetectedError` in `validate`, outputs high-visibility warnings, and exits with status code 1.
+
+  ### 2. Core Parser Isolation (`src/core/parsers/`)
+  - Decoupled monolithic text parsing logic from `engine.ts` into isolated, pure Strategy Pattern components.
+  - Introduced `IContextParser.ts` interface contract (`canParse`, `parse`).
+  - Created `ParserUtils.ts` security perimeter (`sanitizePath`, `dedupePath`, `extractSessionId`, `buildFileStartRegex`, `processExtractedFile`).
+  - Implemented `SessionParser.ts`, `LegacyParser.ts`, and `HeaderParser.ts` concrete strategies.
+  - Lightweight `engine.ts` factory orchestrator re-exporting key utilities for backward compatibility.
+
+  ### 3. Core Builder Isolation & Stream Engine (`src/core/builder/`)
+  - Decoupled builder logic into `IFormatter.ts`, `IFilterStrategy.ts`, and `IScanner.ts` interfaces.
+  - Hoisted `INeutralizer.ts` and `Neutralizer.ts` to `src/core/shared/`.
+  - Non-blocking streaming scanner (`Scanner.scanDirectoryStream` using `await fs.promises.readFile()`).
+  - Asynchronous generator orchestration (`ConcatenationBuilder.buildStreamFromDirectory`, `buildStreamFromFiles`) outputting `AsyncGenerator<string>`.
+  - Direct stream piping (`buildToWritable`) with Node `Writable` stream `drain` event backpressure.
+
+  ### 4. Web Workbench & Web Worker Performance (`src/workers/concatenator.worker.ts`)
+  - Offloaded Core Engine execution and tokenization to a dedicated Web Worker.
+  - Native File System Access API streaming (`showSaveFilePicker` / `showDirectoryPicker`) with transferable `ReadableStream` backpressure.
+  - 2-Pass Token Physics Engine: Pass 1 Heuristic + Pass 2 Deterministic WASM TikToken (`o200k_base` / `cl100k_base`) with 500ms response batching.
+  - Enforced `ERR_PLATFORM_OOM_RISK` 500MB circuit breaker preventing V8 heap crashes.
+  - Added `SecurityStatusBadge` amber status indicator for legacy payload fallback (`degradedMode`).
+
+  ### 5. AgentOps Telemetry Sealing
+  - Sealed local agent log directories (`.agentops/`, `.agents/`, `.claude/`, `agentops/`) across Git (`.gitignore`), engine defaults (`DEFAULT_IGNORE_LIST`), and directory traversal (`heavyDirs`).
+  - Verified via `src/core/ignore/IgnoreEngine.test.ts`.
+
+  ### 6. Unified Vitest + Playwright Coverage Pipeline (`scripts/merge-coverage.ts`)
+  - Consolidated Istanbul JSON coverage artifacts from Vitest and Playwright (`coverage/raw-playwright/`).
+  - Strip Vite server origins and worker query parameters for accurate relative path matching.
+  - Created `tests/e2e/worker-streaming.spec.ts` Playwright integration suite validating $O(1)$ streaming, Gas Gauge lock transitions, and 501MB payload circuit breaker handling.
+
+  ### 7. SEA Packaging & CI/CD Pipeline
+  - Converted `scripts/build-sea.js` to use programmatic `esbuild.buildSync()` with native `define: { PROCESS_IS_UNSIGNED: ... }` injection and hard failure exits (`process.exit(1)`).
+  - Generated clearsigned GPG release manifest (`dist/SHA256SUMS.asc`) matching Architect PGP Fingerprint.
+  - Created `.changeset/fix-changelog.js` automation script for local timezone semver header formatting.
+
+  ***
+
+  ## 📁 Key File Modification Matrix
+
+  | File Path                            | Domain            | Summary of Changes                                                                               |
+  | :----------------------------------- | :---------------- | :----------------------------------------------------------------------------------------------- |
+  | `src/core/ManifestValidator.ts`      | Security / Core   | Created `ManifestValidator` service enforcing strict SHA-256 Post-Matter manifest checks.        |
+  | `src/core/errors.ts`                 | Security / Core   | Added `TamperDetectedError` and re-exported `SecurityError`.                                     |
+  | `src/core/engine.ts`                 | Core Engine       | Integrated `ManifestValidator` into `validateConcatenation()` and re-exported core symbols.      |
+  | `src/cli/index.ts`                   | CLI Interface     | Caught `TamperDetectedError` in `validate` handler with high-visibility logging and exit code 1. |
+  | `src/core/parsers/*`                 | Core Architecture | Extracted `IContextParser`, `ParserUtils`, `SessionParser`, `LegacyParser`, and `HeaderParser`.  |
+  | `src/core/builder/*`                 | Core Architecture | Decoupled `Scanner`, `SessionFormatter`, contracts, and streaming generator pipeline.            |
+  | `src/workers/concatenator.worker.ts` | Web UI / Worker   | Implemented 2-pass BPE token physics, streaming backpressure, and 500MB circuit breaker.         |
+  | `scripts/merge-coverage.ts`          | CI / CD           | Unified Vitest and Playwright Istanbul coverage artifacts into consolidated reports.             |
+  | `scripts/build-sea.js`               | Packaging / SEA   | Converted SEA builder to programmatic `esbuild.buildSync` with strict error exits.               |
+
+  ***
+
+  ## 🎯 Verification Matrix
+  - **Unit & Integration Tests (`vitest`)**: 100% Pass (60 test files / 800+ assertions).
+  - **TypeScript Strict Check (`tsc --noEmit`)**: Clean exit with 0 errors.
+  - **Linter & Formatting (`eslint` / `prettier`)**: Clean exit across the repository.
+  - **Smoke Suite (`smoke-test.sh`)**: Passed all 11 stages (including clean bundle validation, tampered bundle cryptographic rejection, path traversal jailbreak, GPG verification, and bit-for-bit build determinism).
 
 ## [0.8.1] - 2026-07-25
 
