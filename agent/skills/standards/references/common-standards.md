@@ -276,12 +276,12 @@ Validate at system boundaries (user input, external APIs, file reads). Trust int
 
 Resolve user-supplied paths to absolute form, then verify the result stays within the allowed directory.
 
-| Language | Pattern                                                                                                           |
+| Language | Pattern |
 | -------- | ----------------------------------------------------------------------------------------------------------------- | -------------------- | --- | ------- |
-| Go       | `cleaned := filepath.Clean(userPath); if !strings.HasPrefix(filepath.Join(baseDir, cleaned), baseDir) { reject }` |
-| Python   | `resolved = (base_dir / user_path).resolve(); if not str(resolved).startswith(str(base_dir.resolve())): raise`    |
-| Node     | `const resolved = path.resolve(baseDir, userPath); if (!resolved.startsWith(baseDir)) throw`                      |
-| Shell    | `realpath "$user_path"                                                                                            | grep -q "^$base_dir" |     | exit 1` |
+| Go | `cleaned := filepath.Clean(userPath); if !strings.HasPrefix(filepath.Join(baseDir, cleaned), baseDir) { reject }` |
+| Python | `resolved = (base_dir / user_path).resolve(); if not str(resolved).startswith(str(base_dir.resolve())): raise` |
+| Node | `const resolved = path.resolve(baseDir, userPath); if (!resolved.startsWith(baseDir)) throw` |
+| Shell | `realpath "$user_path"                                                                                            | grep -q "^$base_dir" |     | exit 1` |
 
 **Key rules:**
 

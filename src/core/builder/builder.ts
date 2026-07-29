@@ -165,8 +165,8 @@ export class ConcatenationBuilder {
 
     const ledger: PostMatterLedgerItem[] = []
     const iterableFiles:
-      | AsyncIterable<ConcatenateInputFile>
-      | Iterable<ConcatenateInputFile> = files
+      AsyncIterable<ConcatenateInputFile> | Iterable<ConcatenateInputFile> =
+      files
 
     for await (const rawFile of iterableFiles) {
       const path = rawFile.path.replace(/\\/g, '/')

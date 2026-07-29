@@ -81,15 +81,16 @@ Correct response: explain why you think it's safe, let human decide.
 ## Performance Contract
 
 **Latency Tiers:**
-| Tier | Stage | Target | Panic Threshold |
-|------|-------|--------|-----------------|
-| 0 | Quick Reject | <1μs | >50μs |
-| 1 | Normalization | <5μs | >100μs |
-| 2 | Safe Pattern Check | <50μs | >500μs |
-| 3 | Destructive Pattern Check | <50μs | >500μs |
-| 4 | Heredoc Extraction | <1ms | >20ms |
-| 5 | Heredoc Evaluation | <2ms | >30ms |
-| 6 | Full Pipeline | <5ms | >50ms |
+
+| Tier | Stage                     | Target | Panic Threshold |
+| ---- | ------------------------- | ------ | --------------- |
+| 0    | Quick Reject              | <1μs   | >50μs           |
+| 1    | Normalization             | <5μs   | >100μs          |
+| 2    | Safe Pattern Check        | <50μs  | >500μs          |
+| 3    | Destructive Pattern Check | <50μs  | >500μs          |
+| 4    | Heredoc Extraction        | <1ms   | >20ms           |
+| 5    | Heredoc Evaluation        | <2ms   | >30ms           |
+| 6    | Full Pipeline             | <5ms   | >50ms           |
 
 **Absolute Max:** 200ms (fail-open threshold)
 

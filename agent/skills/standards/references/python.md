@@ -77,12 +77,12 @@ Also normalize impossible states: if `is_error=False` but `error_class="timeout"
 
 When classifying inputs by string patterns (error types, log levels, status codes):
 
-| Anti-Pattern                            | Problem                                                           | Fix                                                                             |
+| Anti-Pattern | Problem | Fix |
 | --------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------- | ---- | ----- | -------------------- |
-| `"429" in msg`                          | Matches port numbers, line numbers                                | Use regex with context: `r'\b(status                                            | http | error | code)\s*:?\s*429\b'` |
-| Bare keyword match (`"sandbox" in msg`) | "sandbox startup failed" misclassifies as sandbox violation       | Require compound match: keyword + policy phrase (`denied`, `violation`)         |
-| Meaningless default case                | `return "unknown"` for both truly-unknown and simply-unrecognized | Make default semantic: `"execution_error"` for non-empty, `"unknown"` for empty |
-| No false-positive test coverage         | Tests only check happy paths                                      | Generate 5+ realistic false-positive inputs per pattern                         |
+| `"429" in msg` | Matches port numbers, line numbers | Use regex with context: `r'\b(status                                            | http | error | code)\s*:?\s*429\b'` |
+| Bare keyword match (`"sandbox" in msg`) | "sandbox startup failed" misclassifies as sandbox violation | Require compound match: keyword + policy phrase (`denied`, `violation`) |
+| Meaningless default case | `return "unknown"` for both truly-unknown and simply-unrecognized | Make default semantic: `"execution_error"` for non-empty, `"unknown"` for empty |
+| No false-positive test coverage | Tests only check happy paths | Generate 5+ realistic false-positive inputs per pattern |
 
 ## Testing
 

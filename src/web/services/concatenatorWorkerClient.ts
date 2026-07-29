@@ -90,9 +90,7 @@ export class ConcatenatorWorkerClient {
     // 1. Await User Gesture First: Prompt for save file picker
     let fileHandle: FileSystemFileHandle | null = null
     let writableStream:
-      | FileSystemWritableFileStream
-      | WritableStream<Uint8Array>
-      | null = null
+      FileSystemWritableFileStream | WritableStream<Uint8Array> | null = null
     const blobChunks: Uint8Array[] = []
     const win = window as unknown as WindowWithFileSystemAccess
 
