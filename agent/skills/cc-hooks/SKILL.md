@@ -221,12 +221,12 @@ allow + record. Every fire appends one hashed guardrail-telemetry line
 
 Day-1 enforce cohort (age-wnyt, all pure-regex, high-pain):
 
-| Policy                               | Blocks                                                                               | Routes to                                                               |
+| Policy | Blocks | Routes to |
 | ------------------------------------ | ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------- | ---------------------------------------- | ---------------- |
-| `core.git:add-beads-ledger`          | `git add` naming `_beads/` (private ledger leak is one-way)                          | push the ledger repo itself — never `git add _beads` in the public tree |
-| `core.provenance:ledger-hand-append` | redirect/`tee`/Edit/Write onto `docs/provenance/ledger.jsonl` (hash-chained, sealed) | `ao provenance add`                                                     |
-| `core.skills:copy-into-installed`    | `cp`/`rsync`/`mv` INTO `~/.claude                                                    | .codex                                                                  | .gemini/skills` (dest-position enforced) | `ao skills link` |
-| `core.skills:edit-installed-copy`    | Edit/Write of an installed skill copy (`file_path` only — prose can never fire it)   | edit repo `skills/<name>/`                                              |
+| `core.git:add-beads-ledger` | `git add` naming `_beads/` (private ledger leak is one-way) | push the ledger repo itself — never `git add _beads` in the public tree |
+| `core.provenance:ledger-hand-append` | redirect/`tee`/Edit/Write onto `docs/provenance/ledger.jsonl` (hash-chained, sealed) | `ao provenance add` |
+| `core.skills:copy-into-installed` | `cp`/`rsync`/`mv` INTO `~/.claude                                                    | .codex                                                                  | .gemini/skills` (dest-position enforced) | `ao skills link` |
+| `core.skills:edit-installed-copy` | Edit/Write of an installed skill copy (`file_path` only — prose can never fire it) | edit repo `skills/<name>/` |
 
 **How it reaches users — every install path delivers hooks:**
 

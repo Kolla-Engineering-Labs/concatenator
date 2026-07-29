@@ -52,6 +52,9 @@ export default defineConfig(({ mode }) => {
     },
     optimizeDeps: {
       include: ['js-tiktoken'],
+      esbuildOptions: {
+        target: 'es2022',
+      },
     },
     plugins: [
       react(),
@@ -164,6 +167,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     build: {
+      target: 'es2022',
       sourcemap: false, // Disabled for bit-for-bit determinism
       chunkSizeWarningLimit: 6000,
       rollupOptions: {

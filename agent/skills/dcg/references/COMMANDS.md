@@ -230,14 +230,15 @@ $ dcg scan --format sarif > results.sarif
 ```
 
 **Supported file types:**
-| Type | Contexts Scanned |
-|------|-----------------|
-| Shell scripts (`.sh`) | All executable lines |
-| Dockerfile | `RUN` instructions |
-| GitHub Actions | `run:` fields |
-| GitLab CI | `script:`, `before_script:`, `after_script:` |
-| Makefile | Recipe lines |
-| Docker Compose | `command:`, `entrypoint:` |
+
+| Type                  | Contexts Scanned                             |
+| --------------------- | -------------------------------------------- |
+| Shell scripts (`.sh`) | All executable lines                         |
+| Dockerfile            | `RUN` instructions                           |
+| GitHub Actions        | `run:` fields                                |
+| GitLab CI             | `script:`, `before_script:`, `after_script:` |
+| Makefile              | Recipe lines                                 |
+| Docker Compose        | `command:`, `entrypoint:`                    |
 
 ### Install Pre-commit Hook
 

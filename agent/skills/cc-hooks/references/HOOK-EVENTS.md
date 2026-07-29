@@ -17,9 +17,7 @@ Complete documentation for all Claude Code hook events.
   "permission_mode": "default|plan|acceptEdits|dontAsk|bypassPermissions",
   "hook_event_name": "PreToolUse",
   "tool_name": "Bash|Write|Edit|Read|Glob|Grep|Task|WebFetch|WebSearch|mcp__*",
-  "tool_input": {
-    /* tool-specific */
-  },
+  "tool_input": {/* tool-specific */},
   "tool_use_id": "toolu_01ABC..."
 }
 ```
@@ -104,12 +102,8 @@ Complete documentation for all Claude Code hook events.
   "permission_mode": "default",
   "hook_event_name": "PostToolUse",
   "tool_name": "Write",
-  "tool_input": {
-    /* original input */
-  },
-  "tool_response": {
-    /* tool result */
-  },
+  "tool_input": {/* original input */},
+  "tool_response": {/* tool result */},
   "tool_use_id": "toolu_01ABC..."
 }
 ```
