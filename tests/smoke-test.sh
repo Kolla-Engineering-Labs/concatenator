@@ -66,7 +66,8 @@ echo -e "$PASS  Clean bundle validated."
 # ── 4. Corruption Check ───────────────────────────────────────────────────────
 echo "[4/11] Simulating corruption and re-validating..."
 cp tests/smoke-sandbox/bundle.txt tests/smoke-sandbox/bundle-clean.txt
-echo "CORRUPT_DATA_INJECTED" >> tests/smoke-sandbox/bundle.txt
+# Guarantee byte mutation by modifying raw text inside the payload boundary
+node -e "const fs=require('fs'); const c=fs.readFileSync('tests/smoke-sandbox/bundle.txt','utf8'); fs.writeFileSync('tests/smoke-sandbox/bundle.txt', c.replace('hello world', 'hello world // TAMPERED BYTE SEQUENCE'));"
 
 if npm run dev:cli -- validate tests/smoke-sandbox/bundle.txt > /dev/null 2>&1; then
   echo -e "$FAIL  Corruption was NOT detected — validate passed on tampered bundle."

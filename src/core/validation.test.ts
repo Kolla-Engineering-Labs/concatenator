@@ -4,7 +4,11 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { validateConcatenation, concatenate } from './engine'
+import {
+  validateConcatenation,
+  concatenate,
+  ConcatenationBuilder,
+} from './engine'
 
 describe('validateConcatenation', () => {
   describe('valid concatenated strings', () => {
@@ -193,6 +197,71 @@ Content C
       expect(result.detectedFiles).toEqual(['a.txt', 'b.txt', 'c.txt'])
       expect(result.errors).toHaveLength(1)
       expect(result.errors[0]).toContain('b.txt')
+    })
+  })
+
+  describe('Two-Key Verification with Post-Matter Manifest', () => {
+    it('validates a complete bundle with valid Post-Matter Manifest', () => {
+      const builder = new ConcatenationBuilder()
+      const bundle = builder.buildFromFiles([
+        { path: 'src/index.ts', content: 'console.log("hello")' },
+        { path: 'src/utils.ts', content: 'export const x = 42' },
+      ])
+
+      const result = validateConcatenation(bundle)
+      expect(result.isValid).toBe(true)
+      expect(result.errors).toHaveLength(0)
+    })
+
+    it('fails closed when payload is tampered with (hash mismatch)', () => {
+      const builder = new ConcatenationBuilder()
+      let bundle = builder.buildFromFiles([
+        { path: 'src/index.ts', content: 'console.log("hello")' },
+      ])
+
+      // Tamper with payload content inline
+      bundle = bundle.replace('console.log("hello")', 'console.log("TAMPERED")')
+
+      const result = validateConcatenation(bundle)
+      expect(result.isValid).toBe(false)
+      expect(result.errors).toContain(
+        'CORRUPTION DETECTED: Cryptographic hash mismatch in bundle payload.'
+      )
+    })
+
+    it('fails closed when Post-Matter Manifest entry count is out of sync with payload', () => {
+      const builder = new ConcatenationBuilder()
+      let bundle = builder.buildFromFiles([
+        { path: 'src/index.ts', content: 'console.log("hello")' },
+        { path: 'src/extra.ts', content: 'export const extra = true' },
+      ])
+
+      // Remove one of the files from the payload inline, keeping manifest intact
+      const extraStartIndex = bundle.indexOf('<<<<< FILE_START: src/extra.ts')
+      const extraEndIndex =
+        bundle.indexOf('<<<<< FILE_END >>>>>', extraStartIndex) +
+        '<<<<< FILE_END >>>>>'.length
+      bundle = bundle.slice(0, extraStartIndex) + bundle.slice(extraEndIndex)
+
+      const result = validateConcatenation(bundle)
+      expect(result.isValid).toBe(false)
+      expect(result.errors).toContain(
+        'CORRUPTION DETECTED: Post-Matter Manifest is missing, malformed, or out of sync with payload.'
+      )
+    })
+
+    it('fails closed when Post-Matter Manifest block is malformed', () => {
+      const bundle = `--- CONCATENATOR_SESSION_ID: 123456 ---
+<<<<< FILE_START: src/file.txt (ID: 123456) >>>>>
+hello
+<<<<< FILE_END >>>>>
+<<<<< POST_MATTER_MANIFEST_START (ID: 123456) >>>>>
+`
+      const result = validateConcatenation(bundle)
+      expect(result.isValid).toBe(false)
+      expect(result.errors).toContain(
+        'CORRUPTION DETECTED: Post-Matter Manifest is missing, malformed, or out of sync with payload.'
+      )
     })
   })
 })

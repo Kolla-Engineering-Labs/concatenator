@@ -1,0 +1,2 @@
+echo "KEL Protocol: Enforcing Core Engine Coverage Baselines..."
+npm run test:coverage

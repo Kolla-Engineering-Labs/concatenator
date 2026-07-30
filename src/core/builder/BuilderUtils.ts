@@ -26,10 +26,19 @@ export interface PostMatterLedgerItem {
  * @returns 8-character hex digest
  */
 export function computeHash(input: Buffer | Uint8Array | string): string {
-  const data =
-    typeof input === 'string'
-      ? new TextEncoder().encode(input)
-      : new Uint8Array(input.buffer, input.byteOffset, input.byteLength)
+  // KEL Protocol: OS-Agnostic Cryptography
+  // Normalize CRLF to LF and strip parser boundary bleed
+  let strContent: string
+  if (typeof input === 'string') {
+    strContent = input
+  } else if (Buffer.isBuffer(input)) {
+    strContent = input.toString('utf8')
+  } else {
+    strContent = new TextDecoder().decode(input)
+  }
+
+  const normalizedContent = strContent.replace(/\r\n/g, '\n').trimEnd()
+  const data = new TextEncoder().encode(normalizedContent)
 
   const len = data.length
   const seed = 0
