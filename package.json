@@ -110,6 +110,8 @@
     "body-parser": "^1.20.6",
     "@babel/core": "^7.29.6",
     "@opentelemetry/core": "^2.8.0",
-    "esbuild": "^0.28.1"
+    "esbuild": "^0.28.1",
+    "brace-expansion": "^5.0.8",
+    "minimatch": "^10.0.3"
   }
 }
