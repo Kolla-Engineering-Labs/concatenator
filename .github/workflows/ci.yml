@@ -92,7 +92,8 @@ jobs:
 
       - name: Native Security Audit (Stopgap Zero-Trust)
         if: matrix.os == 'ubuntu-latest'
-        run: npm audit --audit-level=high
+        # KEL Protocol: Isolate audit to the SEA production boundary
+        run: npm audit --audit-level=high --omit=dev
 
       # TODO: Provision Kolla Engineering Labs SaaS accounts and uncomment for Phase D / v1.0.0
       # - name: Static Analysis (SonarCloud)

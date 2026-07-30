@@ -19,7 +19,7 @@
   - Updated `tests/smoke-test.sh` payload tamper logic to run a cross-platform Node script mutating bytes inside the file segment boundary; verified 11/11 passing smoke test assertions.
 - **CI/CD Perimeter — v0.9.5 Security Gate (`ci.yml`):**
   - Inserted `Run E2E Tests (Playwright)` step immediately after the Vitest unit test step; both steps pass `CONCATENATOR_API_TOKEN` for local Core Engine auth.
-  - Added `Native Security Audit (Stopgap Zero-Trust)` step: `npm audit --audit-level=high` on `ubuntu-latest` — any `high`/`critical` CVE now mathematically blocks a PR merge.
+  - Scoped `Native Security Audit` to the production boundary (`npm audit --audit-level=high --omit=dev`) on `ubuntu-latest` — isolates audit to dependencies landing in the compiled SEA binary while preserving local dev tooling compatibility.
   - SonarCloud (`SonarSource/sonarcloud-github-action@master`) and Snyk (`snyk/actions/node@master`) steps scaffolded as commented-out blueprints with a `TODO` marker for Phase D / v1.0.0 provisioning. No external tokens required to pass current pipeline.
 - **VFS Sandboxing & Symlink Rejection:** Implemented `PathValidator.resolveAndJail()` to mathematically enforce directory traversal protection and symlink rejection via `fs.lstatSync`. Validated against 807 test assertions.
 - Multi-Job Matrix SEA Release Pipeline for automated cross-platform builds with GPG detached signing and context-aware macOS Apple Gatekeeper bypassing.
