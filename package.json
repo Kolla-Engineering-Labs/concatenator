@@ -36,7 +36,8 @@
     "build:manifest": "node scripts/generate-manifest.js",
     "test:release": "tsx scripts/verify-release-candidate.ts",
     "pre-release": "npm run test:release",
-    "version": "changeset version && node ./.changeset/fix-changelog.js"
+    "version": "changeset version && node ./.changeset/fix-changelog.js",
+    "prepare": "npx husky"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

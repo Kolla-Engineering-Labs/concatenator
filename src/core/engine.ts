@@ -11,13 +11,21 @@ import {
   POST_MATTER_MANIFEST_START,
 } from './constants.js'
 import type { IContextParser } from './parsers/IContextParser.js'
-import { extractSessionId } from './parsers/ParserUtils.js'
+import {
+  extractSessionId,
+  extractPostMatterManifest,
+} from './parsers/ParserUtils.js'
+import { computeHash } from './builder/BuilderUtils.js'
 import { SessionParser } from './parsers/SessionParser.js'
 import { LegacyParser } from './parsers/LegacyParser.js'
 import { HeaderParser } from './parsers/HeaderParser.js'
 import { Neutralizer } from './shared/Neutralizer.js'
 
-export { sanitizePath, dedupePath } from './parsers/ParserUtils.js'
+export {
+  sanitizePath,
+  dedupePath,
+  extractPostMatterManifest,
+} from './parsers/ParserUtils.js'
 
 import type { ValidationResult } from './types.js'
 
@@ -134,7 +142,10 @@ export function deconcatenate(
  * @param input - The concatenated content string to validate
  * @returns ValidationResult with detailed findings
  */
-export function validateConcatenation(input: string): ValidationResult {
+export function validateConcatenation(
+  input: string,
+  parsedFiles?: VirtualFile[]
+): ValidationResult {
   const errors: string[] = []
   const warnings: string[] = []
   const detectedFiles: string[] = []
@@ -344,6 +355,52 @@ export function validateConcatenation(input: string): ValidationResult {
     const orphanedCount = endMarkerCount - startMarkerCount
     errors.push(
       `${orphanedCount} orphaned end marker(s) found without matching start markers`
+    )
+  }
+
+  // 2. Two-Key Verification: Post-Matter Manifest Validation
+  const manifest = extractPostMatterManifest(input)
+  if (manifest) {
+    if (sessionId && manifest.sessionId && sessionId !== manifest.sessionId) {
+      errors.push(
+        'Session ID mismatch between manifest header and Post-Matter manifest'
+      )
+    }
+
+    const filesToValidate = parsedFiles ?? deconcatenate(input).files
+
+    // FAIL CLOSED: Missing manifest entries, empty array, or mismatched lengths
+    if (
+      manifest.entries.length === 0 ||
+      manifest.entries.length !== filesToValidate.length
+    ) {
+      errors.push(
+        'CORRUPTION DETECTED: Post-Matter Manifest is missing, malformed, or out of sync with payload.'
+      )
+    } else {
+      // STRICT VERIFICATION: H(M_payload) == H(M_manifest)
+      const neutralizer = new Neutralizer()
+      const isPostMatterValid = manifest.entries.every((entry) => {
+        const extractedFile = filesToValidate.find(
+          (f) => f.path.replace(/\\/g, '/') === entry.path.replace(/\\/g, '/')
+        )
+        if (!extractedFile) return false
+
+        const unneutralized = neutralizer.unneutralize(extractedFile.content)
+        const calculatedHash1 = computeHash(unneutralized)
+        const calculatedHash2 = computeHash(extractedFile.content)
+        return calculatedHash1 === entry.hash || calculatedHash2 === entry.hash
+      })
+
+      if (!isPostMatterValid) {
+        errors.push(
+          'CORRUPTION DETECTED: Cryptographic hash mismatch in bundle payload.'
+        )
+      }
+    }
+  } else if (input.includes(POST_MATTER_MANIFEST_START)) {
+    errors.push(
+      'CORRUPTION DETECTED: Post-Matter Manifest is missing, malformed, or out of sync with payload.'
     )
   }
 

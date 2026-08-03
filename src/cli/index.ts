@@ -805,10 +805,15 @@ program
             }
           } else {
             // File validation
-            const content = readFileSync(inputPath, 'utf-8')
-            const result = validateConcatenation(content)
-            formatValidationReport(result, inputPath, options.verbose, false)
-            if (!result.isValid) {
+            try {
+              const content = readFileSync(inputPath, 'utf-8')
+              const result = validateConcatenation(content)
+              formatValidationReport(result, inputPath, options.verbose, false)
+              if (!result.isValid) {
+                process.exit(1)
+              }
+            } catch (error) {
+              logger.error(`✗ FATAL: ${(error as Error).message}`)
               process.exit(1)
             }
           }

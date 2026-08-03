@@ -1,7 +1,7 @@
 # Project State: Concatenator
 
-**Current Version:** v0.9.0-alpha (Phase C: Security & Decoupling Sprint)
-**Last Updated:** 2026-07-28
+**Current Version:** v0.9.5-alpha (Phase C: CI/CD Perimeter Sealed)
+**Last Updated:** 2026-07-29
 
 ## Active Context & Architecture
 
@@ -12,6 +12,15 @@
 
 ## Recently Completed Milestones (Stable - Do Not Revisit)
 
+- **Post-Matter EOF Manifest & Two-Key Verification Sealed:**
+  - Implemented pipe-delimited Post-Matter EOF manifest parsing (`extractPostMatterManifest`) and fail-closed validation loop (`validateConcatenation`) in `src/core/engine.ts`.
+  - Centralized OS-agnostic CRLF-to-LF line normalization and parser boundary bleed trimming (`.replace(/\r\n/g, '\n').trimEnd()`) inside `computeHash()` in `src/core/builder/BuilderUtils.ts`.
+  - Hardened CLI exception boundary in `src/cli/index.ts` to translate Core Engine validation exceptions into POSIX `process.exit(1)`.
+  - Updated `tests/smoke-test.sh` payload tamper logic to run a cross-platform Node script mutating bytes inside the file segment boundary; verified 11/11 passing smoke test assertions.
+- **CI/CD Perimeter — v0.9.5 Security Gate (`ci.yml`):**
+  - Inserted `Run E2E Tests (Playwright)` step immediately after the Vitest unit test step; both steps pass `CONCATENATOR_API_TOKEN` for local Core Engine auth.
+  - Scoped `Native Security Audit` to the production boundary (`npm audit --audit-level=high --omit=dev`) on `ubuntu-latest` — isolates audit to dependencies landing in the compiled SEA binary while preserving local dev tooling compatibility.
+  - SonarCloud (`SonarSource/sonarcloud-github-action@master`) and Snyk (`snyk/actions/node@master`) steps scaffolded as commented-out blueprints with a `TODO` marker for Phase D / v1.0.0 provisioning. No external tokens required to pass current pipeline.
 - **VFS Sandboxing & Symlink Rejection:** Implemented `PathValidator.resolveAndJail()` to mathematically enforce directory traversal protection and symlink rejection via `fs.lstatSync`. Validated against 807 test assertions.
 - Multi-Job Matrix SEA Release Pipeline for automated cross-platform builds with GPG detached signing and context-aware macOS Apple Gatekeeper bypassing.
 - Explicit CodeQL permissions boundary lock-down (`permissions: contents: read`) in the E2E GitHub Actions workflow.
@@ -19,6 +28,5 @@
 
 ## Pending Roadmap Tasks (Immediate Focus)
 
+- **Phase D SaaS Provisioning:** Register Kolla Engineering Labs org accounts on SonarCloud and Snyk; add `SONAR_TOKEN` and `SNYK_TOKEN` to GitHub Actions secrets; uncomment the blueprint blocks in `ci.yml`.
 - **The KEL Protocol Decoder Ring:** Draft `SKILLS.md` to act as a machine-readable System Prompt instructing LLMs on Two-Key Verification, neutralized boundaries, and Post-Matter manifest parsing.
-- **Pipeline Governance (v0.9.5 Prep):** Initialize Husky pre-commit hooks, Changesets for deterministic semantic versioning, and Snyk/SonarCloud quality gates.
-- Finalize the Post-Matter EOF manifest pipeline, shifting from JSON boundaries to pipe-delimited hashes for two-key extraction verification.

@@ -5,7 +5,12 @@
 
 import { resolveAndJail } from '../PathValidator.js'
 import { SymlinkRejectedError, PathTraversalError } from '../errors.js'
-import { START_DELIMITER, END_DELIMITER } from '../constants.js'
+import {
+  START_DELIMITER,
+  END_DELIMITER,
+  POST_MATTER_MANIFEST_START,
+  POST_MATTER_MANIFEST_END,
+} from '../constants.js'
 import type { VirtualFile, TelemetryPayload } from '../engine.js'
 
 /**
@@ -152,5 +157,73 @@ export function processExtractedFile(
       return false
     }
     throw err
+  }
+}
+
+export interface PostMatterEntry {
+  path: string
+  mode: string
+  hash: string
+}
+
+export interface PostMatterManifest {
+  sessionId: string | null
+  entries: PostMatterEntry[]
+}
+
+/**
+ * Extract Post-Matter EOF manifest from concatenated content
+ *
+ * Format:
+ * <<<<< POST_MATTER_MANIFEST_START (ID: sessionId) >>>>>
+ * path/to/file|0644|hash
+ * <<<<< POST_MATTER_MANIFEST_END >>>>>
+ *
+ * @param content - The concatenated content
+ * @returns PostMatterManifest or null if not found
+ */
+export function extractPostMatterManifest(
+  content: string
+): PostMatterManifest | null {
+  const startIndex = content.indexOf(POST_MATTER_MANIFEST_START)
+  if (startIndex === -1) return null
+
+  const endIndex = content.indexOf(POST_MATTER_MANIFEST_END, startIndex)
+  if (endIndex === -1) return null
+
+  const lineEnd = content.indexOf('\n', startIndex)
+  const startLine =
+    lineEnd !== -1
+      ? content.substring(startIndex, lineEnd)
+      : content.substring(startIndex)
+
+  const sessionMatch = startLine.match(/\(ID:\s*([a-zA-Z0-9]+)\s*\)/i)
+  const sessionId = sessionMatch ? sessionMatch[1] : null
+
+  const manifestBody = content.substring(
+    lineEnd !== -1 ? lineEnd + 1 : startIndex + startLine.length,
+    endIndex
+  )
+
+  const lines = manifestBody.split(/\r?\n/)
+  const entries: PostMatterEntry[] = []
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+
+    const parts = trimmed.split('|')
+    if (parts.length >= 3) {
+      entries.push({
+        path: parts[0].trim(),
+        mode: parts[1].trim(),
+        hash: parts[2].trim(),
+      })
+    }
+  }
+
+  return {
+    sessionId,
+    entries,
   }
 }

@@ -55,6 +55,11 @@ jobs:
         env:
           CONCATENATOR_API_TOKEN: ci-mock-token-998877
 
+      - name: Run E2E Tests (Playwright)
+        run: npm run test:e2e
+        env:
+          CONCATENATOR_API_TOKEN: ci-mock-token-998877
+
       - name: Archive coverage results
         if: matrix.os == 'ubuntu-latest' && !cancelled()
         uses: actions/upload-artifact@v4
@@ -84,3 +89,22 @@ jobs:
           use_oidc: true
           files: ./coverage/lcov.info
           fail_ci_if_error: false
+
+      - name: Native Security Audit (Stopgap Zero-Trust)
+        if: matrix.os == 'ubuntu-latest'
+        # KEL Protocol: Isolate audit to the SEA production boundary
+        run: npm audit --audit-level=high --omit=dev
+
+      # TODO: Provision Kolla Engineering Labs SaaS accounts and uncomment for Phase D / v1.0.0
+      # - name: Static Analysis (SonarCloud)
+      #   if: matrix.os == 'ubuntu-latest' && !cancelled()
+      #   uses: SonarSource/sonarcloud-github-action@master
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #     SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      #
+      # - name: Security Scan (Snyk)
+      #   if: matrix.os == 'ubuntu-latest'
+      #   uses: snyk/actions/node@master
+      #   env:
+      #     SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
