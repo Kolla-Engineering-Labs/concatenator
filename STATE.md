@@ -12,6 +12,14 @@
 
 ## Recently Completed Milestones (Stable - Do Not Revisit)
 
+- **Build-Time Version Injection (`scripts/build-cli.ts` & `src/cli/index.ts`):**
+  - Configured `esbuild` `define` in `scripts/build-cli.ts` to inject `__KEL_VERSION__` directly from `package.json` into the AST.
+  - Updated `src/cli/index.ts` to declare and consume `__KEL_VERSION__` with fallback to `'dev-build'`, eliminating disk reads and stale hardcoded version strings.
+- **V8 Snapshot & Postject Injection (`scripts/build-binary.ts`):**
+  - Created cross-platform build script `scripts/build-binary.ts` to orchestrate V8 SEA blob generation (`sea-prep.blob`), clone the host Node executable (`process.execPath`), and inject the blob via `postject`.
+  - Realigned segment architecture to restrict `--macho-segment-name NODE_SEA` exclusively to macOS (`darwin`), allowing native PE/ELF mapping on Windows and Linux.
+  - Updated `sea-config.json` entrypoints to `dist/bundle.js` and `dist/sea-prep.blob`.
+  - Wired `build:sea-bundle`, `build:sea-binary`, and `build:sea` pipeline script chain in `package.json`.
 - **Compiler Blueprint & SEA AST Bundling (`scripts/build-cli.ts`):**
   - Created `scripts/build-cli.ts` targeting Node 22 runtime with `esbuild`, bundling CommonJS output (`dist/bundle.js`) with tree shaking enabled.
   - Added `"build:sea-bundle": "tsx scripts/build-cli.ts"` execution hook script to `package.json`.
