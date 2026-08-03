@@ -12,6 +12,9 @@
 
 ## Recently Completed Milestones (Stable - Do Not Revisit)
 
+- **Compiler Blueprint & SEA AST Bundling (`scripts/build-cli.ts`):**
+  - Created `scripts/build-cli.ts` targeting Node 22 runtime with `esbuild`, bundling CommonJS output (`dist/bundle.js`) with tree shaking enabled.
+  - Added `"build:sea-bundle": "tsx scripts/build-cli.ts"` execution hook script to `package.json`.
 - **Post-Matter EOF Manifest & Two-Key Verification Sealed:**
   - Implemented pipe-delimited Post-Matter EOF manifest parsing (`extractPostMatterManifest`) and fail-closed validation loop (`validateConcatenation`) in `src/core/engine.ts`.
   - Centralized OS-agnostic CRLF-to-LF line normalization and parser boundary bleed trimming (`.replace(/\r\n/g, '\n').trimEnd()`) inside `computeHash()` in `src/core/builder/BuilderUtils.ts`.
