@@ -7,7 +7,6 @@
 import { Command } from 'commander'
 import { readFileSync, writeFileSync, statSync, existsSync } from 'node:fs'
 import { join, resolve, dirname, relative, basename } from 'node:path'
-import { fileURLToPath } from 'node:url'
 import {
   concatenate,
   deconcatenate,
@@ -54,33 +53,15 @@ import {
 
 // Build-time flags injected by esbuild
 declare const PROCESS_IS_UNSIGNED: boolean
-declare const PROCESS_VERSION: string
+declare const __KEL_VERSION__: string
 
 const IS_UNSIGNED =
   process.env.CONCATENATOR_FORCE_UNSIGNED === 'true' ||
   (typeof PROCESS_IS_UNSIGNED !== 'undefined' ? PROCESS_IS_UNSIGNED : false)
 
-// Load version from package.json or build-time flag
-let cliVersion =
-  typeof PROCESS_VERSION !== 'undefined' ? PROCESS_VERSION : '0.6.0'
-try {
-  if (
-    typeof import.meta !== 'undefined' &&
-    (import.meta as { url?: string }).url &&
-    typeof PROCESS_VERSION === 'undefined' // Only try on-disk lookup if not bundled
-  ) {
-    const __filename = fileURLToPath(
-      (import.meta as { url?: string }).url as string
-    )
-    const __dirname = dirname(__filename)
-    const packageJson = JSON.parse(
-      readFileSync(join(__dirname, '../../package.json'), 'utf-8')
-    )
-    cliVersion = packageJson.version
-  }
-} catch {
-  // Fallback if not available
-}
+// Fallback for local tsx dev execution if the constant is undefined
+const CLI_VERSION =
+  typeof __KEL_VERSION__ !== 'undefined' ? __KEL_VERSION__ : 'dev-build'
 
 // Initialize Commander program
 const program = new Command()
@@ -88,7 +69,7 @@ const program = new Command()
   .description(
     'Bundle and unbundle directories into LLM-ready concatenated files'
   )
-  .version(cliVersion)
+  .version(CLI_VERSION)
   .option('--ui', 'Launch the web-based Workbench UI')
   .configureOutput({
     writeErr: (str) => logger.error(str.trim()),
@@ -104,7 +85,7 @@ program
   .option('-m, --max-files <number>', 'Preset the maximum file limit', parseInt)
   .option('-i, --ignore-file <file>', 'Specify a custom ignore file')
   .action((path, options) => {
-    launchUI(path, { ...options, version: cliVersion })
+    launchUI(path, { ...options, version: CLI_VERSION })
   })
 
 // Start command (alias for UI, with security check)
@@ -118,7 +99,7 @@ program
       const { checkQuarantine } = await import('./cli-utils.js')
       checkQuarantine()
     }
-    await launchUI(path, { ...options, version: cliVersion })
+    await launchUI(path, { ...options, version: CLI_VERSION })
   })
 
 // Verify command
@@ -840,7 +821,7 @@ program.on('--help', () => {
 if (!process.env.VITEST) {
   if (process.argv.includes('--ui') && !process.argv.includes('ui')) {
     // Backwards compatibility for --ui flag without arguments
-    launchUI(undefined, { version: cliVersion })
+    launchUI(undefined, { version: CLI_VERSION })
   } else {
     program.parse()
   }
