@@ -12,6 +12,13 @@
 
 ## Recently Completed Milestones (Stable - Do Not Revisit)
 
+- **Hardening Frontend Foundation (`workbench-ui`):**
+  - Updated `workbench-ui/vite.config.ts` to use `import.meta.dirname` for ESM path resolution in the `emitBase64Assets` plugin.
+  - Implemented Light/Dark theme matrix CSS custom properties in `workbench-ui/src/index.css` using Tailwind v4 `@theme`.
+  - Created `workbench-ui/src/hooks/usePersistentState.ts` for safe localStorage state sync.
+- **Vite to SEA Bridge (`workbench-ui/vite.config.ts` & `workbench-ui/src/index.css`):**
+  - Configured `workbench-ui/vite.config.ts` with custom `emitBase64Assets` plugin to compile and encode static UI dist assets into `src/cli/webAssets.ts`.
+  - Updated `workbench-ui/src/index.css` with Tailwind v4 engine configuration and dark-mode workspace palette.
 - **Build-Time Version Injection (`scripts/build-cli.ts` & `src/cli/index.ts`):**
   - Configured `esbuild` `define` in `scripts/build-cli.ts` to inject `__KEL_VERSION__` directly from `package.json` into the AST.
   - Updated `src/cli/index.ts` to declare and consume `__KEL_VERSION__` with fallback to `'dev-build'`, eliminating disk reads and stale hardcoded version strings.

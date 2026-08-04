@@ -1,0 +1,33 @@
+@import 'tailwindcss';
+
+@theme {
+  /* Dynamic Surface Variables */
+  --color-surface-900: var(--surface-900);
+  --color-surface-800: var(--surface-800);
+  --color-surface-700: var(--surface-700);
+  --color-surface-100: var(--surface-100);
+
+  /* Static Accent Variables */
+  --color-accent-amber: #fbbf24;
+  --color-accent-rose: #f43f5e;
+}
+
+:root {
+  /* Light Mode (High Contrast) */
+  --surface-900: #f8fafc; /* slate-50 */
+  --surface-800: #f1f5f9; /* slate-100 */
+  --surface-700: #e2e8f0; /* slate-200 */
+  --surface-100: #334155; /* slate-700 */
+}
+
+.dark {
+  /* Dark Mode (Industrial Workbench) */
+  --surface-900: #0f172a; /* slate-900 */
+  --surface-800: #1e293b; /* slate-800 */
+  --surface-700: #334155; /* slate-700 */
+  --surface-100: #f8fafc; /* slate-50 */
+}
+
+body {
+  @apply bg-surface-900 text-surface-100 antialiased overflow-hidden selection:bg-surface-700;
+}
