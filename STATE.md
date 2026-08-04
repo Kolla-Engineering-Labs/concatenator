@@ -1,7 +1,7 @@
 # Project State: Concatenator
 
 **Current Version:** v0.9.5-alpha (Phase C: CI/CD Perimeter Sealed)
-**Last Updated:** 2026-07-29
+**Last Updated:** 2026-08-04
 
 ## Active Context & Architecture
 
@@ -12,6 +12,14 @@
 
 ## Recently Completed Milestones (Stable - Do Not Revisit)
 
+- **VFS Topology Scaffolding (`workbench-ui/src/components/VFSTree.tsx` & `WorkbenchLayout.tsx`):**
+  - Scaffolded recursive `VFSTreeRoot`, `VFSDirectoryNode`, and `VFSFileNode` components with persistent directory expansion state via `usePersistentState`.
+  - Created `WorkbenchLayout` container and mounted `VFSTreeRoot` inside `App.tsx` consuming the `useVFS` hook.
+  - Resolved `verbatimModuleSyntax` and type imports; verified clean bundle compilation (`tsc -b && vite build`) with automatic injection of 5 UI assets into Core Engine perimeter.
+- **API Bridge Porting & Hook Lifecycle Decoupling (`workbench-ui/src/hooks/useVFS.ts`):**
+  - Scaffolded `useVFS` hook to manage VFS tree traversal state and inject `X-Concatenator-Token` header for zero-trust local network boundary access.
+  - Decoupled `fetchPayload` API request logic from React state mutations, handling initial mount via a microtask promise chain with active component unmount guards (`active` flag) to enforce zero synchronous state mutations on mount.
+  - Passed 100% of full test suite, lint check, type-check, coverage, and single-executable application (SEA) build pipeline (`concatenator.exe`).
 - **Hardening Frontend Foundation (`workbench-ui`):**
   - Updated `workbench-ui/vite.config.ts` to use `import.meta.dirname` for ESM path resolution in the `emitBase64Assets` plugin.
   - Implemented Light/Dark theme matrix CSS custom properties in `workbench-ui/src/index.css` using Tailwind v4 `@theme`.
