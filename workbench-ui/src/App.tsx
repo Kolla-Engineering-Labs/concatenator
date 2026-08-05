@@ -1,5 +1,6 @@
 import { WorkbenchLayout } from './components/WorkbenchLayout'
 import { VFSTreeRoot } from './components/VFSTree'
+import { TokenGasGauge } from './components/TokenGasGauge'
 import { useVFS } from './hooks/useVFS'
 
 function App() {
@@ -8,11 +9,14 @@ function App() {
   return (
     <WorkbenchLayout
       sidebar={
-        <VFSTreeRoot
-          tree={tree}
-          isLoading={isLoading}
-          onToggleIgnore={(path) => toggleIgnore([path])}
-        />
+        <>
+          <TokenGasGauge tree={tree} />
+          <VFSTreeRoot
+            tree={tree}
+            isLoading={isLoading}
+            onToggleIgnore={(path) => toggleIgnore([path])}
+          />
+        </>
       }
       content={
         // Placeholder for the preview/configuration pane

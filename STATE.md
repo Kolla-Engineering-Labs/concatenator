@@ -12,6 +12,10 @@
 
 ## Recently Completed Milestones (Stable - Do Not Revisit)
 
+- **Gas Gauge Telemetry (`workbench-ui/src/hooks/useTokenBudget.ts` & `TokenGasGauge.tsx`):**
+  - Implemented `useTokenBudget` hook to calculate context token load percentage against budget ceiling and derive Tailwind status colors (`bg-accent-rose`, `bg-accent-amber`, `bg-slate-400`, `bg-surface-700`).
+  - Created `TokenGasGauge` component featuring persistent user-defined budget state (`kel:token_budget` defaulting to 120,000 tk) and high-density telemetry progress bar.
+  - Mounted `TokenGasGauge` above `VFSTreeRoot` inside `workbench-ui/src/App.tsx` sidebar configuration.
 - **VFS Topology Scaffolding (`workbench-ui/src/components/VFSTree.tsx` & `WorkbenchLayout.tsx`):**
   - Scaffolded recursive `VFSTreeRoot`, `VFSDirectoryNode`, and `VFSFileNode` components with persistent directory expansion state via `usePersistentState`.
   - Created `WorkbenchLayout` container and mounted `VFSTreeRoot` inside `App.tsx` consuming the `useVFS` hook.
