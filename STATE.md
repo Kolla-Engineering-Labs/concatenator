@@ -12,6 +12,11 @@
 
 ## Recently Completed Milestones (Stable - Do Not Revisit)
 
+- **Configuration State & Payload Matrix (`workbench-ui/src/hooks/useConcatenationConfig.ts` & `useConcatenationConfig.test.ts`):**
+  - Scaffolded `useConcatenationConfig` hook defining strict TypeScript `ConcatenationConfig` contract (`outputFormat`, `enableNeutralization`, `injectPostMatterManifest`, `stripComments`).
+  - Integrated `usePersistentState` for automatic workspace preference synchronization under `kel:config_format`, `kel:config_neutralize`, `kel:config_manifest`, and `kel:config_strip_comments` localStorage keys.
+  - Exposed `getPayloadMatrix()` getter to format payload parameters for `POST /api/concatenate` API execution.
+  - Co-located UI unit tests in `workbench-ui/src/hooks/useConcatenationConfig.test.ts` with an isolated Vitest + JSDOM testing configuration in `workbench-ui/vite.config.ts`.
 - **Gas Gauge Telemetry (`workbench-ui/src/hooks/useTokenBudget.ts` & `TokenGasGauge.tsx`):**
   - Implemented `useTokenBudget` hook to calculate context token load percentage against budget ceiling and derive Tailwind status colors (`bg-accent-rose`, `bg-accent-amber`, `bg-slate-400`, `bg-surface-700`).
   - Created `TokenGasGauge` component featuring persistent user-defined budget state (`kel:token_budget` defaulting to 120,000 tk) and high-density telemetry progress bar.
