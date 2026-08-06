@@ -27,6 +27,7 @@ export default defineConfig(({ mode }) => {
       // after each test, preventing leaks without requiring manual afterEach calls.
       clearMocks: true,
       restoreMocks: true,
+      setupFiles: ['./workbench-ui/src/setupTests.ts'],
       exclude: ['e2e/**/*', 'node_modules/**/*'],
       reporters: env.CI ? ['default', 'junit'] : ['default'],
       outputFile: {

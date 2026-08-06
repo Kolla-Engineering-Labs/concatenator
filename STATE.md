@@ -12,6 +12,16 @@
 
 ## Recently Completed Milestones (Stable - Do Not Revisit)
 
+- **Vitest Setup & DOM Matcher Extension (`workbench-ui/src/setupTests.ts`, `vite.config.ts`, `ExecutionWorkbench.test.tsx`):**
+  - Scaffolded `workbench-ui/src/setupTests.ts` importing `@testing-library/jest-dom` to extend global Vitest assertions with DOM matchers (`toBeInTheDocument`, `toBeDisabled`).
+  - Configured `setupFiles: './src/setupTests.ts'` in `workbench-ui/vite.config.ts` and `./workbench-ui/src/setupTests.ts` in root `vite.config.ts`.
+  - Added `"vitest/globals"` and `"@testing-library/jest-dom"` to `workbench-ui/tsconfig.app.json`.
+  - Added explicit `@testing-library/jest-dom` import in `ExecutionWorkbench.test.tsx` for cross-environment Vitest compatibility.
+- **Execution Workbench & Pipeline Launch Shell (`workbench-ui/src/components/ExecutionWorkbench.tsx`, `App.tsx`, `ExecutionWorkbench.test.tsx`):**
+  - Scaffolded `ExecutionWorkbench` component consuming `useConcatenationConfig` for KEL protocol payload matrix parameter configuration.
+  - Implemented high-density layout featuring Output Format toggles (`markdown` | `xml`), Security & LLM Safety options (`neutralize`, `manifest`, `stripComments`), and interactive execution launch sequence button.
+  - Injected `ExecutionWorkbench` into `WorkbenchLayout` content pane in `App.tsx` with simulation state and execution handler.
+  - Added unit test suite in `ExecutionWorkbench.test.tsx` verifying configuration option toggling, payload matrix generation, button disabled states, and launch sequence triggers.
 - **Configuration State & Payload Matrix (`workbench-ui/src/hooks/useConcatenationConfig.ts` & `useConcatenationConfig.test.ts`):**
   - Scaffolded `useConcatenationConfig` hook defining strict TypeScript `ConcatenationConfig` contract (`outputFormat`, `enableNeutralization`, `injectPostMatterManifest`, `stripComments`).
   - Integrated `usePersistentState` for automatic workspace preference synchronization under `kel:config_format`, `kel:config_neutralize`, `kel:config_manifest`, and `kel:config_strip_comments` localStorage keys.
