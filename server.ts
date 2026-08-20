@@ -9,6 +9,7 @@ import { DEFAULT_IGNORE_LIST } from './src/core/constants.js'
 import { VFSManager } from './src/core/VFSManager.js'
 import { mergeIgnoreFileWithComments } from './src/lib/ignore-file.js'
 import { LifecycleManager } from './src/core/LifecycleManager.js'
+import { handleConcatenate } from './src/cli/api/controllers/concatenate.js'
 
 /**
  * Read an ignore list from `primaryPath`.
@@ -48,11 +49,35 @@ async function resolveIgnoreList(
   return [...defaultList]
 }
 
-async function startServer() {
+export async function startServer(
+  portOverride?: number,
+  tokenOverride?: string,
+  cwdOverride?: string,
+  uiOriginOverride?: string
+): Promise<import('http').Server> {
   const app = express()
-  const PORT = parseInt(process.env.PORT || '3000')
+  const PORT = portOverride ?? parseInt(process.env.PORT || '3000')
 
-  app.use(express.json())
+  app.use((req, res, next) => {
+    const origin =
+      uiOriginOverride || req.headers.origin || 'http://127.0.0.1:5173'
+    res.setHeader('Access-Control-Allow-Origin', origin)
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, DELETE')
+    res.setHeader(
+      'Access-Control-Allow-Headers',
+      'Content-Type, X-Concatenator-Token, X-Worker-Id'
+    )
+    res.setHeader(
+      'Access-Control-Expose-Headers',
+      'X-Kolla-Stream, Content-Disposition'
+    )
+
+    if (req.method === 'OPTIONS') {
+      return res.status(204).end()
+    }
+    next()
+  })
+
   // Load version from package.json
   let version = '0.0.0'
   try {
@@ -68,7 +93,10 @@ async function startServer() {
   // This prevents bots probing the local server from triggering filesystem ops.
   // Token is read from CONCATENATOR_API_TOKEN env var (set in .env).
   // Health-check and static assets bypass this guard.
-  const API_TOKEN = process.env.CONCATENATOR_API_TOKEN
+  const API_TOKEN =
+    tokenOverride ||
+    process.env.KEL_TEST_TOKEN ||
+    process.env.CONCATENATOR_API_TOKEN
   if (API_TOKEN) {
     app.use((req, res, next) => {
       // Allow health checks and static assets through without a token
@@ -81,7 +109,11 @@ async function startServer() {
       }
       const provided = req.headers['x-concatenator-token']
       if (provided !== API_TOKEN) {
-        return res.status(403).json({ error: 'Forbidden' })
+        console.error(
+          `[AUTH FAILURE] Expected: ${API_TOKEN} | Received: ${provided} | Headers:`,
+          req.headers
+        )
+        return res.status(403).json({ error: 'Zero-Trust Perimeter Violation' })
       }
       next()
     })
@@ -90,6 +122,25 @@ async function startServer() {
       '[Security] CONCATENATOR_API_TOKEN is not set. API endpoints are unprotected.'
     )
   }
+
+  // ── Native Stream Boundary (Phase D) ─────────────────────────────────────────
+  // Mount the $O(1)$ stream controller BEFORE express.json() drains the socket
+  app.post('/api/concatenate', (req, res) => {
+    res.setHeader(
+      'Access-Control-Expose-Headers',
+      'X-Kolla-Stream, Content-Disposition'
+    )
+    return handleConcatenate(
+      req,
+      res,
+      API_TOKEN || '',
+      cwdOverride || process.cwd()
+    )
+  })
+
+  // ── Standard REST Boundary ───────────────────────────────────────────────────
+  // Apply JSON body parsing ONLY to routes that require it (e.g., ignore-list)
+  app.use(express.json())
 
   // Health check endpoint (supports both /api/health and shorter /health)
   app.get(['/api/health', '/health'], (req, res) => {
@@ -341,11 +392,22 @@ async function startServer() {
 
   // Bind strictly to localhost — external network traffic is rejected at the OS level.
   // This prevents bots or other machines on the LAN from probing the API.
-  const server = app.listen(PORT, '127.0.0.1', () => {
-    const addr = server.address()
-    const actualPort = typeof addr === 'object' && addr ? addr.port : PORT
-    logger.info(`Server running on http://localhost:${actualPort}`)
+  return new Promise((resolve, reject) => {
+    const server = app.listen(PORT, '127.0.0.1', () => {
+      const addr = server.address()
+      const actualPort = typeof addr === 'object' && addr ? addr.port : PORT
+      logger.info(`Server running on http://localhost:${actualPort}`)
+      resolve(server)
+    })
+
+    // Prevent silent hangs during EADDRINUSE collisions in parallel testing
+    server.on('error', (err) => {
+      reject(err)
+    })
   })
 }
 
-startServer()
+// Prevent auto-execution during Vitest imports, but allow Playwright subprocesses to boot
+if (!process.env.VITEST) {
+  startServer()
+}

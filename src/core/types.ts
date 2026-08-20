@@ -3,11 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export enum IgnoreSource {
-  DEFAULT = 'default',
-  FILE = 'file',
-  SESSION = 'session',
-  MANUAL = 'manual override',
+export type IgnoreSource = 'default' | 'file' | 'session' | 'manual override'
+
+export const IgnoreSourceValues = {
+  DEFAULT: 'default' as const,
+  FILE: 'file' as const,
+  SESSION: 'session' as const,
+  MANUAL: 'manual override' as const,
 }
 
 export type FileStatus = 'included' | 'ignored' | 'rejected'
@@ -44,6 +46,7 @@ export interface TreeItem {
   reason?: string
   ignoreSource?: IgnoreSource
   file?: FileItem
+  tokens?: number
   tokenWeight?: number
   isPrecise?: boolean
 }

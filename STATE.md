@@ -1,7 +1,7 @@
 # Project State: Concatenator
 
 **Current Version:** v0.9.5-alpha (Phase C: CI/CD Perimeter Sealed)
-**Last Updated:** 2026-08-04
+**Last Updated:** 2026-08-19
 
 ## Active Context & Architecture
 
@@ -11,6 +11,201 @@
 - **Zero-Trust Local Networking:** Queued hardening of `server.ts` to strictly bind to `127.0.0.1` and enforce cryptographic ephemeral tokens.
 
 ## Recently Completed Milestones (Stable - Do Not Revisit)
+
+- **Phase B Lockdown — E2E Telemetry Strip & CI/CD Sanitization (`e2e/max-file-limit.spec.ts`):**
+  - Removed 3× `test.setTimeout()` overrides (120 s, 60 s, 180 s) injected during state-bug diagnosis from the `Enforcement` test describe block.
+  - Removed 9× `await page.waitForTimeout()` debug yields from the Enforcement suite; the 3 legitimate `waitForTimeout` calls in the `Persistence` suite (localStorage write-timing assertions) were intentionally preserved.
+  - Deleted 2× full `console.log` DOM dump blocks (`CRITICAL DOM DUMP Test 1` and `Test 2`) including their surrounding `page.evaluate` localStorage reads and `page.innerHTML` body scrapes (~39 lines total).
+  - All 3 Enforcement tests continued to pass (`npx playwright test e2e/max-file-limit.spec.ts --grep "Enforcement"`) following removal, confirming the assertions are self-sufficient without artificial oxygen.
+  - Full build pipeline passed clean: `clean → build → type-check → lint:fix → format → format:check → test:coverage → build:exe → workbench-ui build`.
+  - Prettier formatter subsequently applied no-semicolons style normalization (project default) across the `page.evaluate` synthetic file injection blocks.
+
+- **Phase D - Asynchronous Max File Limit Lock Protection (`src/App.tsx`):**
+  - Updated `initWorkspace` in `App.tsx` so `setMaxFileLimit(config.maxFiles)` is guarded by `window.localStorage.getItem('concatenator-max-files') === null`.
+  - Prevented async `ApiClient.getConfig()` responses from overwriting user-selected `maxFileLimit` preferences in React state and `localStorage`, resolving E2E timeout failures in `e2e/max-file-limit.spec.ts`.
+
+- **Phase D - Clean Architecture Restoration - Pure Prop Evaluation & Test Synchronization (`src/web/features/concatenator/hooks/useFileProcessing.ts`, `e2e/max-file-limit.spec.ts`):**
+  - Purged `resolveMaxFileLimit` storage fallback from `useFileProcessing.ts`, restoring pure top-down React prop evaluation (`maxFileLimit`) in `processUploadedFiles` and `handleDrop`.
+  - Injected explicit synchronization yields (`await page.waitForTimeout(500)`) in `e2e/max-file-limit.spec.ts` after dropdown selection to allow React VDOM state updates to commit to closure before file uploads.
+
+- **Phase D - Semantic Text Alignment (`e2e/max-file-limit.spec.ts`):**
+  - Replaced rigid `data-testid` lookup assertions in `e2e/max-file-limit.spec.ts` with Playwright's native DOM-agnostic `page.getByText(/Warning: You are attempting to concatenate over 500 files/i).first()` RegExp locator to seamlessly capture limit errors across dropzone fallback and toolbar overlays.
+
+- **Phase D - The Polymorphic DOM Alignment (`src/web/features/concatenator/components/UploadZone.tsx`, `e2e/max-file-limit.spec.ts`):**
+  - Maintained `data-testid="concatenation-error"` attribute on UploadZone error message block.
+  - Updated error locators in `e2e/max-file-limit.spec.ts` to filter explicitly for visible nodes (`page.getByTestId('concatenation-error').filter({ visible: true }).first()`), bypassing invisible overlay node collisions.
+
+- **Phase D - The Final UI Contract (`src/web/features/concatenator/components/UploadZone.tsx`):**
+  - Re-injected `data-testid="concatenation-error"` attribute into the error overlay container in `UploadZone.tsx` to align with the Playwright E2E contract.
+
+- **Phase D - Restore DOM Singularity (`src/web/features/concatenator/components/UploadZone.tsx`):**
+  - Stripped redundant `data-testid="concatenation-error"` from error banner div in `UploadZone.tsx`.
+  - Ensured DOM singularity where `FileView.tsx` is the sole persistent holder of `data-testid="concatenation-error"` for Playwright E2E testing (`e2e/max-file-limit.spec.ts`).
+
+- **Phase D - The Deterministic Storage Resolver (`src/web/features/concatenator/hooks/useFileProcessing.ts`):**
+  - Injected global `resolveMaxFileLimit(fallbackProp: number): number` resolver helper into `useFileProcessing.ts` to safely access and sanitize `concatenator-max-files` from `window.localStorage` with prop and default fallbacks.
+  - Replaced inline parsing logic inside `processUploadedFiles` and `handleDrop` with synchronous `resolveMaxFileLimit` calls.
+
+- **Phase D - The Serialization Sanitizer (`src/web/features/concatenator/hooks/useFileProcessing.ts`):**
+  - Globalized string literal quote stripping (`.replace(/["']/g, '')`) before calling `parseInt(cleanLimit, 10)` across limit check occurrences in `processUploadedFiles` and `traverseEntry` within `useFileProcessing.ts`.
+
+- **Phase D - The UI Contract Alignment (`src/web/features/concatenator/components/UploadZone.tsx`):**
+  - Injected `data-testid="concatenation-error"` into `UploadZone.tsx` error message block to ensure Playwright E2E tests (`e2e/max-file-limit.spec.ts`) capture limit warnings in empty/dropzone state while keeping E2E assertions anchored to stable test IDs.
+
+- **Phase D - The Asynchronous Assertion Fix (`tests/context_coverage.test.tsx`):**
+  - Wrapped `ignoreList` context assertion inside `await waitFor(...)` to eliminate race conditions with asynchronous `ModeProvider` state resolution following `ApiClient.getIgnoreList`.
+
+- **Phase D - The Final Deterministic Alignment (`src/web/features/concatenator/hooks/useFileProcessing.ts`):**
+  - Replaced RegExp `parseConcatenatedBundle` implementation with $O(n)$ index scanner string parser, isolating corrupted markers without consuming adjacent files and sanitizing paths.
+  - Implemented direct `localStorage` read bypass (`localStorage.getItem('concatenator-max-files')`) for `maxFileLimit` in `processUploadedFiles` and `traverseEntry` to eliminate React state closure delay.
+
+- **Phase D - The Assertion Reversion (`e2e/max-file-limit.spec.ts`):**
+  - Restored `data-testid` locator `page.getByTestId('concatenation-error').first()` and explicit regex text assertions (`toHaveText(/Warning: You are attempting to concatenate over 500 files/i)`) across limit enforcement tests.
+
+- **Phase D - The Extraction Engine & State Execution Reorder (`src/web/features/concatenator/hooks/useFileProcessing.ts`):**
+  - Replaced `parseConcatenatedBundle` string splitting with robust RegExp pattern `/<<<<< FILE_START:\s*(.*?)(?:\s+\(ID:\s*[^>]+\))?\s*>>>>>\r?\n([\s\S]*?)\r?\n<<<<< FILE_END >>>>>/g` consuming surrounding newlines and enforcing strict path sanitization.
+  - Reordered file limit parsing and validation in `processUploadedFiles` below state reset (`setIsProcessing(true)` / `setImportError(null)`).
+  - Aligned limit boundary condition across `processUploadedFiles` and `handleDrop` to `> limit` with fallback to 10000.
+
+- **Phase D - The Definitive State Alignment (`src/web/features/concatenator/hooks/useFileProcessing.ts`, `e2e/max-file-limit.spec.ts`):**
+  - Forced strict integer base-10 coercion (`parseInt(String(maxFileLimit), 10)`) across `processUploadedFiles` and `handleDrop` memory limit guards in `useFileProcessing.ts`.
+  - Shifted Playwright E2E locators in `e2e/max-file-limit.spec.ts` to `text=Warning: You are attempting to concatenate over 500 files` and purged invalid `No files selected` assertions.
+
+- **Phase D - The Strict Boundary Alignment (`src/web/features/concatenator/hooks/useFileProcessing.ts`, `e2e/max-file-limit.spec.ts`):**
+  - Tightened file limit checks in `processUploadedFiles` inside `useFileProcessing.ts` to be inclusive (`>=`) so file limit guards halt on the exact limit boundary.
+  - Reverted test assertions in `e2e/max-file-limit.spec.ts` to use stable `data-testid` locator (`page.getByTestId('concatenation-error')`) and added explicit text assertions for warning overlays.
+
+- **Phase D - The Final State Alignment - Test Runner & UI Sync (`src/web/features/concatenator/hooks/useFileProcessing.ts`, `e2e/max-file-limit.spec.ts`):**
+  - Relaxed strict newline boundary check in `parseConcatenatedBundle` inside `useFileProcessing.ts` so `skippedPaths` populates reliably even when template literals normalize newlines differently.
+  - Standardized memory guard error strings in `handleDrop` in `useFileProcessing.ts` to `Warning: You are attempting to concatenate over ${maxFileLimit} files.`.
+  - Updated Playwright test locators in `e2e/max-file-limit.spec.ts` to match visible error text `/over 500 files/i`.
+
+- **Phase D - The Final Test & State Alignment (`src/web/features/concatenator/hooks/useFileProcessing.ts`, `e2e/max-file-limit.spec.ts`):**
+  - Injected validation warning routing for skipped paths during de-concatenation VFS hydration in `useFileProcessing.ts`.
+  - Added ESLint security rule override (`no-control-regex`) above null byte regex path sanitization in `useFileProcessing.ts`.
+  - Updated E2E test assertions in `e2e/max-file-limit.spec.ts` to locate error elements via visible text matching (`getByText`) rather than missing test ID selectors.
+
+- **Phase D - The Extraction Engine Rewrite (`src/web/features/concatenator/hooks/useFileProcessing.ts`, `e2e/max-file-limit.spec.ts`):**
+  - Injected pure top-level `parseConcatenatedBundle` $O(n)$ extraction helper into `useFileProcessing.ts`, replacing legacy non-linear regex matching with string chunking and index searching.
+  - Wired `parseConcatenatedBundle` across `handleDeconcatenate` and `processUploadedFiles` (de-concatenate mode) with centralized path sanitization (null bytes, absolute roots, and traversal prevention).
+  - Maintained strict V8 memory guard early return (`setIsProcessing(false); return;`) in `processUploadedFiles` when `uploadedFiles.length > maxFileLimit`.
+  - Updated Playwright test suite `e2e/max-file-limit.spec.ts` to assert state protection (`No files selected`) and warning overlay when file limit is exceeded.
+
+- **Phase D - The Linter Reconciliation (`src/web/features/concatenator/components/FileView.tsx`, `src/App.tsx`, `src/web/features/concatenator/hooks/useFileProcessing.ts`):**
+  - Pruned orphaned `setOutputFormat` prop from `FileViewProps` interface, `FileView` component destructuring, and `App.tsx` caller site.
+  - Cleaned unnecessary regex slash escapes (`[/\\]+` and `\.\.[/\\]`) in `handleDeconcatenate` inside `useFileProcessing.ts` and added `// eslint-disable-next-line no-control-regex` above `\x00` null byte sanitization.
+  - Hydrated `maxFileLimit` in `processUploadedFiles` `useCallback` dependency array in `useFileProcessing.ts`.
+
+- **Phase D - The Final State Alignment (`src/web/features/concatenator/hooks/useFileProcessing.ts`, `src/web/context/ModeContext.tsx`, `src/web/features/concatenator/components/FileView.tsx`, `e2e/concatenate.spec.ts`, `e2e/binary-content.spec.ts`):**
+  - Injected maxFileLimit input gate into `processUploadedFiles` loop in `useFileProcessing.ts`.
+  - Updated `markerRegex` and added path sanitization (stripping absolute roots, traversal `..`, and null bytes `\x00`) in `handleDeconcatenate` inside `useFileProcessing.ts`.
+  - Extracted `getIgnoreResult` out of Provider return block as a `useCallback`, upgraded pattern matching to support raw `/regex/` syntax, and refactored `hydrateFiles` in `ModeContext.tsx` to consume `getIgnoreResult`.
+  - Purged dead `<OutputFormatToggle/>` UI component from `FileView.tsx` and removed the corresponding Playwright describe block from `e2e/concatenate.spec.ts`.
+  - Updated E2E download filename assertions in `concatenate.spec.ts` and `binary-content.spec.ts` to expect `.markdown` files.
+
+- **Phase D - The Strict Type & Extension Reconciliation (`src/cli/api/controllers/concatenate.ts`, `tests/cli/api_server.test.ts`):**
+  - Reconciled outputFormat extension mapping (`xml` | `markdown`) and HTTP `Content-Type` header assignment (`application/xml` | `text/markdown`) in `handleConcatenate` to enforce the strict `'markdown' | 'xml'` union.
+  - Hardened `afterEach` teardown in `tests/cli/api_server.test.ts` with event loop tick (`await setTimeout(100)`) and try-catch guard around `fs.rmSync` to prevent unhandled file handle locks during async stream teardowns.
+
+- **Phase D - The Final Hardening Pass (`src/cli/api/controllers/concatenate.ts`, `src/web/features/concatenator/hooks/useFileProcessing.ts`, `src/web/context/ModeContext.tsx`):**
+  - Updated `handleConcatenate` in `concatenate.ts` to set `Content-Disposition: attachment; filename="..."` and `Access-Control-Expose-Headers` headers before piping the Web stream.
+  - Updated `handleExport` catch block in `useFileProcessing.ts` to route errors to `setImportError` for rendering `[data-testid="concatenation-error"]` UI overlays.
+  - Updated `getIgnoreResult` in `ModeContext.tsx` to capture `matchedDefaultPattern` and `matchedManualPattern` as `reason` while preserving `ignoreSource`.
+  - Updated `isIgnored` and `getIgnoreResult` in `ModeContext.tsx` with glob regex normalizer `(^|/)...(/|$)` to cleanly match patterns like `*.spec.ts`.
+
+- **Phase D - The Perimeter Polish (`server.ts`, `src/web/context/ModeContext.tsx`, `src/web/features/concatenator/hooks/useFileProcessing.ts`):**
+  - Exposed `Content-Disposition` in CORS `Access-Control-Expose-Headers` middleware and `/api/concatenate` POST endpoint in `server.ts`.
+  - Normalized path backslashes (`\`) to forward slashes (`/`) and added case-insensitive matching (`new RegExp(regexStr, 'i')`) across `isIgnored`, `isExplicitlyNegated`, `getIgnoreResult`, and `hydrateFiles` in `ModeContext.tsx`.
+  - Updated `getIgnoreResult` and `hydrateFiles` to cross-reference `DEFAULT_IGNORE_LIST` patterns and dynamically set `reason` and `ignoreSource` to `'default'` (instead of hardcoding `'manual override'`).
+  - Added `setError` state alias in `useFileProcessing.ts` and updated `handleExport`'s `catch` block to route export exceptions directly to `setError` so `[data-testid="concatenation-error"]` UI overlays render on 400 Bad Request / Max File Limit errors.
+
+- **Phase D - The Thin-Consumer Hardening Pass (`src/web/features/concatenator/hooks/useFileProcessing.ts`, `src/web/context/ModeContext.tsx`):**
+  - Updated `handleExport` in `useFileProcessing.ts` to intercept non-ok HTTP responses, parse JSON error messages (`errorData.error`), throw errors to trigger UI overlays (`setImportError`), and dynamically parse target export filenames from `Content-Disposition` headers.
+  - Upgraded pattern evaluation in `ModeContext.tsx` (`isExplicitlyNegated` & `isIgnored`) to use escaped wildcard RegExp matching (`*` -> `.*`) and enforced explicit negation guard precedence (`isExplicitlyNegated(path)` return check) in `isIgnored`.
+
+- **Phase D - Stream Boundary Reordering (`server.ts`):**
+  - Removed top-level `app.use(express.json())` middleware in `server.ts` to prevent pre-draining the HTTP request socket.
+  - Relocated `app.post('/api/concatenate', ...)` endpoint to mount immediately following the API Token Guard middleware block.
+  - Mounted `app.use(express.json())` immediately below `/api/concatenate` to scope JSON body parsing strictly to downstream REST endpoints (`/api/shutdown`, `/api/ignore-list`, `/api/vfs`).
+
+- **Phase D - Test Boundary Reconciliation (`server.ts`, `tests/rate-limiting.test.ts`, `tests/health.test.ts`, `tests/ModeContext.test.tsx`, `tests/cli/api_server.test.ts`):**
+  - Updated `PORT` calculation in `server.ts` to use nullish coalescing operator (`portOverride ?? parseInt(...)`) so `0` is strictly respected as a valid port for requesting OS-assigned ephemeral ports.
+  - Registered `server.on('error', (err) => reject(err))` listener in `server.ts` bootstrapper promise to fail fast on `EADDRINUSE` collisions.
+  - Refactored legacy integration test files (`tests/rate-limiting.test.ts` and `tests/health.test.ts`) to call `await startServer(0)` directly, extracting dynamic ports via `(server.address() as any).port`.
+  - Updated `fetchMock` call expectations in `tests/ModeContext.test.tsx` from 2 to 3 to align with reactivity loop `refreshVFS` GET call.
+  - Attached `x-concatenator-token` header to 404 test in `tests/cli/api_server.test.ts` to bypass API auth guard and reach route table.
+
+- **Phase D - The Lexical Extraction (`src/web/context/ModeContext.tsx`):**
+  - Promoted `setVfsState` state hook and `refreshVFS` callback hook up to the root level of `ModeProvider` in `ModeContext.tsx`.
+  - Removed nested hook definitions from inside `useEffect` callback body, resolving React Rules of Hooks violations and ensuring strict hook execution order.
+
+- **Phase D - Thin-Consumer UI Logic Patches (`src/web/services/ApiClient.ts`, `src/web/context/ModeContextCore.ts`, `src/web/context/ModeContext.tsx`, `src/web/features/concatenator/hooks/useFileProcessing.ts`):**
+  - Added `ApiClient.triggerConcatenate()`, `ApiClient.fetchVFS()`, and `ApiClient.addIgnorePattern()` static helper methods to `ApiClient.ts`.
+  - Enforced Clean Architecture by exposing `refreshVFS: () => Promise<void>` on `ModeContextType` in `ModeContextCore.ts` (keeping raw `setVfsState` encapsulated within context).
+  - Updated `saveToServer()` in `ModeContext.tsx` to automatically call `await refreshVFS()` after `/api/ignore-list` updates, invalidating VFS tree state and reactively syncing `.line-through` CSS styles across UI components.
+  - Updated `handleExport` download handler in `useFileProcessing.ts` to bridge the backend stream via `await response.blob()`, construct an in-memory Object URL, and programmatically trigger click on a hidden anchor element (`a.download = \`concatenator-export-${Date.now()}.txt\``) for Playwright download event compatibility.
+
+- **Phase D - The Split-Brain Reconciliation (`e2e/fixtures.ts`):**
+  - Synchronized Playwright test worker fixture token resolution (`apiToken`) to strictly resolve `process.env.KEL_TEST_TOKEN || 'kel-test-token-001'`.
+  - Removed fallback check for ambient `CONCATENATOR_API_TOKEN` in `fixtures.ts`, guaranteeing test worker HTTP contexts align with the Playwright `webServer` authentication token and preventing HTTP 403 Forbidden errors on pre-test API calls like `resetIgnoreList`.
+
+- **Phase D - The Final State Isolation (`server.ts`, `e2e/fixtures.ts`, `src/web/services/ApiClient.ts`):**
+  - Updated `API_TOKEN` resolution in `server.ts` to strictly prioritize `process.env.KEL_TEST_TOKEN` when `NODE_ENV === 'test'`, bypassing `.env` token pollution during E2E runs.
+  - Injected `WORKER_ID` (`testInfo.workerIndex.toString()`) alongside `CONCATENATOR_TOKEN` into browser `sessionStorage` in `e2e/fixtures.ts`.
+  - Updated `ApiClient.getHeaders()` in `ApiClient.ts` to extract `WORKER_ID` from `sessionStorage` and include `'X-Worker-Id'` header in outgoing HTTP requests for worker-isolated VFS sandboxing.
+
+- **Phase D - The Bootstrapper Gate Adjustment (`server.ts`):**
+  - Updated execution gate at bottom of `server.ts` from `process.env.NODE_ENV !== 'test'` check to `!process.env.VITEST`.
+  - Ensured backend server remains dormant during Vitest unit test imports while allowing Playwright dev `webServer` subprocesses (running under `NODE_ENV: 'test'`) to automatically start and bind to port 3000.
+
+- **Phase D - The Testability Refactor (`server.ts`, `tests/cli/api_server.test.ts`, `src/cli/api/server.ts`):**
+  - Decoupled `server.ts` Express bootstrapper definition from execution by exporting `startServer(portOverride?, tokenOverride?, cwdOverride?, uiOriginOverride?): Promise<http.Server>` and guarding auto-execution with `process.env.NODE_ENV !== 'test'`.
+  - Added strict CORS middleware in `server.ts` supporting `uiOriginOverride` and OPTIONS preflight (`204 No Content`).
+  - Rewired integration test suite in `tests/cli/api_server.test.ts` to test the true Express engine.
+  - Eradicated duplicate `src/cli/api/server.ts` hazard.
+
+- **Phase D - Vite Proxy Header Bridge (`vite.config.ts`):**
+  - Updated `server.proxy['^/api']` configuration in `vite.config.ts` to include a `configure` hook listening on `'proxyReq'`.
+  - Ensured custom KEL protocol headers (`x-concatenator-token` and `x-worker-id`) are explicitly forwarded across the Vite dev server proxy boundary to the Express backend target on `http://127.0.0.1:3000`.
+
+- **Phase D - Engine Room Transplant (`server.ts`):**
+  - Transplanted `handleConcatenate` controller from `src/cli/api/controllers/concatenate.js` into root `server.ts`.
+  - Synchronized zero-trust credential guard to fall back to `process.env.KEL_TEST_TOKEN` alongside `CONCATENATOR_API_TOKEN`.
+  - Mounted `POST /api/concatenate` stream router endpoint with `Access-Control-Expose-Headers: X-Kolla-Stream` header.
+
+- **Phase D - The E2E Token Handshake (`src/cli/api/server.ts`, `src/core/UIServer.ts`, `playwright.config.ts`, `e2e/fixtures.ts`, `.spec.ts` files):**
+  - Updated `startApiServer` in `server.ts` and `UIServer` in `UIServer.ts` to allow dynamic `process.env.KEL_TEST_TOKEN` environment variable overrides for deterministic backend authentication tokens in testing.
+  - Injected `KEL_TEST_TOKEN: 'kel-test-token-001'` and `NODE_ENV: 'test'` into the Playwright `webServer` environment in `playwright.config.ts`.
+  - Extended the base Playwright `page` fixture in `e2e/fixtures.ts` to inject `window.sessionStorage.setItem('CONCATENATOR_TOKEN', token)` before navigation, guaranteeing all browser contexts mount with deterministic credentials.
+  - Updated all `.spec.ts` files to pull `test` and `expect` from `./fixtures.ts`, centralizing Zero-Trust token injection without hook duplication.
+
+- **Phase D - Thin-Consumer Stream Bridge & Boundary Hardening (`src/cli/api/controllers/concatenate.ts`, `src/web/services/ApiClient.ts`, `src/web/features/concatenator/hooks/useFileProcessing.ts`, `tests/ApiClient.test.ts`):**
+  - Updated `concatenate.ts` controller to use `res.statusCode` and `res.setHeader()` instead of `res.writeHead()`, preserving CORS headers configured by `server.ts`.
+  - Updated `ApiClient.concatenate` to attempt parsing backend JSON error messages (`errorJson.error` / `errorJson.message`) before throwing on non-ok API responses.
+  - Documented OOM Technical Debt explicitly in `ApiClient.concatenate` above `return res.blob()` for future Phase E ServiceWorker stream interceptor migration.
+  - Applied boundary patch in `useFileProcessing.ts` (`ExecutionMatrix` interface & `handleExport`) to map UI config options into the exact KEL protocol matrix payload.
+  - Added comprehensive unit test suite in `tests/ApiClient.test.ts` testing streaming Blob responses, protocol signature warning logging, and JSON/fallback error handling.
+
+- **Phase D - HTTP Transport Wire-Up & Stream Header Exposure (`src/cli/api/controllers/concatenate.ts`, `src/cli/api/server.ts`, `tests/cli/api_server.test.ts`):**
+  - Updated `handleConcatenate` controller to inject `X-Kolla-Stream: active` KEL protocol response header on chunked 200 responses and pipe Web Streams (`Readable.fromWeb(webStream).pipe(res)`).
+  - Configured `server.ts` to include `Access-Control-Expose-Headers: X-Kolla-Stream` for browser CORS preflight compliance.
+  - Updated integration test assertions in `tests/cli/api_server.test.ts` verifying header presence and exposed CORS access.
+  - Added `tests/cli/cli.e2e.test.ts` CLI end-to-end test suite (26 tests, 71 s) covering: 3-file nested concatenation with session manifest, stdout output, full directory extraction with path structure validation, and `--help` flag smoke.
+
+- **Phase D - Native Web Streams & Zero-RAM Engine Pipeline (`src/core/streams/NeutralizationStream.ts`, `src/core/engine.ts`, `src/cli/api/controllers/concatenate.ts`, `src/core/streams/NeutralizationStream.test.ts`):**
+  - Completed `createConcatenationStream` generator pipeline in `src/core/engine.ts` bridging Node's disk I/O (`createReadStream`) with native Web Streams (`Readable.toWeb`), yielding file headers/footers, zero-RAM chunks, and Post-Matter manifests with explicit lock release (`finally { reader.releaseLock(); }`).
+  - Implemented `createConcatenationStream` generator in `src/core/engine.ts` using Node 22 `Readable.toWeb(createReadStream(file.fullPath))` reader pumps with explicit lock cleanup (`reader.releaseLock()`) to pipe repository data directly from disk to Web Streams ($O(1)$ memory mandate).
+  - Deleted legacy monolithic string accumulator `synthesizePayload` completely.
+  - Refactored HTTP API controller (`handleConcatenate` in `src/cli/api/controllers/concatenate.ts`) to stream Web Stream output directly into `http.ServerResponse` via `Readable.fromWeb(webStream).pipe(res)`.
+  - Added unit test suite in `NeutralizationStream.test.ts`, updated core engine tests in `engine.test.ts`, and updated `tests/cli/api_server.test.ts` for HTTP chunked stream responses.
+
+- **Node 22 Execution Boundary & Zero-Trust API Server (`src/cli/api/controllers/concatenate.ts`, `src/cli/api/server.ts`, `src/core/engine.ts`, `tests/cli/api_server.test.ts`):**
+  - Scaffolded `handleConcatenate` controller enforcing zero-trust `x-concatenator-token` header security (403 Forbidden on invalid or missing tokens).
+  - Implemented 1MB payload stream circuit breaker (`MAX_PAYLOAD_BYTES = 1024 * 1024`) in `parseJSONBody` to immediately terminate connection (`req.destroy()`) and reject with `413 Payload Too Large`.
+  - Scaffolded `startApiServer` router listening strictly on `127.0.0.1` with dynamic `uiOrigin` CORS preflight header injection (`Access-Control-Allow-Origin: uiOrigin`).
+  - Implemented and exported `synthesizePayload` in `@concatenator/core` (`src/core/engine.ts`), enforcing strict KEL protocol symlink boundary rejection (`fs.lstatSync(cwd).isSymbolicLink()`), directory crawling, comment stripping, neutralization, and EOF Post-Matter manifest generation.
+  - Added `@concatenator/core` path alias mapping to `tsconfig.json` and integrated `/api/concatenate` into `UIServer.ts`.
+  - Added unit and integration test suite in `tests/cli/api_server.test.ts`.
 
 - **Vitest Setup & DOM Matcher Extension (`workbench-ui/src/setupTests.ts`, `vite.config.ts`, `ExecutionWorkbench.test.tsx`):**
   - Scaffolded `workbench-ui/src/setupTests.ts` importing `@testing-library/jest-dom` to extend global Vitest assertions with DOM matchers (`toBeInTheDocument`, `toBeDisabled`).

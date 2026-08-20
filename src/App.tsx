@@ -20,12 +20,11 @@ import { useWorkbench } from './web/hooks/useWorkbench'
 import { useLocalStorage } from './web/hooks/useLocalStorage'
 import { useTokenAggregation } from './web/hooks/useTokenAggregation'
 import { AppMode, ViewPreference } from './web/types/workbench'
-import { FileItem, TreeItem, OutputFormat } from './core/types'
+import type { FileItem, TreeItem, OutputFormat } from './core/types'
 import { useHeartbeat } from './web/hooks/useHeartbeat'
 import { usePulseMonitor } from './web/hooks/usePulseMonitor'
 import { SessionExpiredModal } from './web/components/SessionExpiredModal'
 import { AbsorptionToast } from './web/components/Toast'
-import { TokenService } from './core/TokenService'
 
 export default function App() {
   const { isExpired, isConnected, wasEverConnected } = useHeartbeat()
@@ -49,7 +48,7 @@ export default function App() {
     useLocalStorage<boolean>('concatenator-dropzone-minimized', false)
 
   const [newIgnoreItem, setNewIgnoreItem] = useState('')
-  const [outputFormat, setOutputFormat] = useLocalStorage<OutputFormat>(
+  const [outputFormat] = useLocalStorage<OutputFormat>(
     'concatenate-output-format',
     'text'
   )
@@ -240,13 +239,12 @@ export default function App() {
     let mounted = true
     const initWorkspace = async () => {
       try {
-        // Load precision token counting strategy in background
-        TokenService.loadPrecisionStrategy().catch((err) => {
-          logger.warn(`Failed to load precision token strategy: ${err}`)
-        })
-
         const config = await ApiClient.getConfig()
-        if (mounted && config.maxFiles) {
+        if (
+          mounted &&
+          config.maxFiles &&
+          window.localStorage.getItem('concatenator-max-files') === null
+        ) {
           setMaxFileLimit(config.maxFiles)
         }
       } catch {
@@ -489,7 +487,6 @@ export default function App() {
                   }
                   onRemoveFile={handleRemoveFile}
                   outputFormat={outputFormat}
-                  setOutputFormat={setOutputFormat}
                   validationResult={validationResult}
                   tokenBudget={tokenBudget}
                   totalTokens={totalTokens}

@@ -226,4 +226,99 @@ describe('ApiClient', () => {
       )
     })
   })
+
+  describe('concatenate', () => {
+    it('dispatches concatenation request and returns blob on valid response', async () => {
+      const mockBlob = new Blob(['concatenated data'], { type: 'text/plain' })
+      const mockHeaders = new Headers({
+        'X-Kolla-Stream': 'active',
+      })
+
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        headers: mockHeaders,
+        blob: async () => mockBlob,
+      } as unknown as Response)
+
+      const matrix = {
+        outputFormat: 'markdown' as const,
+        enableNeutralization: true,
+        injectPostMatterManifest: false,
+      }
+
+      const result = await ApiClient.concatenate(matrix)
+
+      expect(fetch).toHaveBeenCalledWith('/api/concatenate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(matrix),
+      })
+      expect(result).toBe(mockBlob)
+    })
+
+    it('warns when X-Kolla-Stream header is missing or invalid', async () => {
+      const consoleWarnSpy = vi
+        .spyOn(console, 'warn')
+        .mockImplementation(() => {})
+      const mockBlob = new Blob(['data'], { type: 'text/plain' })
+      const mockHeaders = new Headers()
+
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        headers: mockHeaders,
+        blob: async () => mockBlob,
+      } as unknown as Response)
+
+      const matrix = {
+        outputFormat: 'xml' as const,
+        enableNeutralization: false,
+        injectPostMatterManifest: true,
+      }
+
+      await ApiClient.concatenate(matrix)
+
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        '[KEL Protocol] Warning: Backend stream signature missing or invalid.'
+      )
+      consoleWarnSpy.mockRestore()
+    })
+
+    it('throws error on non-ok response with fallback statusText', async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: false,
+        statusText: 'Internal Server Error',
+        json: async () => {
+          throw new Error('Not JSON')
+        },
+      } as unknown as Response)
+
+      const matrix = {
+        outputFormat: 'markdown' as const,
+        enableNeutralization: true,
+        injectPostMatterManifest: true,
+      }
+
+      await expect(ApiClient.concatenate(matrix)).rejects.toThrow(
+        'Concatenation failed: Internal Server Error'
+      )
+    })
+
+    it('throws error with backend error message from JSON', async () => {
+      vi.mocked(fetch).mockResolvedValue({
+        ok: false,
+        statusText: 'Forbidden',
+        json: async () => ({ error: 'Zero-Trust Perimeter Violation' }),
+      } as unknown as Response)
+
+      const matrix = {
+        outputFormat: 'markdown' as const,
+        enableNeutralization: true,
+        injectPostMatterManifest: true,
+      }
+
+      await expect(ApiClient.concatenate(matrix)).rejects.toThrow(
+        'Zero-Trust Perimeter Violation'
+      )
+    })
+  })
 })

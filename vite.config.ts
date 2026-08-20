@@ -141,6 +141,23 @@ export default defineConfig(({ mode }) => {
         '^/api': {
           target: 'http://127.0.0.1:3000',
           changeOrigin: true,
+          // Ensure custom KEL Protocol headers survive the proxy boundary
+          configure: (proxy) => {
+            proxy.on('proxyReq', (proxyReq, req) => {
+              if (req.headers['x-concatenator-token']) {
+                proxyReq.setHeader(
+                  'x-concatenator-token',
+                  req.headers['x-concatenator-token'] as string
+                )
+              }
+              if (req.headers['x-worker-id']) {
+                proxyReq.setHeader(
+                  'x-worker-id',
+                  req.headers['x-worker-id'] as string
+                )
+              }
+            })
+          },
         },
       },
       hmr: process.env.DISABLE_HMR !== 'true',

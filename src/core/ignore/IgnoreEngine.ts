@@ -40,7 +40,7 @@ export class IgnoreEngine {
 
   constructor(
     patterns: PatternInput[],
-    defaultSource: IgnoreSource = IgnoreSource.DEFAULT
+    defaultSource: IgnoreSource = 'default'
   ) {
     this.rules = patterns
       .map((entry) => {

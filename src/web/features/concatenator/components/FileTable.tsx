@@ -13,7 +13,7 @@ import {
   EyeOff,
   Ban,
 } from 'lucide-react'
-import { FileItem } from '../../../../core/types'
+import type { FileItem } from '../../../../core/types'
 import { cn, formatFileSize } from '../../../../lib/utils'
 import { getFileIcon } from '../../../../lib/fileIcons'
 import { useWorkbench } from '../../../hooks/useWorkbench'

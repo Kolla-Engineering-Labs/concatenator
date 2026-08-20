@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { test, expect, devices } from '@playwright/test'
+import { test, expect } from './fixtures'
+import { devices } from '@playwright/test'
 
 // Use iPhone 14 for touch device simulation
 test.use({ ...devices['iPhone 14'] })

@@ -4,11 +4,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import {
-  validateConcatenation,
-  concatenate,
-  ConcatenationBuilder,
-} from './engine'
+import { validateConcatenation, concatenate } from './engine'
 
 describe('validateConcatenation', () => {
   describe('valid concatenated strings', () => {
@@ -202,8 +198,7 @@ Content C
 
   describe('Two-Key Verification with Post-Matter Manifest', () => {
     it('validates a complete bundle with valid Post-Matter Manifest', () => {
-      const builder = new ConcatenationBuilder()
-      const bundle = builder.buildFromFiles([
+      const bundle = concatenate([
         { path: 'src/index.ts', content: 'console.log("hello")' },
         { path: 'src/utils.ts', content: 'export const x = 42' },
       ])
@@ -214,8 +209,7 @@ Content C
     })
 
     it('fails closed when payload is tampered with (hash mismatch)', () => {
-      const builder = new ConcatenationBuilder()
-      let bundle = builder.buildFromFiles([
+      let bundle = concatenate([
         { path: 'src/index.ts', content: 'console.log("hello")' },
       ])
 
@@ -230,8 +224,7 @@ Content C
     })
 
     it('fails closed when Post-Matter Manifest entry count is out of sync with payload', () => {
-      const builder = new ConcatenationBuilder()
-      let bundle = builder.buildFromFiles([
+      let bundle = concatenate([
         { path: 'src/index.ts', content: 'console.log("hello")' },
         { path: 'src/extra.ts', content: 'export const extra = true' },
       ])

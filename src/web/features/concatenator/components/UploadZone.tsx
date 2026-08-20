@@ -7,7 +7,7 @@ import React, { useRef } from 'react'
 import { motion } from 'motion/react'
 import { Maximize2, Minimize2, X, Ban, Upload } from 'lucide-react'
 import { cn } from '../../../../lib/utils'
-import { AppMode } from '../../../../core/types'
+import type { AppMode } from '../../../../core/types'
 import { useTouchDevice } from '../../../hooks/useTouchDevice'
 
 interface UploadZoneProps {
@@ -146,7 +146,10 @@ export const UploadZone: React.FC<UploadZoneProps> = ({
               )}
             >
               {importError ? (
-                <div className="flex flex-col items-center gap-2 text-center max-w-md relative z-20 ph-no-capture">
+                <div
+                  data-testid="concatenation-error"
+                  className="flex flex-col items-center gap-2 text-center max-w-md relative z-20 ph-no-capture"
+                >
                   <div className="p-3 bg-red-100 dark:bg-red-900/30 rounded-full text-red-600 dark:text-red-400">
                     <Ban className="w-5 h-5 sm:w-6 sm:h-6" />
                   </div>

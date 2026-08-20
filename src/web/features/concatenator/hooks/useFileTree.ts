@@ -4,7 +4,7 @@
  */
 
 import { useMemo } from 'react'
-import { FileItem, TreeItem, IgnoreSource } from '../../../../core/types'
+import type { FileItem, TreeItem, IgnoreSource } from '../../../../core/types'
 
 const EMPTY_MAP = {}
 

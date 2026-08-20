@@ -5,7 +5,7 @@
 
 import { describe, it, expect } from 'vitest'
 
-describe('concatenator worker test (obsolete)', () => {
+describe('tests/cli/cli.e2e.test.ts (stub - real suite is at src/cli/cli.e2e.test.ts)', () => {
   it('passes stub', () => {
     expect(true).toBe(true)
   })

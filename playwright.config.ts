@@ -59,5 +59,9 @@ export default defineConfig({
     timeout: 120000,
     stdout: 'pipe',
     stderr: 'pipe',
+    env: {
+      KEL_TEST_TOKEN: 'kel-test-token-001',
+      NODE_ENV: 'test',
+    },
   },
 })

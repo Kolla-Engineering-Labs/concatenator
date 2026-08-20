@@ -1,45 +1,23 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { spawn, ChildProcess } from 'child_process'
+import * as http from 'node:http'
+import { startServer } from '../server.js'
 
 describe('Rate Limiting Integration', () => {
-  let child: ChildProcess
+  let server: http.Server
   let port: number
   const API_TOKEN = 'test-token-rate-limit'
 
-  function startServer(nodeEnv: string): Promise<number> {
-    return new Promise((resolve, reject) => {
-      child = spawn('npx tsx server.ts', {
-        env: {
-          ...process.env,
-          PORT: '0',
-          NODE_ENV: nodeEnv,
-          CONCATENATOR_API_TOKEN: API_TOKEN,
-          VFS_PATH: '.',
-        },
-        shell: true,
-      })
-
-      child.stdout?.on('data', (data) => {
-        const str = data.toString()
-        const match = str.match(/Server running on http:\/\/localhost:(\d+)/)
-        if (match) {
-          resolve(parseInt(match[1]))
-        }
-      })
-
-      child.on('error', reject)
-      setTimeout(() => reject(new Error('Server start timeout')), 30000)
-    })
-  }
-
   afterEach(() => {
-    if (child) {
-      child.kill()
+    if (server) {
+      server.close()
     }
   })
 
   it('should NOT apply rate limiting in test mode', async () => {
-    port = await startServer('test')
+    process.env.NODE_ENV = 'test'
+    // Pass 0 to let the OS assign an ephemeral port, preventing collisions
+    server = await startServer(0, API_TOKEN, '.')
+    port = (server.address() as any).port
     const response = await fetch(`http://127.0.0.1:${port}/api/vfs`, {
       headers: { 'x-concatenator-token': API_TOKEN },
     })
@@ -50,7 +28,10 @@ describe('Rate Limiting Integration', () => {
   }, 30000)
 
   it('should apply rate limiting in production mode', async () => {
-    port = await startServer('production')
+    process.env.NODE_ENV = 'production'
+    // Pass 0 to let the OS assign an ephemeral port, preventing collisions
+    server = await startServer(0, API_TOKEN, '.')
+    port = (server.address() as any).port
     const response = await fetch(`http://127.0.0.1:${port}/api/vfs`, {
       headers: { 'x-concatenator-token': API_TOKEN },
     })

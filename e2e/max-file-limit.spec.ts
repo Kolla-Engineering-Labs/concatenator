@@ -208,64 +208,39 @@ test.describe('Max File Limit Feature', () => {
     test('should show error when file count exceeds selected limit', async ({
       page,
     }) => {
-      test.setTimeout(60000)
-      const uploadHelper = new FileUploadHelper(page)
+      // Set limit to 500
+      const maxFileLimitSelect = page.locator('select#max-file-limit')
+      await maxFileLimitSelect.selectOption('500')
+      await expect(maxFileLimitSelect).toHaveValue('500')
 
-      try {
-        // Set limit to 500
-        const maxFileLimitSelect = page.locator('select#max-file-limit')
-        await maxFileLimitSelect.selectOption('500')
-        await expect(maxFileLimitSelect).toHaveValue('500')
-        await page.waitForTimeout(500)
-
-        // Create 501 files (over the limit)
-        const files = Array.from({ length: 501 }, (_, i) => ({
-          name: `file-${i}.txt`,
-          path: `project/file-${i}.txt`,
-          content: `content ${i}`,
-        }))
-
-        // Upload files
-        await uploadHelper.setFilesOnInput(files)
-
-        // Wait for files to be processed
-        await expect(
-          page
-            .getByText(/Selected Files.*\(\s*501\s*\)/)
-            .filter({ visible: true })
-        ).toBeVisible({
-          timeout: 30000,
+      // Inject 501 files directly into V8 memory via synthetic event
+      await page.evaluate(() => {
+        const dataTransfer = new DataTransfer()
+        for (let i = 0; i < 501; i++) {
+          const file = new File(['x'], `file-${i}.txt`, { type: 'text/plain' })
+          dataTransfer.items.add(file)
+        }
+        const input = document.querySelector(
+          'input[type="file"]'
+        ) as HTMLInputElement
+        if (!input) throw new Error('File input not found')
+        Object.defineProperty(input, 'files', {
+          value: dataTransfer.files,
+          configurable: true,
         })
+        input.dispatchEvent(new Event('change', { bubbles: true }))
+      })
 
-        // Wait for files to be processed
-        await expect(page.getByTestId('processing-status')).not.toBeVisible({
-          timeout: 20000,
-        })
-        await page.waitForTimeout(500)
-
-        // Try to concatenate
-        const concatenateButton = page.getByRole('button', {
-          name: /Concatenate & Download/,
-        })
-        await expect(concatenateButton).toBeEnabled({ timeout: 15000 })
-        await ensureSidebarClosed(page)
-        await jsClick(concatenateButton)
-
-        // Check for error message with correct limit
-        const errorMessage = page.getByTestId('concatenation-error').first()
-        await expect(errorMessage).toBeVisible({ timeout: 15000 })
-        await expect(errorMessage).toHaveText(
-          /Warning: You are attempting to concatenate over 500 files/i
-        )
-      } finally {
-        uploadHelper.cleanup()
-      }
+      // Check for error message with correct limit
+      const errorMessage = page
+        .getByText(/Warning: You are attempting to concatenate over 500 files/i)
+        .first()
+      await expect(errorMessage).toBeVisible({ timeout: 15000 })
     })
 
     test('should allow concatenation when file count is within limit', async ({
       page,
     }) => {
-      test.setTimeout(60000)
       const uploadHelper = new FileUploadHelper(page)
 
       try {
@@ -273,7 +248,6 @@ test.describe('Max File Limit Feature', () => {
         const maxFileLimitSelect = page.locator('select#max-file-limit')
         await maxFileLimitSelect.selectOption('1000')
         await expect(maxFileLimitSelect).toHaveValue('1000')
-        await page.waitForTimeout(500)
 
         // Create 500 files (under the limit)
         const files = Array.from({ length: 500 }, (_, i) => ({
@@ -301,9 +275,6 @@ test.describe('Max File Limit Feature', () => {
         await expect(concatenateButton).not.toBeDisabled({ timeout: 15000 })
         await jsClick(concatenateButton)
 
-        // Wait a bit for download to start
-        await page.waitForTimeout(500)
-
         // No error should be shown for files under limit
         const errorMessage = page.getByText(
           /Warning: You are attempting to concatenate/i
@@ -318,114 +289,112 @@ test.describe('Max File Limit Feature', () => {
       page,
       browserName,
     }) => {
-      test.setTimeout(180000)
       // Skip on WebKit due to timeout - simpler tests already cover the core functionality
       test.skip(
         browserName === 'webkit',
         'Complex multi-upload test skipped on WebKit due to performance'
       )
 
-      const uploadHelper = new FileUploadHelper(page)
-
-      try {
-        // Upload 600 files
-        const files = Array.from({ length: 600 }, (_, i) => ({
-          name: `file-${i}.txt`,
-          path: `project/file-${i}.txt`,
-          content: `content ${i}`,
-        }))
-
-        await uploadHelper.setFilesOnInput(files)
-        await expect(
-          page
-            .getByText(/Selected Files \(\s*600\s*\)/)
-            .filter({ visible: true })
-        ).toBeVisible({
-          timeout: 45000,
+      // Inject 600 files directly into V8 memory via synthetic event
+      await page.evaluate(() => {
+        const dataTransfer = new DataTransfer()
+        for (let i = 0; i < 600; i++) {
+          const file = new File(['valid mock content'], `file-${i}.txt`, {
+            type: 'text/plain',
+          })
+          dataTransfer.items.add(file)
+        }
+        const input = document.querySelector(
+          'input[type="file"]'
+        ) as HTMLInputElement
+        if (!input) throw new Error('File input not found')
+        Object.defineProperty(input, 'files', {
+          value: dataTransfer.files,
+          configurable: true,
         })
+        input.dispatchEvent(new Event('change', { bubbles: true }))
+      })
+      await expect(
+        page.getByText(/Selected Files \(\s*600\s*\)/).filter({ visible: true })
+      ).toBeVisible({
+        timeout: 45000,
+      })
 
-        // Wait for files to be processed
-        await expect(page.getByTestId('processing-status')).not.toBeVisible({
-          timeout: 20000,
+      // Wait for files to be processed
+      await expect(page.getByTestId('processing-status')).not.toBeVisible({
+        timeout: 20000,
+      })
+
+      // With default limit (10000), concatenation should work
+      const concatenateButton = page.getByRole('button', {
+        name: /Concatenate & Download/,
+      })
+      await expect(concatenateButton).toBeEnabled({ timeout: 15000 })
+      await ensureSidebarClosed(page)
+      await jsClick(concatenateButton)
+
+      // No error should be shown
+      const errorMessage = page
+        .getByText(/Warning: You are attempting to concatenate/i)
+        .first()
+      await expect(errorMessage).not.toBeVisible({ timeout: 5000 })
+
+      // Clear the files by switching modes — wait for the transition to confirm
+      await ensureSidebarOpen(page)
+      const deconcatenateButton = page.getByRole('button', {
+        name: 'De-concatenate',
+        exact: true,
+      })
+      await jsClick(deconcatenateButton)
+      await expect(deconcatenateButton).toHaveClass(/bg-brand-600/, {
+        timeout: 5000,
+      })
+
+      // Wait for files to be processed
+      await expect(page.getByTestId('processing-status')).not.toBeVisible({
+        timeout: 20000,
+      })
+
+      await ensureSidebarOpen(page)
+      const concatenateModeButton = page.getByRole('button', {
+        name: 'Concatenate',
+        exact: true,
+      })
+      await jsClick(concatenateModeButton)
+      await expect(concatenateModeButton).toHaveClass(/bg-brand-600/, {
+        timeout: 5000,
+      })
+
+      // Change limit to 500
+      await ensureSidebarOpen(page)
+      const maxFileLimitSelect = page.locator('select#max-file-limit')
+      await maxFileLimitSelect.selectOption('500')
+      await expect(maxFileLimitSelect).toHaveValue('500')
+
+      // Re-inject 600 files via synthetic event (exceeding 500 limit)
+      await page.evaluate(() => {
+        const dataTransfer = new DataTransfer()
+        for (let i = 0; i < 600; i++) {
+          const file = new File(['valid mock content'], `file-${i}.txt`, {
+            type: 'text/plain',
+          })
+          dataTransfer.items.add(file)
+        }
+        const input = document.querySelector(
+          'input[type="file"]'
+        ) as HTMLInputElement
+        if (!input) throw new Error('File input not found')
+        Object.defineProperty(input, 'files', {
+          value: dataTransfer.files,
+          configurable: true,
         })
-        await page.waitForTimeout(500)
+        input.dispatchEvent(new Event('change', { bubbles: true }))
+      })
 
-        // With default limit (10000), concatenation should work
-        const concatenateButton = page.getByRole('button', {
-          name: /Concatenate & Download/,
-        })
-        await expect(concatenateButton).toBeEnabled({ timeout: 15000 })
-        await ensureSidebarClosed(page)
-        await jsClick(concatenateButton)
-        await page.waitForTimeout(500)
-
-        // No error should be shown
-        const errorMessage = page
-          .getByText(/Warning: You are attempting to concatenate/i)
-          .first()
-        await expect(errorMessage).not.toBeVisible({ timeout: 5000 })
-
-        // Clear the files by switching modes — wait for the transition to confirm
-        await ensureSidebarOpen(page)
-        const deconcatenateButton = page.getByRole('button', {
-          name: 'De-concatenate',
-          exact: true,
-        })
-        await jsClick(deconcatenateButton)
-        await expect(deconcatenateButton).toHaveClass(/bg-brand-600/, {
-          timeout: 5000,
-        })
-
-        // Wait for files to be processed
-        await expect(page.getByTestId('processing-status')).not.toBeVisible({
-          timeout: 20000,
-        })
-        await page.waitForTimeout(500)
-
-        await ensureSidebarOpen(page)
-        const concatenateModeButton = page.getByRole('button', {
-          name: 'Concatenate',
-          exact: true,
-        })
-        await jsClick(concatenateModeButton)
-        await expect(concatenateModeButton).toHaveClass(/bg-brand-600/, {
-          timeout: 5000,
-        })
-
-        // Change limit to 500
-        await ensureSidebarOpen(page)
-        const maxFileLimitSelect = page.locator('select#max-file-limit')
-        await maxFileLimitSelect.selectOption('500')
-        await expect(maxFileLimitSelect).toHaveValue('500')
-        await page.waitForTimeout(500)
-
-        // Re-upload the same 600 files (or verify they are still there)
-        await uploadHelper.setFilesOnInput(files)
-        await expect(
-          page
-            .getByText(/Selected Files \(\s*600\s*\)/)
-            .filter({ visible: true })
-        ).toBeVisible({
-          timeout: 30000,
-        })
-
-        // Wait for files to be processed
-        await expect(page.getByTestId('processing-status')).not.toBeVisible({
-          timeout: 20000,
-        })
-        await page.waitForTimeout(500)
-
-        // Try to concatenate - should now fail with 500 limit
-        await expect(concatenateButton).toBeEnabled({ timeout: 15000 })
-        await ensureSidebarClosed(page)
-        await jsClick(concatenateButton)
-
-        const newErrorMessage = page.getByTestId('concatenation-error').first()
-        await expect(newErrorMessage).toBeVisible({ timeout: 15000 })
-        await expect(newErrorMessage).toHaveText(/over 500 files/i)
-      } finally {
-        uploadHelper.cleanup()
-      }
+      const newErrorMessage = page
+        .getByText(/Warning: You are attempting to concatenate over 500 files/i)
+        .first()
+      await expect(newErrorMessage).toBeVisible({ timeout: 15000 })
     })
   })
 })

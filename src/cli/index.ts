@@ -550,6 +550,9 @@ program
       // Ensure high-precision BPE strategy is loaded before execution
       await loadCliPrecision()
       try {
+        if (options.output) {
+          options.output = resolve(options.output)
+        }
         if (options.quiet) {
           logger._setLevel('error')
         }

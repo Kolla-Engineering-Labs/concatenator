@@ -13,6 +13,7 @@ import {
   parseBundle,
   validateConcatenation,
   generateFileTimestamp,
+  createConcatenationStream,
 } from './engine'
 
 describe('engine', () => {
@@ -434,6 +435,98 @@ trailing data`
       const { fileMap } = parseBundle(bundle)
 
       expect(fileMap['meta.txt']).toBe('Look at this: <<<<< and >>>>>')
+    })
+  })
+
+  describe('createConcatenationStream', () => {
+    it('streams files directly from disk with markdown formatting and post-matter manifest', async () => {
+      const fs = await import('node:fs')
+      const path = await import('node:path')
+      const os = await import('node:os')
+
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'stream-test-'))
+      const file1Path = path.join(tmpDir, 'file1.txt')
+      fs.writeFileSync(file1Path, 'Hello ```world```')
+
+      try {
+        const stream = createConcatenationStream(
+          [
+            {
+              path: 'file1.txt',
+              fullPath: file1Path,
+              mode: '0644',
+              hash: 'abc123hash',
+            },
+          ],
+          {
+            outputFormat: 'markdown',
+            enableNeutralization: true,
+            injectPostMatterManifest: true,
+          }
+        )
+
+        const reader = stream.getReader()
+        const decoder = new TextDecoder()
+        let output = ''
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          output += decoder.decode(value, { stream: true })
+        }
+        output += decoder.decode()
+
+        expect(output).toContain('<<<<< FILE_START: file1.txt >>>>>')
+        expect(output).toContain('Hello \\`\\`\\`world\\`\\`\\`')
+        expect(output).toContain('<<<<< FILE_END >>>>>')
+        expect(output).toContain('--- KEL MANIFEST ---')
+        expect(output).toContain('file1.txt|mode:0644|abc123hash')
+      } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true })
+      }
+    })
+
+    it('streams files with XML formatting when outputFormat is xml', async () => {
+      const fs = await import('node:fs')
+      const path = await import('node:path')
+      const os = await import('node:os')
+
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'stream-test-xml-'))
+      const file1Path = path.join(tmpDir, 'test.xml')
+      fs.writeFileSync(file1Path, '<data>val</data>')
+
+      try {
+        const stream = createConcatenationStream(
+          [
+            {
+              path: 'test.xml',
+              fullPath: file1Path,
+            },
+          ],
+          {
+            outputFormat: 'xml',
+            enableNeutralization: false,
+            injectPostMatterManifest: false,
+          }
+        )
+
+        const reader = stream.getReader()
+        const decoder = new TextDecoder()
+        let output = ''
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          output += decoder.decode(value, { stream: true })
+        }
+        output += decoder.decode()
+
+        expect(output).toContain('<file path="test.xml">')
+        expect(output).toContain('<data>val</data>')
+        expect(output).toContain('</file>')
+      } finally {
+        fs.rmSync(tmpDir, { recursive: true, force: true })
+      }
     })
   })
 })

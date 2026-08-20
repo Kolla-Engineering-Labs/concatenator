@@ -90,7 +90,7 @@ test.describe('Binary Content Handling', () => {
       ])
 
       // Verify download happened
-      expect(download.suggestedFilename()).toMatch(/concatenator.*\.txt/)
+      expect(download.suggestedFilename()).toMatch(/concatenator.*\.markdown/)
 
       // Verify no crashes occurred
       expect(errors).toEqual([])

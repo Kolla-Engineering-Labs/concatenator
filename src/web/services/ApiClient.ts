@@ -11,10 +11,55 @@ export class ApiClient {
       typeof window !== 'undefined'
         ? sessionStorage.getItem('CONCATENATOR_TOKEN')
         : null
+    const workerId =
+      typeof window !== 'undefined' ? sessionStorage.getItem('WORKER_ID') : null
+
     return {
       ...extra,
       ...(token ? { 'X-Concatenator-Token': token } : {}),
+      ...(workerId ? { 'X-Worker-Id': workerId } : {}),
     }
+  }
+
+  static async triggerConcatenate(
+    config: Record<string, unknown>
+  ): Promise<Response> {
+    const res = await fetch('/api/concatenate', {
+      method: 'POST',
+      headers: this.getHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(config),
+    })
+
+    if (!res.ok) {
+      let errorMessage = `Concatenation failed: ${res.statusText}`
+      try {
+        const errorJson = await res.json()
+        if (errorJson?.error) errorMessage = errorJson.error
+        else if (errorJson?.message) errorMessage = errorJson.message
+      } catch {
+        // Non-JSON error response fallback
+      }
+      throw new Error(errorMessage)
+    }
+
+    // KEL Protocol Signature Verification
+    const streamSignature = res.headers.get('X-Kolla-Stream')
+    if (streamSignature !== 'active') {
+      console.warn(
+        '[KEL Protocol] Warning: Backend stream signature missing or invalid.'
+      )
+    }
+
+    return res
+  }
+
+  static async concatenate(matrix: {
+    outputFormat: 'markdown' | 'xml'
+    enableNeutralization: boolean
+    injectPostMatterManifest: boolean
+  }): Promise<Blob> {
+    const res = await this.triggerConcatenate(matrix)
+    return res.blob()
   }
 
   static async getIgnoreList(): Promise<string[]> {
@@ -25,6 +70,13 @@ export class ApiClient {
       throw new Error('Failed to fetch ignore list')
     }
     return res.json()
+  }
+
+  static async addIgnorePattern(pattern: string): Promise<void> {
+    const list = await this.getIgnoreList()
+    if (!list.includes(pattern)) {
+      await this.updateIgnoreList([...list, pattern])
+    }
   }
 
   static async updateIgnoreList(list: string[]): Promise<void> {
@@ -47,6 +99,11 @@ export class ApiClient {
       throw new Error('Failed to fetch VFS tree')
     }
     return res.json()
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  static async fetchVFS(): Promise<{ tree: any; partial: boolean }> {
+    return this.getVfsState()
   }
 
   static async getConfig(): Promise<{

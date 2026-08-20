@@ -1,6 +1,5 @@
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
-import { TokenService } from '../core/TokenService'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -23,7 +22,7 @@ export function estimateTokenCount(
   if (content instanceof ArrayBuffer) {
     return Math.ceil(content.byteLength / 4)
   }
-  return TokenService.getTokenEstimate(content)
+  return Math.ceil(content.length / 4)
 }
 
 export function isImageFile(fileName: string): boolean {
