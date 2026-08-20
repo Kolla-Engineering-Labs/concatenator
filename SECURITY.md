@@ -39,8 +39,10 @@ Concatenator implements a multi-layered defense to protect your local machine fr
 - **Localhost Binding**: The API server binds strictly to `127.0.0.1`. This ensures that external machines on your local network (LAN) cannot probe or access the server.
 - **Readiness Probe (`/api/health` or `/health`)**: A lightweight endpoint providing server status, version, and uptime. It is explicitly excluded from the API Token Guard to allow the CLI to verify server readiness before launching the browser. No sensitive data or file access is exposed via this probe.
 - **API Token Guard**: All sensitive API endpoints (VFS, file read, config) are protected by a mandatory `X-Concatenator-Token` header.
-  - **How it works**: The server reads a token from the `CONCATENATOR_API_TOKEN` environment variable.
+  - **How it works**: The server reads a token from the `CONCATENATOR_API_TOKEN` environment variable (or `KEL_TEST_TOKEN` when `NODE_ENV=test` to guarantee deterministic E2E token isolation).
   - **Protection**: This prevents malicious websites or local bots from triggering filesystem operations on your machine via CSRF or simple automated probing. See the [API Security guide](./CONTRIBUTING.md#api-security) for instructions on generating and setting this token.
+- **Worker Sandboxing (`X-Worker-Id`)**: Each Playwright test worker (and each browser session) injects a numeric `X-Worker-Id` header. The server routes this header to a worker-specific `.concatenate-ignore` file, ensuring parallel sessions never corrupt shared server state.
+- **1 MB Payload Circuit Breaker**: The `POST /api/concatenate` controller enforces a strict 1 MB JSON body ceiling. Payloads exceeding this limit immediately trigger `req.destroy()` (TCP connection termination) and respond with `413 Payload Too Large` — preventing memory exhaustion and slow-loris style payload attacks.
 
 ### 🖋️ Binary Integrity (Code Signing)
 
@@ -146,4 +148,4 @@ We thank the security researchers and community members who have responsibly dis
 
 ---
 
-Last updated: 2026-07-22
+Last updated: 2026-08-19
