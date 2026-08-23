@@ -61,7 +61,23 @@ export const test = baseTest.extend<TestFixtures>({
       ...(apiToken && { 'X-Concatenator-Token': apiToken }),
     })
 
-    // Also persist the token and workerId to sessionStorage so ApiClient can find them
+    // ── Zero-Trust Handshake — Timing Guarantee ───────────────────────────────
+    // Playwright's addInitScript() registers a function that executes in the
+    // browser context BEFORE the page's own scripts (including the React bundle)
+    // are evaluated. This is guaranteed by the Playwright worker lifecycle:
+    //
+    //   1. Browser navigates to the URL (page.goto triggers network request)
+    //   2. HTML document is parsed; inline scripts and init scripts fire FIRST
+    //   3. addInitScript callbacks run synchronously before any <script> tags
+    //   4. React bundle evaluates; App.tsx mounts; ApiClient.getHeaders() runs
+    //
+    // Because sessionStorage is populated in step 3, ApiClient.getHeaders() in
+    // step 4 is guaranteed to find CONCATENATOR_TOKEN and WORKER_ID already set.
+    //
+    // ⚠️  DO NOT replace addInitScript with page.evaluate() after page.goto().
+    //     evaluate() runs AFTER the page has loaded — by which point the React
+    //     app has already mounted and ApiClient may have already fired its first
+    //     authenticated request with a missing or empty token (401/403 race).
     await page.addInitScript(
       ({ injectedToken, workerId }) => {
         window.sessionStorage.setItem('CONCATENATOR_TOKEN', injectedToken)

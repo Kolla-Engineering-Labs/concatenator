@@ -123,8 +123,22 @@ export async function startServer(
     )
   }
 
-  // ── Native Stream Boundary (Phase D) ─────────────────────────────────────────
-  // Mount the $O(1)$ stream controller BEFORE express.json() drains the socket
+  // ╔══════════════════════════════════════════════════════════════════════════╗
+  // ║  ⚠️  STREAMING BOUNDARY — DO NOT REORDER — ARCHITECTURAL CONSTRAINT  ⚠️  ║
+  // ╠══════════════════════════════════════════════════════════════════════════╣
+  // ║  POST /api/concatenate MUST be mounted BEFORE express.json() and the   ║
+  // ║  rate-limiter middleware. This is a hard architectural requirement.     ║
+  // ║                                                                         ║
+  // ║  WHY: express.json() calls req.read() internally to drain the socket   ║
+  // ║  buffer into a string before passing control to the next handler.      ║
+  // ║  This pre-drains the socket, destroying the raw IncomingMessage stream ║
+  // ║  that handleConcatenate() requires to parse the JSON body itself via   ║
+  // ║  its own streaming body parser (with the 1MB circuit breaker).         ║
+  // ║                                                                         ║
+  // ║  The controller uses Readable.fromWeb(webStream).pipe(res) to stream   ║
+  // ║  the O(1) concatenation pipeline directly to the HTTP response.        ║
+  // ║  express.json() must not be in scope for this route.                   ║
+  // ╚══════════════════════════════════════════════════════════════════════════╝
   app.post('/api/concatenate', (req, res) => {
     res.setHeader(
       'Access-Control-Expose-Headers',

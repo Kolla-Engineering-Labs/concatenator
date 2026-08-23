@@ -110,4 +110,39 @@ describe('NeutralizationStream', () => {
     const result = await streamToString(outputStream)
     expect(result).toBe('Hello 🚀 World')
   })
+  it('flush() drains tail buffer when stream ends with 1 orphaned backtick', async () => {
+    // Regression guard for the EOF two-source drain in flush().
+    // Input ends with a single ` that was held in `tail` pending a possible triple.
+    // On stream close, flush() must emit it as a literal backtick (not suppress it).
+    const encoder = new TextEncoder()
+    const transform = new NeutralizationStream(true)
+    const readable = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('text `'))
+        controller.close()
+      },
+    })
+
+    const outputStream = readable.pipeThrough(transform)
+    const result = await streamToString(outputStream)
+    expect(result).toBe('text `')
+  })
+
+  it('flush() drains tail buffer when stream ends with 2 orphaned backticks', async () => {
+    // Regression guard for the EOF two-source drain in flush().
+    // Input ends with `` that was held in `tail`. flush() must emit both
+    // as literal backticks (they cannot form a triple at EOF).
+    const encoder = new TextEncoder()
+    const transform = new NeutralizationStream(true)
+    const readable = new ReadableStream({
+      start(controller) {
+        controller.enqueue(encoder.encode('text ``'))
+        controller.close()
+      },
+    })
+
+    const outputStream = readable.pipeThrough(transform)
+    const result = await streamToString(outputStream)
+    expect(result).toBe('text ``')
+  })
 })

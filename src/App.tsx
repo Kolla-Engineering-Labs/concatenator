@@ -234,7 +234,23 @@ export default function App() {
     }
   }, [appMode, setFiles, setVirtualFileSystem, setImportError, clearValidation])
 
-  // Fetch VFS tree and Config from backend on mount
+  // ── Workspace Initializer ─────────────────────────────────────────────────
+  // Fetches the remote config and VFS tree from the CLI backend on first mount.
+  //
+  // PERSISTENCE GUARD (localStorage null check on lines below):
+  //   The `getConfig()` response is ONLY applied to `maxFileLimit` if the user
+  //   has NOT previously set a preference (i.e., the key is absent from localStorage).
+  //   This prevents the async server response — which may resolve hundreds of
+  //   milliseconds after mount — from silently overwriting a user's stored limit.
+  //
+  //   This guard is the primary synchronization mechanism preventing the E2E
+  //   UI race condition where: (1) React reads maxFileLimit from localStorage,
+  //   (2) the component renders with the correct user value, then (3) getConfig()
+  //   resolves and resets it to the server default before the test assertion runs.
+  //
+  //   ⚠️  REGRESSION RISK: Removing or weakening this null check will re-introduce
+  //   the async closure staleness bug and cause max-file-limit E2E flakes.
+  //   Local state MUST supersede remote defaults.
   useEffect(() => {
     let mounted = true
     const initWorkspace = async () => {
