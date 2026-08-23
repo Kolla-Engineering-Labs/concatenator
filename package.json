@@ -1,6 +1,6 @@
 {
   "name": "@kolla/concatenator",
-  "version": "0.9.5",
+  "version": "0.9.0",
   "publishConfig": {
     "access": "public"
   },
@@ -39,7 +39,8 @@
     "test:release": "tsx scripts/verify-release-candidate.ts",
     "pre-release": "npm run test:release",
     "version": "changeset version && node ./.changeset/fix-changelog.js",
-    "prepare": "npx husky"
+    "prepare": "npx husky",
+    "qa:full": "clear && npm run clean && npm run build && npm run type-check && npm run lint:fix && npm run format && npm run type-check && npm run test:coverage && npm run build:exe && cd workbench-ui && npm run build && cd .."
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
