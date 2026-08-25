@@ -4,7 +4,7 @@
  * Requires Node.js 22+
  */
 
-import { execFileSync } from 'child_process'
+import { execFileSync, execSync } from 'child_process'
 import {
   writeFileSync,
   existsSync,
@@ -17,17 +17,18 @@ import {
 } from 'fs'
 import { join, dirname, relative } from 'path'
 import { fileURLToPath } from 'url'
+import { buildSync } from 'esbuild'
 import { signBinary, verifyBinary, isSigningEnabled } from './sign-utils.ts'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const rootDir = dirname(__dirname)
+const pkg = JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf-8'))
 const distDir = join(rootDir, 'dist')
 const seaDir = join(distDir, 'sea')
 const platform = process.platform
 const isWindows = platform === 'win32'
 const isMac = platform === 'darwin'
-const npxCommand = isWindows ? 'npx.cmd' : 'npx'
 
 console.log('🔨 Building Concatenator SEA...\n')
 
@@ -89,7 +90,7 @@ if (!existsSync(seaDir)) mkdirSync(seaDir)
 // Step 0.5: Bundle Web Assets
 console.log('📦 Bundling Web Assets...')
 try {
-  execFileSync(npxCommand, ['tsx', 'scripts/build-web-assets.ts'], {
+  execSync('npx tsx scripts/build-web-assets.ts', {
     cwd: rootDir,
     stdio: 'inherit',
   })
@@ -112,6 +113,7 @@ try {
     external: ['fs', 'path', 'url', 'os'],
     define: {
       PROCESS_IS_UNSIGNED: String(isUnsigned),
+      __KEL_VERSION__: JSON.stringify(pkg.version),
     },
   })
 } catch (error) {
@@ -215,20 +217,35 @@ const exePath = join(distDir, exeName)
 try {
   copyFileSync(nodePath, exePath)
 
-  // Use postject to inject the blob
-  const postjectArgs = [
-    'postject',
-    exePath,
-    'NODE_SEA_BLOB',
-    'dist/sea/concatenator.blob',
-    '--sentinel-fuse',
-    'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2',
-  ]
-  if (isMac) {
+  // PATCH: Cross-platform command resolution that satisfies Windows and CodeQL
+  const isWindows = platform === 'win32'
+  const baseCmd = isWindows ? 'cmd.exe' : 'npx'
+
+  const postjectArgs = isWindows
+    ? [
+        '/c',
+        'npx',
+        'postject',
+        exePath,
+        'NODE_SEA_BLOB',
+        'dist/sea/concatenator.blob',
+        '--sentinel-fuse',
+        'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2',
+      ]
+    : [
+        'postject',
+        exePath,
+        'NODE_SEA_BLOB',
+        'dist/sea/concatenator.blob',
+        '--sentinel-fuse',
+        'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2',
+      ]
+
+  if (platform === 'darwin') {
     postjectArgs.push('--macho-segment-name', 'NODE_SEA')
   }
 
-  execFileSync(npxCommand, postjectArgs, {
+  execFileSync(baseCmd, postjectArgs, {
     cwd: rootDir,
     stdio: 'inherit',
   })
@@ -249,7 +266,6 @@ try {
   }
 
   // Step 6: Move to versioned dist folder
-  const pkg = JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf-8'))
   const version = pkg.version
   const finalDistDir = join(distDir, `v${version}`, platform)
 

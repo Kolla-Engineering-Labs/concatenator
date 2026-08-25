@@ -13,7 +13,14 @@
 
 ## Recently Completed Milestones (Stable - Do Not Revisit)
 
-- **CodeQL Process Execution Hardening Pass (`sign-utils.ts`, `build-sea.js`, `verify-release-candidate.ts`, `src/cli/cli-utils.ts`, `src/cli/index.ts`, `server.ts`, `scripts/build-binary.ts`):**
+- **Architectural Amendment 3: Complete SEA Pipeline Consolidation & AST Version Injection (`scripts/build-sea.js`, `package.json`, `scripts/build-binary.ts`, `scripts/build-cli.ts`):**
+  - **Monolithic SEA Orchestration & AST Injection (`scripts/build-sea.js`):** Imported `buildSync` from `esbuild`, hoisted `package.json` version reading, and injected `__KEL_VERSION__: JSON.stringify(pkg.version)` alongside `PROCESS_IS_UNSIGNED` into the esbuild define map.
+  - **Web Assets Static Shell Execution Reversion (`scripts/build-sea.js`):** Preserved `execSync` for Step 0.5 (`npx tsx scripts/build-web-assets.ts`) to avoid Windows `EINVAL` batch-execution crashes, while retaining hardened `execFileSync` for native `node` binary invocations.
+  - **Cross-Platform Postject Execution (`scripts/build-sea.js`):** Routed Windows postject blob injection via `cmd.exe /c npx postject ...` and POSIX directly via `npx postject ...` using array-based `execFileSync` to eliminate `EINVAL` spawn failures while preserving CodeQL argument safety.
+  - **Deprecation & Removal of Redundant Scripts (`scripts/build-binary.ts`, `scripts/build-cli.ts`):** Retired legacy split build scripts, eliminating orphaned child process execution routines from the CodeQL SAST scan perimeter.
+  - **Script Hook Consolidation (`package.json`):** Pruned obsolete `build:sea-bundle` and `build:sea-binary` hooks; re-routed `build:sea` to `npm run build:exe` for unified local and CI/CD execution.
+
+- **CodeQL Process Execution Hardening Pass (`sign-utils.ts`, `build-sea.js`, `verify-release-candidate.ts`, `src/cli/cli-utils.ts`, `src/cli/index.ts`, `server.ts`):**
   - **Tainted Format String Mitigation (`server.ts`):** Replaced template literal in API Token Guard failure logging with explicit `%s` format specifiers to prevent V8 log formatting hijacking.
   - **Header-Only Rate Limiting for Streaming Route (`server.ts`):** Injected lightweight `express-rate-limit` middleware (`localLimiter`, 100 req/min) above `/api/concatenate` to mitigate DoS scanning flags without pre-draining socket stream bodies.
   - **Direct Process Execution (`scripts/build-binary.ts`):** Replaced `execSync` with `execFileSync` when generating the V8 SEA blob to prevent shell injection vectors when resolving directory paths.
