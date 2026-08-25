@@ -4,8 +4,7 @@
  * Requires Node.js 22+
  */
 
-import { buildSync } from 'esbuild'
-import { execSync } from 'child_process'
+import { execFileSync } from 'child_process'
 import {
   writeFileSync,
   existsSync,
@@ -26,6 +25,9 @@ const rootDir = dirname(__dirname)
 const distDir = join(rootDir, 'dist')
 const seaDir = join(distDir, 'sea')
 const platform = process.platform
+const isWindows = platform === 'win32'
+const isMac = platform === 'darwin'
+const npxCommand = isWindows ? 'npx.cmd' : 'npx'
 
 console.log('🔨 Building Concatenator SEA...\n')
 
@@ -44,7 +46,7 @@ function resolveNodePath() {
 
   try {
     // Validate path exists and is executable by checking version
-    const versionOutput = execSync(`"${nodePath}" --version`, {
+    const versionOutput = execFileSync(nodePath, ['--version'], {
       encoding: 'utf8',
     }).trim()
 
@@ -87,7 +89,7 @@ if (!existsSync(seaDir)) mkdirSync(seaDir)
 // Step 0.5: Bundle Web Assets
 console.log('📦 Bundling Web Assets...')
 try {
-  execSync('npx tsx scripts/build-web-assets.ts', {
+  execFileSync(npxCommand, ['tsx', 'scripts/build-web-assets.ts'], {
     cwd: rootDir,
     stdio: 'inherit',
   })
@@ -195,7 +197,7 @@ try {
   const env = { ...process.env }
   if (sourceDateEpoch) env.SOURCE_DATE_EPOCH = sourceDateEpoch
 
-  execSync(`"${nodePath}" --experimental-sea-config sea-config.json`, {
+  execFileSync(nodePath, ['--experimental-sea-config', 'sea-config.json'], {
     cwd: rootDir,
     stdio: 'inherit',
     env,
@@ -214,13 +216,22 @@ try {
   copyFileSync(nodePath, exePath)
 
   // Use postject to inject the blob
-  execSync(
-    `npx postject "${exePath}" NODE_SEA_BLOB "dist/sea/concatenator.blob" --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 --macho-segment-name NODE_SEA`,
-    {
-      cwd: rootDir,
-      stdio: 'inherit',
-    }
-  )
+  const postjectArgs = [
+    'postject',
+    exePath,
+    'NODE_SEA_BLOB',
+    'dist/sea/concatenator.blob',
+    '--sentinel-fuse',
+    'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2',
+  ]
+  if (isMac) {
+    postjectArgs.push('--macho-segment-name', 'NODE_SEA')
+  }
+
+  execFileSync(npxCommand, postjectArgs, {
+    cwd: rootDir,
+    stdio: 'inherit',
+  })
 
   console.log(`\n✅ SEA executable created: ${exePath}`)
 

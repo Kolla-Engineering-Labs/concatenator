@@ -3,8 +3,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // Mock child_process and other node built-ins
 vi.mock('child_process', () => ({
   execSync: vi.fn(),
+  execFileSync: vi.fn(),
   default: {
     execSync: vi.fn(),
+    execFileSync: vi.fn(),
   },
 }))
 

@@ -1,4 +1,4 @@
-import { execSync } from 'child_process'
+import { execFileSync } from 'child_process'
 import { readFileSync, existsSync } from 'fs'
 import { join, dirname } from 'path'
 import { createHash } from 'crypto'
@@ -43,11 +43,12 @@ async function verifyRelease() {
   let gpgOutput = ''
   try {
     // gpg --verify often writes to stderr
-    gpgOutput = execSync(
-      `gpg --verify --with-fingerprint "${manifestPath.replace(/\\/g, '/')}" 2>&1`,
+    gpgOutput = execFileSync(
+      'gpg',
+      ['--verify', '--with-fingerprint', manifestPath],
       {
-        stdio: ['pipe', 'pipe', 'pipe'],
         encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
       }
     ).toString()
   } catch (error: unknown) {

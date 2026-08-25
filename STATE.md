@@ -13,6 +13,16 @@
 
 ## Recently Completed Milestones (Stable - Do Not Revisit)
 
+- **CodeQL Process Execution Hardening Pass (`sign-utils.ts`, `build-sea.js`, `verify-release-candidate.ts`, `src/cli/cli-utils.ts`, `src/cli/index.ts`, `server.ts`, `scripts/build-binary.ts`):**
+  - **Tainted Format String Mitigation (`server.ts`):** Replaced template literal in API Token Guard failure logging with explicit `%s` format specifiers to prevent V8 log formatting hijacking.
+  - **Header-Only Rate Limiting for Streaming Route (`server.ts`):** Injected lightweight `express-rate-limit` middleware (`localLimiter`, 100 req/min) above `/api/concatenate` to mitigate DoS scanning flags without pre-draining socket stream bodies.
+  - **Direct Process Execution (`scripts/build-binary.ts`):** Replaced `execSync` with `execFileSync` when generating the V8 SEA blob to prevent shell injection vectors when resolving directory paths.
+  - **Signing & Verification Hardening (`scripts/sign-utils.ts`):** Converted all `execSync` shell commands (`codesign`, `signtool`, `xcrun notarytool`, `xcrun stapler`, `spctl`) to array-based `execFileSync` invocations, isolating process inputs from OS shell expansion.
+  - **Release Audit Hardening (`scripts/verify-release-candidate.ts`):** Replaced `execSync` GPG verification shell execution with direct `execFileSync('gpg', ['--verify', '--with-fingerprint', manifestPath])`, eliminating shell redirects (`2>&1`) and leveraging native process stderr capture on rejection.
+  - **Single Executable Build Hardening (`scripts/build-sea.js`):** Converted Node.js version verification, asset compilation, SEA blob generation, and postject binary injection to `execFileSync` with platform-specific executable resolution (`npx.cmd` on Windows vs `npx` on POSIX).
+  - **CLI Runtime Quarantine & Keychain Checks (`src/cli/cli-utils.ts`, `src/cli/index.ts`):** Migrated macOS quarantine check (`ls -l@`) and GPG public key check (`gpg --list-keys`) to `execFileSync`.
+  - **Unit Test Synchronizations (`tests/scripts_sign_utils.test.ts`, `tests/cli/utils.test.ts`, `tests/cli/quarantine.test.ts`, `tests/cli/verify.test.ts`):** Updated test mocks and assertions to expect array-based `execFileSync` execution vectors.
+
 - **Architectural Hardening & Critical Boundary Lockdown (`server.ts`, `src/App.tsx`, `src/core/streams/NeutralizationStream.ts`, `src/core/streams/NeutralizationStream.test.ts`, `e2e/fixtures.ts`):**
   - **API Streaming Boundary (`server.ts`):** Added a multi-line bordered structural warning above `POST /api/concatenate` documenting why mounting before `express.json()` is mandatory to prevent socket pre-draining before streaming parsing.
   - **Stateful Persistence Guard (`src/App.tsx`):** Injected detailed `PERSISTENCE GUARD` documentation explaining the `localStorage` null-check in `initWorkspace` as the primary synchronization mechanism preventing async `getConfig()` defaults from overwriting user limits.

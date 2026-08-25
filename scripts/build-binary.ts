@@ -1,4 +1,4 @@
-import { execSync } from 'child_process'
+import { execFileSync } from 'child_process'
 import { copyFileSync, existsSync, rmSync } from 'fs'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
@@ -22,7 +22,10 @@ console.log('[KEL Protocol] Initiating Phase D Binary Orchestration...')
 try {
   // Step 1: Generate the V8 SEA Blob
   console.log('1. Generating V8 SEA Blob...')
-  execSync(`node --experimental-sea-config ${configPath}`, { stdio: 'inherit' })
+  // PATCH: Bypass the OS shell entirely by passing arguments as an array
+  execFileSync('node', ['--experimental-sea-config', configPath], {
+    stdio: 'inherit',
+  })
 
   // Step 2: Clone the Host Node Binary
   console.log(`2. Cloning host Node executable to ${binaryName}...`)
@@ -34,12 +37,21 @@ try {
   // The sentinel fuse is a strict requirement for Node SEA
   const sentinelFuse = 'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2'
 
-  execSync(
-    `npx postject "${binaryPath}" NODE_SEA_BLOB "${blobPath}" --sentinel-fuse ${sentinelFuse} ${
-      isMac ? '--macho-segment-name NODE_SEA' : ''
-    }`,
-    { stdio: 'inherit' }
-  )
+  const npxCommand = isWindows ? 'npx.cmd' : 'npx'
+  const postjectArgs = [
+    'postject',
+    binaryPath,
+    'NODE_SEA_BLOB',
+    blobPath,
+    '--sentinel-fuse',
+    sentinelFuse,
+  ]
+
+  if (isMac) {
+    postjectArgs.push('--macho-segment-name', 'NODE_SEA')
+  }
+
+  execFileSync(npxCommand, postjectArgs, { stdio: 'inherit' })
 
   console.log(
     `✓ [KEL Protocol] Single Executable Application compiled: dist/${binaryName}`

@@ -13,7 +13,7 @@ import {
   rmSync,
 } from 'node:fs'
 import { join, relative, dirname, resolve } from 'node:path'
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { createHash, randomBytes } from 'node:crypto'
 import {
   type VirtualFile,
@@ -62,7 +62,7 @@ export function checkQuarantine(): void {
     if (isMocked) {
       isQuarantined = true
     } else {
-      const output = execSync(`ls -l@ "${exePath}"`, {
+      const output = execFileSync('ls', ['-l@', exePath], {
         encoding: 'utf8',
         stdio: ['pipe', 'pipe', 'ignore'],
       })

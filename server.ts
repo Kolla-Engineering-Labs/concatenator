@@ -110,7 +110,9 @@ export async function startServer(
       const provided = req.headers['x-concatenator-token']
       if (provided !== API_TOKEN) {
         console.error(
-          `[AUTH FAILURE] Expected: ${API_TOKEN} | Received: ${provided} | Headers:`,
+          '[AUTH FAILURE] Expected: %s | Received: %s | Headers:',
+          API_TOKEN,
+          provided,
           req.headers
         )
         return res.status(403).json({ error: 'Zero-Trust Perimeter Violation' })
@@ -139,6 +141,14 @@ export async function startServer(
   // ║  the O(1) concatenation pipeline directly to the HTTP response.        ║
   // ║  express.json() must not be in scope for this route.                   ║
   // ╚══════════════════════════════════════════════════════════════════════════╝
+  const localLimiter = rateLimit({
+    windowMs: 1 * 60 * 1000, // 1 minute
+    max: 100, // Limit each IP to 100 requests per windowMs
+    message: { error: 'Rate limit exceeded. Local perimeter defense active.' },
+  })
+
+  app.use('/api/concatenate', localLimiter)
+
   app.post('/api/concatenate', (req, res) => {
     res.setHeader(
       'Access-Control-Expose-Headers',

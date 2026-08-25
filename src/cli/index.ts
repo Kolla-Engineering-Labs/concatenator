@@ -122,7 +122,7 @@ program
     const { calculateFileHash } = await import('./cli-utils.js')
     const { OFFICIAL_MANIFEST_URL, ARCHITECT_PGP_FINGERPRINT } =
       await import('../core/constants.js')
-    const { execSync } = await import('node:child_process')
+    const { execFileSync } = await import('node:child_process')
 
     const targetPath = target === 'self' ? process.execPath : resolve(target)
     const manifestPath =
@@ -139,8 +139,9 @@ program
       // 1. GPG Keychain Check
       let hasKey = false
       try {
-        execSync(
-          `gpg --list-keys "${ARCHITECT_PGP_FINGERPRINT.replace(/\s/g, '')}"`,
+        execFileSync(
+          'gpg',
+          ['--list-keys', ARCHITECT_PGP_FINGERPRINT.replace(/\s/g, '')],
           { stdio: 'ignore' }
         )
         hasKey = true

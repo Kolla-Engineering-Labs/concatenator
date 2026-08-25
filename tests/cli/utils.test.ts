@@ -15,6 +15,7 @@ const mockFs = {
 
 const mockChildProcess = {
   execSync: vi.fn(),
+  execFileSync: vi.fn(),
   exec: vi.fn(),
 }
 
@@ -145,13 +146,14 @@ describe('cli-utils', () => {
         .spyOn(process, 'platform', 'get')
         .mockReturnValue('darwin')
 
-      mockChildProcess.execSync.mockReturnValue('com.apple.quarantine')
+      mockChildProcess.execFileSync.mockReturnValue('com.apple.quarantine')
       const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
       cliUtils.checkQuarantine()
 
-      expect(mockChildProcess.execSync).toHaveBeenCalledWith(
-        expect.stringContaining('ls -l@'),
+      expect(mockChildProcess.execFileSync).toHaveBeenCalledWith(
+        'ls',
+        ['-l@', expect.any(String)],
         expect.anything()
       )
 

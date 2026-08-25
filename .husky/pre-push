@@ -1,2 +1,2 @@
 echo "KEL Protocol: Enforcing Core Engine Coverage Baselines..."
-clear && npm run test:coverage
+clear && npm run format && npm run test:coverage
