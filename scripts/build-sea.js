@@ -217,35 +217,31 @@ const exePath = join(distDir, exeName)
 try {
   copyFileSync(nodePath, exePath)
 
-  // PATCH: Cross-platform command resolution that satisfies Windows and CodeQL
-  const isWindows = platform === 'win32'
-  const baseCmd = isWindows ? 'cmd.exe' : 'npx'
+  // PATCH: Cross-platform, shell-less execution bypassing npx and cmd.exe
+  // We resolve the postject CLI entry point directly to satisfy CodeQL SAST
+  const postjectCli = join(
+    rootDir,
+    'node_modules',
+    'postject',
+    'dist',
+    'cli.js'
+  )
 
-  const postjectArgs = isWindows
-    ? [
-        '/c',
-        'npx',
-        'postject',
-        exePath,
-        'NODE_SEA_BLOB',
-        'dist/sea/concatenator.blob',
-        '--sentinel-fuse',
-        'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2',
-      ]
-    : [
-        'postject',
-        exePath,
-        'NODE_SEA_BLOB',
-        'dist/sea/concatenator.blob',
-        '--sentinel-fuse',
-        'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2',
-      ]
+  const postjectArgs = [
+    postjectCli,
+    exePath,
+    'NODE_SEA_BLOB',
+    'dist/sea/concatenator.blob',
+    '--sentinel-fuse',
+    'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2',
+  ]
 
   if (platform === 'darwin') {
     postjectArgs.push('--macho-segment-name', 'NODE_SEA')
   }
 
-  execFileSync(baseCmd, postjectArgs, {
+  // Execute directly via the Node binary, bypassing all OS shells
+  execFileSync(nodePath, postjectArgs, {
     cwd: rootDir,
     stdio: 'inherit',
   })

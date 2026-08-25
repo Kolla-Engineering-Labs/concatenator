@@ -13,6 +13,11 @@
 
 ## Recently Completed Milestones (Stable - Do Not Revisit)
 
+- **Supply-Chain Hardening, SAST Execution Bypass & Vite Config Rigor (`package.json`, `scripts/build-sea.js`, `vite.config.ts`):**
+  - **Supply-Chain Resolution Tree Hardening (`package.json`):** Forced `dompurify` override to `^3.4.13` and added `nanoid: ^3.3.18` to bypass transitive dependency CVEs without waiting for upstream maintainers.
+  - **Native SAST Postject Execution (`scripts/build-sea.js`):** Eliminated `cmd.exe` and `npx` wrapper execution in Step 4. Directly invoked `postject`'s CLI entry point (`node_modules/postject/dist/cli.js`) via the pre-resolved `nodePath` binary, permanently satisfying CodeQL SAST rules and removing Windows `EINVAL` risks.
+  - **Type Rigor & Secrets Error Handling (`vite.config.ts`):** Hoisted `DEV_BUILD_HASH` and `DEV_FINGERPRINT` constants, added non-crashing `.secrets` parsing with console warnings on error, and typed `codecovLogLevel: 'debug' | 'info'` to eliminate the `@ts-expect-error` suppression.
+
 - **Architectural Amendment: GPG Stream Capture (`scripts/verify-release-candidate.ts`):**
   - **Native Stream Capture via `spawnSync`:** Switched process invocation from `execFileSync` to `spawnSync`, capturing both `stderr` and `stdout` on exit code 0. Resolved GPG verification failures where signature verification diagnostics written to `stderr` were lost by `execFileSync` on successful execution.
 
