@@ -1,7 +1,7 @@
 # Project State: Concatenator
 
 **Current Version:** v1.0.0-rc (Release Candidate Pipeline)
-**Last Updated:** 2026-08-23
+**Last Updated:** 2026-08-24
 
 ## Active Context & Architecture
 
@@ -12,6 +12,9 @@
 - **Husky Tiering:** `pre-commit` restricted to fast static analysis (types, linting, unit tests); heavy E2E suites relegated to `pre-push` to maintain developer velocity.
 
 ## Recently Completed Milestones (Stable - Do Not Revisit)
+
+- **Architectural Amendment: GPG Stream Capture (`scripts/verify-release-candidate.ts`):**
+  - **Native Stream Capture via `spawnSync`:** Switched process invocation from `execFileSync` to `spawnSync`, capturing both `stderr` and `stdout` on exit code 0. Resolved GPG verification failures where signature verification diagnostics written to `stderr` were lost by `execFileSync` on successful execution.
 
 - **Architectural Amendment 3: Complete SEA Pipeline Consolidation & AST Version Injection (`scripts/build-sea.js`, `package.json`, `scripts/build-binary.ts`, `scripts/build-cli.ts`):**
   - **Monolithic SEA Orchestration & AST Injection (`scripts/build-sea.js`):** Imported `buildSync` from `esbuild`, hoisted `package.json` version reading, and injected `__KEL_VERSION__: JSON.stringify(pkg.version)` alongside `PROCESS_IS_UNSIGNED` into the esbuild define map.

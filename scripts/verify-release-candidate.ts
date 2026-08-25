@@ -1,4 +1,4 @@
-import { execFileSync } from 'child_process'
+import { spawnSync } from 'child_process'
 import { readFileSync, existsSync } from 'fs'
 import { join, dirname } from 'path'
 import { createHash } from 'crypto'
@@ -42,22 +42,21 @@ async function verifyRelease() {
   console.log('\n[1/2] Verifying GPG Signature...')
   let gpgOutput = ''
   try {
-    // gpg --verify often writes to stderr
-    gpgOutput = execFileSync(
+    // PATCH: Use spawnSync to capture stderr natively on exit code 0
+    const result = spawnSync(
       'gpg',
       ['--verify', '--with-fingerprint', manifestPath],
-      {
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      }
-    ).toString()
-  } catch (error: unknown) {
-    if (error instanceof Error) {
-      const execError = error as { stderr?: Buffer | string }
-      gpgOutput = execError.stderr?.toString() || error.message
-    } else {
-      gpgOutput = String(error)
+      { encoding: 'utf-8' }
+    )
+
+    // GPG writes signature status to stderr; append both to be safe
+    gpgOutput = (result.stderr || '') + (result.stdout || '')
+
+    if (result.error) {
+      gpgOutput += '\n' + result.error.message
     }
+  } catch (error: unknown) {
+    gpgOutput = String(error)
   }
 
   const cleanFingerprint = ARCHITECT_PGP_FINGERPRINT.replace(/\s/g, '')
