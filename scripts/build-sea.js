@@ -27,8 +27,6 @@ const pkg = JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf-8'))
 const distDir = join(rootDir, 'dist')
 const seaDir = join(distDir, 'sea')
 const platform = process.platform
-const isWindows = platform === 'win32'
-const isMac = platform === 'darwin'
 
 console.log('🔨 Building Concatenator SEA...\n')
 
