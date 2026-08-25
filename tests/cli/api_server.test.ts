@@ -8,6 +8,7 @@ import * as http from 'node:http'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
+import type { AddressInfo } from 'node:net'
 import { startServer } from '@/server'
 
 describe('Node 22 Execution Boundary API Server', () => {
@@ -25,9 +26,9 @@ describe('Node 22 Execution Boundary API Server', () => {
     )
     fs.writeFileSync(path.join(tmpDir, 'test2.json'), '{"key": "value"}\n')
 
-    // Find dynamic open port
-    port = 45000 + Math.floor(Math.random() * 5000)
-    server = await startServer(port, testToken, tmpDir, uiOrigin)
+    // Bind to port 0 for dynamic ephemeral port allocation, preventing Hyper-V / EACCES collisions
+    server = await startServer(0, testToken, tmpDir, uiOrigin)
+    port = (server.address() as AddressInfo).port
   })
 
   afterEach(async () => {
@@ -53,13 +54,8 @@ describe('Node 22 Execution Boundary API Server', () => {
       return
     }
 
-    const symPort = port + 1
-    const symServer = await startServer(
-      symPort,
-      testToken,
-      symlinkPath,
-      uiOrigin
-    )
+    const symServer = await startServer(0, testToken, symlinkPath, uiOrigin)
+    const symPort = (symServer.address() as AddressInfo).port
 
     try {
       const res = await fetch(`http://127.0.0.1:${symPort}/api/concatenate`, {

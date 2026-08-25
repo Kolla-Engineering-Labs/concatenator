@@ -13,6 +13,9 @@
 
 ## Recently Completed Milestones (Stable - Do Not Revisit)
 
+- **Architectural Amendment: Dynamic Port Allocation for Windows CI (`tests/cli/api_server.test.ts`):**
+  - **Kernel-Assigned Ephemeral Ports (`tests/cli/api_server.test.ts`):** Replaced static random port arithmetic with `startServer(0, ...)`, extracting dynamic ports via `(server.address() as AddressInfo).port` for primary test servers and symlink test instances. Eliminates Windows `EACCES` test crashes caused by Hyper-V dynamic port reservation blocks.
+
 - **Supply-Chain Hardening, SAST Execution Bypass & Vite Config Rigor (`package.json`, `scripts/build-sea.js`, `vite.config.ts`):**
   - **Supply-Chain Resolution Tree Hardening (`package.json`):** Forced `dompurify` override to `^3.4.13` and added `nanoid: ^3.3.18` to bypass transitive dependency CVEs without waiting for upstream maintainers.
   - **Native SAST Postject Execution (`scripts/build-sea.js`):** Eliminated `cmd.exe` and `npx` wrapper execution in Step 4. Directly invoked `postject`'s CLI entry point (`node_modules/postject/dist/cli.js`) via the pre-resolved `nodePath` binary, permanently satisfying CodeQL SAST rules and removing Windows `EINVAL` risks.
