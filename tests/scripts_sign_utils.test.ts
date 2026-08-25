@@ -6,16 +6,20 @@ import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 
 describe('sign-utils', () => {
   let signUtils: any
-  let mockExecSync: any
+  let mockExecFileSync: any
   let mockWriteFileSync: any
   let mockUnlinkSync: any
   let mockExistsSync: any
 
   beforeAll(async () => {
-    mockExecSync = vi.fn()
+    mockExecFileSync = vi.fn()
     vi.doMock('child_process', () => ({
-      execSync: mockExecSync,
-      default: { execSync: mockExecSync },
+      execFileSync: mockExecFileSync,
+      execSync: mockExecFileSync,
+      default: {
+        execFileSync: mockExecFileSync,
+        execSync: mockExecFileSync,
+      },
       __esModule: true,
     }))
 
@@ -53,25 +57,27 @@ describe('sign-utils', () => {
 
   describe('checkTools', () => {
     it('should return true if tools exist for win32', () => {
-      mockExecSync.mockReturnValue(Buffer.from('help'))
+      mockExecFileSync.mockReturnValue(Buffer.from('help'))
       expect(signUtils.checkTools('win32')).toBe(true)
-      expect(mockExecSync).toHaveBeenCalledWith(
-        'signtool /?',
+      expect(mockExecFileSync).toHaveBeenCalledWith(
+        'signtool',
+        ['/?'],
         expect.anything()
       )
     })
 
     it('should return true if tools exist for darwin', () => {
-      mockExecSync.mockReturnValue(Buffer.from('version'))
+      mockExecFileSync.mockReturnValue(Buffer.from('version'))
       expect(signUtils.checkTools('darwin')).toBe(true)
-      expect(mockExecSync).toHaveBeenCalledWith(
-        'codesign --version',
+      expect(mockExecFileSync).toHaveBeenCalledWith(
+        'codesign',
+        ['--version'],
         expect.anything()
       )
     })
 
     it('should return false if tools are missing', () => {
-      mockExecSync.mockImplementation(() => {
+      mockExecFileSync.mockImplementation(() => {
         throw new Error('command not found')
       })
       expect(signUtils.checkTools('win32')).toBe(false)
@@ -107,17 +113,18 @@ describe('sign-utils', () => {
 
   describe('applyAdHocSignature', () => {
     it('should apply ad-hoc signature using codesign -s -', () => {
-      mockExecSync.mockReturnValue(Buffer.from('ok'))
+      mockExecFileSync.mockReturnValue(Buffer.from('ok'))
       const result = signUtils.applyAdHocSignature('test-bin')
-      expect(mockExecSync).toHaveBeenCalledWith(
-        'codesign -s - "test-bin"',
+      expect(mockExecFileSync).toHaveBeenCalledWith(
+        'codesign',
+        ['-s', '-', 'test-bin'],
         expect.anything()
       )
       expect(result).toBe(true)
     })
 
     it('should return false if ad-hoc signature fails', () => {
-      mockExecSync.mockImplementation(() => {
+      mockExecFileSync.mockImplementation(() => {
         throw new Error('failed')
       })
       const result = signUtils.applyAdHocSignature('test-bin')
@@ -131,14 +138,28 @@ describe('sign-utils', () => {
         process.env.SIGNING_CERT_DATA = 'YmFzZTY0'
         process.env.SIGNING_CERT_PASSWORD = 'pass'
 
-        mockExecSync.mockReturnValue(Buffer.from('ok'))
+        mockExecFileSync.mockReturnValue(Buffer.from('ok'))
         mockExistsSync.mockReturnValue(true)
 
         const result = signUtils.signBinary('test-bin', 'win32')
 
         expect(mockWriteFileSync).toHaveBeenCalled()
-        expect(mockExecSync).toHaveBeenCalledWith(
-          expect.stringContaining('signtool sign /f'),
+        expect(mockExecFileSync).toHaveBeenCalledWith(
+          'signtool',
+          [
+            'sign',
+            '/f',
+            expect.stringContaining('temp_cert.pfx'),
+            '/p',
+            'pass',
+            '/tr',
+            expect.any(String),
+            '/td',
+            'sha256',
+            '/fd',
+            'sha256',
+            'test-bin',
+          ],
           expect.anything()
         )
         expect(mockUnlinkSync).toHaveBeenCalled()
@@ -149,8 +170,8 @@ describe('sign-utils', () => {
         process.env.SIGNING_CERT_DATA = 'YmFzZTY0'
         process.env.SIGNING_CERT_PASSWORD = 'pass'
 
-        mockExecSync.mockImplementation((cmd) => {
-          if (cmd.includes('signtool /?')) throw new Error('missing')
+        mockExecFileSync.mockImplementation((bin) => {
+          if (bin === 'signtool') throw new Error('missing')
           return Buffer.from('ok')
         })
 
@@ -172,20 +193,44 @@ describe('sign-utils', () => {
         process.env.APPLE_TEAM_ID = 'team'
         process.env.MACOS_CERT_NAME = 'cert'
 
-        mockExecSync.mockReturnValue(Buffer.from('ok'))
+        mockExecFileSync.mockReturnValue(Buffer.from('ok'))
 
         const result = signUtils.signBinary('test-bin', 'darwin')
 
-        expect(mockExecSync).toHaveBeenCalledWith(
-          expect.stringContaining('codesign --force --options runtime'),
+        expect(mockExecFileSync).toHaveBeenCalledWith(
+          'codesign',
+          [
+            '--force',
+            '--options',
+            'runtime',
+            '--entitlements',
+            expect.stringContaining('Entitlements.plist'),
+            '--sign',
+            'cert',
+            '--timestamp',
+            'test-bin',
+          ],
           expect.anything()
         )
-        expect(mockExecSync).toHaveBeenCalledWith(
-          expect.stringContaining('notarytool submit'),
+        expect(mockExecFileSync).toHaveBeenCalledWith(
+          'xcrun',
+          [
+            'notarytool',
+            'submit',
+            'test-bin',
+            '--apple-id',
+            'id',
+            '--password',
+            'pass',
+            '--team-id',
+            'team',
+            '--wait',
+          ],
           expect.anything()
         )
-        expect(mockExecSync).toHaveBeenCalledWith(
-          expect.stringContaining('stapler staple'),
+        expect(mockExecFileSync).toHaveBeenCalledWith(
+          'xcrun',
+          ['stapler', 'staple', 'test-bin'],
           expect.anything()
         )
         expect(result).toBe(true)
@@ -193,8 +238,9 @@ describe('sign-utils', () => {
 
       it('should fall back to ad-hoc signing on darwin if credentials missing', () => {
         const result = signUtils.signBinary('test-bin', 'darwin')
-        expect(mockExecSync).toHaveBeenCalledWith(
-          'codesign -s - "test-bin"',
+        expect(mockExecFileSync).toHaveBeenCalledWith(
+          'codesign',
+          ['-s', '-', 'test-bin'],
           expect.anything()
         )
         expect(result).toBe(true)
@@ -210,8 +256,9 @@ describe('sign-utils', () => {
   describe('verifyBinary', () => {
     it('should verify signature on win32', () => {
       signUtils.verifyBinary('test-bin', 'win32')
-      expect(mockExecSync).toHaveBeenCalledWith(
-        'signtool verify /pa "test-bin"',
+      expect(mockExecFileSync).toHaveBeenCalledWith(
+        'signtool',
+        ['verify', '/pa', 'test-bin'],
         expect.anything()
       )
     })
@@ -223,22 +270,24 @@ describe('sign-utils', () => {
       process.env.MACOS_CERT_NAME = 'cert'
 
       signUtils.verifyBinary('test-bin', 'darwin')
-      expect(mockExecSync).toHaveBeenCalledWith(
-        expect.stringContaining('spctl --assess'),
+      expect(mockExecFileSync).toHaveBeenCalledWith(
+        'spctl',
+        ['--assess', '--verbose', '--type', 'execute', 'test-bin'],
         expect.anything()
       )
     })
 
     it('should verify signature on darwin when signing is disabled (ad-hoc build)', () => {
       signUtils.verifyBinary('test-bin', 'darwin')
-      expect(mockExecSync).toHaveBeenCalledWith(
-        expect.stringContaining('codesign --verify --verbose'),
+      expect(mockExecFileSync).toHaveBeenCalledWith(
+        'codesign',
+        ['--verify', '--verbose', 'test-bin'],
         expect.anything()
       )
     })
 
     it('should throw error if verification fails', () => {
-      mockExecSync.mockImplementation(() => {
+      mockExecFileSync.mockImplementation(() => {
         throw new Error('verification failed')
       })
       expect(() => signUtils.verifyBinary('test-bin', 'win32')).toThrow(

@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+import { createReadStream } from 'node:fs'
+import { Readable } from 'node:stream'
 import {
   START_DELIMITER,
   END_DELIMITER,
@@ -20,6 +22,7 @@ import { SessionParser } from './parsers/SessionParser.js'
 import { LegacyParser } from './parsers/LegacyParser.js'
 import { HeaderParser } from './parsers/HeaderParser.js'
 import { Neutralizer } from './shared/Neutralizer.js'
+import { NeutralizationStream } from './streams/NeutralizationStream.js'
 
 export {
   sanitizePath,
@@ -76,7 +79,7 @@ export {
   formatPostMatterManifest,
   type PostMatterLedgerItem,
 } from './builder/BuilderUtils.js'
-export { concatenate, ConcatenationBuilder } from './builder/builder.js'
+export { concatenate } from './builder/builder.js'
 
 /**
  * Registry of available parser strategies evaluated in order of specificity
@@ -446,4 +449,94 @@ export function parseBundle(content: string): {
   }
 
   return { fileMap, skippedPaths }
+}
+
+export interface ExecutionMatrixPayload {
+  outputFormat: 'markdown' | 'xml'
+  enableNeutralization: boolean
+  injectPostMatterManifest: boolean
+}
+
+export interface HydratedStreamFile {
+  path: string
+  fullPath: string
+  mode?: string
+  hash?: string
+}
+
+export { NeutralizationStream }
+
+/**
+ * Creates a zero-RAM ReadableStream generator piping files directly from disk
+ * through the NeutralizationStream transform middleware.
+ */
+export function createConcatenationStream(
+  files: HydratedStreamFile[],
+  matrix: ExecutionMatrixPayload
+): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder()
+
+  const sourceStream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      try {
+        for (const file of files) {
+          // 1. Yield File Header
+          const header =
+            matrix.outputFormat === 'xml'
+              ? `<file path="${file.path}">\n`
+              : `<<<<< FILE_START: ${file.path} >>>>>\n`
+          controller.enqueue(encoder.encode(header))
+
+          // 2. Stream directly from SSD (Zero-RAM execution)
+          const nodeStream = createReadStream(file.fullPath)
+          const webStream = Readable.toWeb(
+            nodeStream
+          ) as ReadableStream<Uint8Array>
+          const reader = webStream.getReader()
+
+          try {
+            while (true) {
+              const { done, value } = await reader.read()
+              if (done) break
+              if (value) {
+                controller.enqueue(value)
+              }
+            }
+          } finally {
+            // Strictly enforce lock release to prevent file descriptor leaks
+            reader.releaseLock()
+          }
+
+          // 3. Yield File Footer
+          const footer =
+            matrix.outputFormat === 'xml'
+              ? `\n</file>\n`
+              : `\n<<<<< FILE_END >>>>>\n`
+          controller.enqueue(encoder.encode(footer))
+        }
+
+        // 4. Yield Post-Matter Manifest (KEL Protocol)
+        if (matrix.injectPostMatterManifest) {
+          controller.enqueue(encoder.encode('\n--- KEL MANIFEST ---\n'))
+          for (const file of files) {
+            // Using actual stat metadata, defaulting safely
+            const mode = file.mode || '0644'
+            const hash = file.hash || 'none'
+            controller.enqueue(
+              encoder.encode(`${file.path}|mode:${mode}|${hash}\n`)
+            )
+          }
+        }
+
+        controller.close()
+      } catch (err) {
+        controller.error(err)
+      }
+    },
+  })
+
+  // Pipe the raw bytes through our strict boundary-checking neutralizer
+  return sourceStream.pipeThrough(
+    new NeutralizationStream(matrix.enableNeutralization)
+  )
 }

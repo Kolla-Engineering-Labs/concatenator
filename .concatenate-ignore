@@ -40,3 +40,7 @@ test-results
 Thumbs.db
 vendor
 venv
+.agentops
+.agents
+.claude
+agentops

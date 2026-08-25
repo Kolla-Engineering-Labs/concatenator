@@ -4,8 +4,7 @@
  * Requires Node.js 22+
  */
 
-import { buildSync } from 'esbuild'
-import { execSync } from 'child_process'
+import { execFileSync, execSync } from 'child_process'
 import {
   writeFileSync,
   existsSync,
@@ -18,11 +17,13 @@ import {
 } from 'fs'
 import { join, dirname, relative } from 'path'
 import { fileURLToPath } from 'url'
+import { buildSync } from 'esbuild'
 import { signBinary, verifyBinary, isSigningEnabled } from './sign-utils.ts'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = dirname(__filename)
 const rootDir = dirname(__dirname)
+const pkg = JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf-8'))
 const distDir = join(rootDir, 'dist')
 const seaDir = join(distDir, 'sea')
 const platform = process.platform
@@ -44,7 +45,7 @@ function resolveNodePath() {
 
   try {
     // Validate path exists and is executable by checking version
-    const versionOutput = execSync(`"${nodePath}" --version`, {
+    const versionOutput = execFileSync(nodePath, ['--version'], {
       encoding: 'utf8',
     }).trim()
 
@@ -110,6 +111,7 @@ try {
     external: ['fs', 'path', 'url', 'os'],
     define: {
       PROCESS_IS_UNSIGNED: String(isUnsigned),
+      __KEL_VERSION__: JSON.stringify(pkg.version),
     },
   })
 } catch (error) {
@@ -195,7 +197,7 @@ try {
   const env = { ...process.env }
   if (sourceDateEpoch) env.SOURCE_DATE_EPOCH = sourceDateEpoch
 
-  execSync(`"${nodePath}" --experimental-sea-config sea-config.json`, {
+  execFileSync(nodePath, ['--experimental-sea-config', 'sea-config.json'], {
     cwd: rootDir,
     stdio: 'inherit',
     env,
@@ -213,14 +215,34 @@ const exePath = join(distDir, exeName)
 try {
   copyFileSync(nodePath, exePath)
 
-  // Use postject to inject the blob
-  execSync(
-    `npx postject "${exePath}" NODE_SEA_BLOB "dist/sea/concatenator.blob" --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 --macho-segment-name NODE_SEA`,
-    {
-      cwd: rootDir,
-      stdio: 'inherit',
-    }
+  // PATCH: Cross-platform, shell-less execution bypassing npx and cmd.exe
+  // We resolve the postject CLI entry point directly to satisfy CodeQL SAST
+  const postjectCli = join(
+    rootDir,
+    'node_modules',
+    'postject',
+    'dist',
+    'cli.js'
   )
+
+  const postjectArgs = [
+    postjectCli,
+    exePath,
+    'NODE_SEA_BLOB',
+    'dist/sea/concatenator.blob',
+    '--sentinel-fuse',
+    'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2',
+  ]
+
+  if (platform === 'darwin') {
+    postjectArgs.push('--macho-segment-name', 'NODE_SEA')
+  }
+
+  // Execute directly via the Node binary, bypassing all OS shells
+  execFileSync(nodePath, postjectArgs, {
+    cwd: rootDir,
+    stdio: 'inherit',
+  })
 
   console.log(`\n✅ SEA executable created: ${exePath}`)
 
@@ -238,7 +260,6 @@ try {
   }
 
   // Step 6: Move to versioned dist folder
-  const pkg = JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf-8'))
   const version = pkg.version
   const finalDistDir = join(distDir, `v${version}`, platform)
 

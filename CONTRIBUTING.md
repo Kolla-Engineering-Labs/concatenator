@@ -151,6 +151,9 @@ e2e/                # End-to-end tests (Playwright)
 └── helpers/        # FileUploadHelper, sidebar helpers
 
 tests/              # Unit tests (Vitest)
+├── cli/
+│   ├── api_server.test.ts  # Integration tests for the Express API server (auth, CORS, streaming)
+│   └── cli.e2e.test.ts     # CLI E2E suite (concat, extract, validate, stdout, --help)
 └── *.test.ts
 ```
 
@@ -262,7 +265,8 @@ npm run test:e2e:debug    # Debug mode with step-through
 **Important notes for E2E tests**:
 
 - Tests use worker-specific `.concatenate-ignore` files to ensure isolation
-- The `x-worker-id` header is used to route requests to the correct ignore file
+- The `x-worker-id` header is injected by the `apiContext` fixture and routes each Playwright worker to its own server-side ignore file — never share state between parallel test workers
+- The `KEL_TEST_TOKEN` / `CONCATENATOR_TOKEN` is injected into `sessionStorage` by the base page fixture before navigation; all `ApiClient` calls pick it up automatically via `getHeaders()`
 - File System Access API requires Chrome/Edge browsers (Playwright's Chromium is used)
 
 **Writing E2E tests**:

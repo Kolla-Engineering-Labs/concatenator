@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 // motion and AnimatePresence removed as they are currently unused
 import { cn, formatFileSize } from '../../../../lib/utils'
-import { TreeItem, FileItem } from '../../../../core/types'
+import type { TreeItem, FileItem } from '../../../../core/types'
 import { getFileIcon } from '../../../../lib/fileIcons'
 import { useWorkbench } from '../../../hooks/useWorkbench'
 

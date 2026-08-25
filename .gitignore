@@ -13,6 +13,7 @@ coverage/
 .windsurfrules
 .agents/
 .claude/
+diff.txt
 
 # AgentOps telemetry logs
 .agentops/

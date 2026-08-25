@@ -20,6 +20,7 @@ import { mergeIgnoreFileWithComments } from '../lib/ignore-file.js'
 import { LifecycleManager } from './LifecycleManager.js'
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto'
 import { ARCHITECT_PGP_FINGERPRINT } from './constants.js'
+import { handleConcatenate } from '../cli/api/controllers/concatenate.js'
 
 export interface UIServerFileSystem {
   readFileSync: typeof fsDefault.readFileSync
@@ -66,7 +67,8 @@ export class UIServer {
       ? resolve(process.cwd(), uiConfig.ignoreFile)
       : join(process.cwd(), '.concatenate-ignore')
     this.shutdownToken = Buffer.from(
-      process.env.CONCATENATOR_TOKEN ||
+      process.env.KEL_TEST_TOKEN ||
+        process.env.CONCATENATOR_TOKEN ||
         process.env.CONCATENATOR_SHUTDOWN_TOKEN ||
         randomBytes(32).toString('hex')
     )
@@ -133,6 +135,13 @@ export class UIServer {
           this.handleGetVfsFile(req, res, url.searchParams)
         } else if (pathname === '/api/security/info' && req.method === 'GET') {
           this.handleGetSecurityInfo(req, res)
+        } else if (pathname === '/api/concatenate' && req.method === 'POST') {
+          await handleConcatenate(
+            req,
+            res,
+            this.shutdownToken.toString('hex'),
+            this.uiConfig.path || process.cwd()
+          )
         } else if (pathname === '/api/shutdown' && req.method === 'POST') {
           await this.handlePostShutdown(req, res)
         } else {

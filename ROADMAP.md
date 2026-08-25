@@ -1,6 +1,6 @@
 # Concatenator Roadmap
 
-This document outlines the strategic trajectory for Concatenator, mapping the progression from the current v0.8.0 release through to v2.0.0. Our overarching objective is to evolve the project from a highly functional utility into an industrial-grade standard for LLM context management, anchored in local-first principles and Clean Architecture.
+This document outlines the strategic trajectory for Concatenator, mapping the progression from the current release through to v2.0.0. Our overarching objective is to evolve the project from a highly functional utility into an industrial-grade standard for LLM context management, anchored in local-first principles and Clean Architecture.
 
 ## v0.9.0: The Security & Decoupling Sprint (Phase C)
 
@@ -31,10 +31,24 @@ This release focuses on solidifying our CI/CD pipeline and ensuring the codebase
 
 ## v1.0.0: Protocol Stability Release (General Availability)
 
-_Target: Architectural Freeze and Zero-Dependency Portability_
+_Target: Architectural Freeze, Security Auditing, and Zero-Dependency Portability_
 
 v1.0.0 marks the transition to a stable, production-ready standard. The core architecture will be frozen to guarantee backward compatibility.
 
 - **API & Schema Guarantee:** Committing to strict backward compatibility for the `@concatenator/core` engine API, CLI execution flags, and the local-first UI state schemas (localStorage VFS structures).
-- **Node 22 SEA Validation:** Final, rigorous validation of the standalone Node 22 Single Executable Application payload, ensuring flawless operation in offline, air-gapped enterprise environments.
+- **Phase C: Zero-Trust Security Auditing:** Hardening the local `127.0.0.1` API perimeter, enforcing strict CORS boundaries, and validating ephemeral cryptographic handshakes. All code must explicitly pass Snyk vulnerability scans and SonarCloud quality gates before merge.
+- **Phase D: Core Engine Scaling:** Stress-testing the $O(n)$ extraction engine against massive monorepo payloads to guarantee V8 memory stability.
+- **Phase E: Node 22 SEA Validation:** Final, rigorous validation of the standalone Node 22 Single Executable Application payload, ensuring flawless operation in offline, air-gapped enterprise environments.
 - **Open-Source Distribution Baseline:** Formalizing the standard NPM and Homebrew distribution channels for the community edition.
+
+## v2.0.0: The Enterprise Context Engine
+
+_Target: Semantic Intelligence, Deterministic Patching, and SMB Commercialization_
+
+v2.0.0 will shift Concatenator from a static text-bundler into an intelligent, semantic transport layer designed for SMBs requiring strict compliance and data loss prevention (DLP).
+
+- **AST-Aware Chunking (Tree-sitter Pruning):** Integrating native Tree-sitter libraries to perform semantic AST thinning. This extracts structural signatures (imports, types, class definitions) while replacing implementation logic with `pass` statements, drastically reducing token burn.
+- **Deterministic Patching Schema:** Augmenting our Post-Matter Manifest to require LLMs to emit changes in a strict, formalized schema (e.g., JSON/YAML) before triggering the `fflate` Web-Stream reconstruction, bypassing the fragility of fuzzy raw-text diff matching.
+- **Pre-Context Middleware Compression:** Aggressively compressing internal type definitions and manifest schemas before they reach the model's context window, ensuring the LLM spends its attention entirely on the source code.
+- **Deterministic Speculative Edits:** Leveraging the fact that code edits have a strong prior on draft tokens to predict and validate unchanged code blocks during the generation stream, accelerating file application speeds natively on the client side.
+- **SMB Premium Pivot:** Commercializing a premium license offering VFS Sandboxing, advanced AST pruning, and cryptographic ephemeral tokens for multi-agent local handshakes, targeting enterprise developers terrified of autonomous agents corrupting their local VFS.

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { UIServer } from '../src/core/UIServer.js'
-import { spawn, ChildProcess } from 'child_process'
+import * as http from 'node:http'
+import { startServer } from '../server.js'
 
 describe('Health Endpoint Integration', () => {
   describe('UIServer (Standalone)', () => {
@@ -46,52 +47,18 @@ describe('Health Endpoint Integration', () => {
   })
 
   describe('server.ts (Express)', () => {
-    let child: ChildProcess
+    let server: http.Server
     let port: number
 
-    beforeAll(() => {
-      return new Promise((resolve, reject) => {
-        // Use a single string with shell: true to avoid DeprecationWarning and EINVAL
-        // We use PORT: 0 to let the OS pick a random available port
-        child = spawn('npx tsx server.ts', {
-          env: { ...process.env, PORT: '0', NODE_ENV: 'test' },
-          shell: true,
-        })
-
-        child.stdout?.on('data', (data) => {
-          const str = data.toString()
-          // Extract the actual port from the server log
-          const match = str.match(/Server running on http:\/\/localhost:(\d+)/)
-          if (match) {
-            port = parseInt(match[1])
-            resolve(true)
-          }
-        })
-
-        child.stderr?.on('data', (data) => {
-          console.error(`[Server Error] ${data}`)
-        })
-
-        child.on('error', (err) => {
-          console.error(`[Spawn Error] ${err}`)
-          reject(err)
-        })
-
-        child.on('exit', (code) => {
-          if (code !== 0 && code !== null) {
-            console.error(`[Server Exit] code ${code}`)
-            reject(new Error(`Server exited with code ${code}`))
-          }
-        })
-
-        // Timeout after 30s
-        setTimeout(() => reject(new Error('Server start timeout')), 30000)
-      })
-    }, 35000)
+    beforeAll(async () => {
+      // Pass 0 to let the OS assign an ephemeral port, preventing collisions
+      server = await startServer(0)
+      port = (server.address() as any).port
+    })
 
     afterAll(() => {
-      if (child) {
-        child.kill()
+      if (server) {
+        server.close()
       }
     })
 

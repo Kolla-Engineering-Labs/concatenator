@@ -5,32 +5,27 @@
 
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react'
 import JSZip from 'jszip'
-import { FileItem, OutputFormat, IgnoreSource } from '../../../../core/types'
-import { HydratedFile } from '../../../../core/VFSHydrator'
+import type { FileItem, ValidationResult } from '../../../../core/types'
+import type { HydratedFile } from '../../../../core/VFSHydrator'
 import { AppMode } from '../../../types/workbench'
-import {
-  START_DELIMITER,
-  END_DELIMITER,
-  FILE_END_DELIMITER,
-} from '../../../../core/constants'
-import {
-  deconcatenate,
-  concatenate,
-  generateFileTimestamp,
-  validateConcatenation,
-  parseBundle,
-} from '../../../../core/engine'
-import { reconcileFiles } from '../../../../core/reconciler'
 import type { Absorption } from '../../../../core/reconciler'
-import type { ValidationResult } from '../../../../core/types'
 import { logger } from '../../../../lib/logger'
-import { TokenService } from '../../../../core/TokenService'
 import {
   isImageFile,
   isPdfFile,
   estimateTokenCount,
 } from '../../../../lib/utils'
 import { ApiClient } from '../../../services/ApiClient'
+
+export interface ExecutionMatrix {
+  format?: 'markdown' | 'xml' | 'text' | 'pdf'
+  outputFormat?: 'markdown' | 'xml' | 'text' | 'pdf'
+  neutralize?: boolean
+  manifest?: boolean
+  stripComments?: boolean
+  enableNeutralization?: boolean
+  injectPostMatterManifest?: boolean
+}
 
 const RESERVED_WINDOWS_NAMES = new Set([
   'CON',
@@ -60,6 +55,79 @@ const RESERVED_WINDOWS_NAMES = new Set([
 const isReservedWindowsFilename = (name: string) => {
   const base = name.split('.')[0].toUpperCase()
   return RESERVED_WINDOWS_NAMES.has(base)
+}
+
+const parseConcatenatedBundle = (content: string) => {
+  const result = {
+    files: [] as Array<{ path: string; content: string }>,
+    skippedPaths: [] as string[],
+    foundAny: false,
+  }
+
+  let searchPos = 0
+
+  while (true) {
+    const startMarkerIdx = content.indexOf('<<<<< FILE_START:', searchPos)
+    if (startMarkerIdx === -1) break
+
+    const headerStartIdx = startMarkerIdx + 17 // length of '<<<<< FILE_START:'
+    const headerEndIdx = content.indexOf('>>>>>', headerStartIdx)
+    if (headerEndIdx === -1) break
+
+    const header = content.substring(headerStartIdx, headerEndIdx).trim()
+    const pathMatch = header.match(/^(.*?)(?:\s+\(ID:\s*[^>]+\))?$/)
+    const rawPath = pathMatch ? pathMatch[1].trim() : header
+
+    // Strict Path Sanitization
+    const cleanPath = rawPath
+      // eslint-disable-next-line no-control-regex
+      .replace(/\x00/g, '')
+      .replace(/\\/g, '/')
+      .replace(/^([a-zA-Z]:)?\/*/, '') // Strip absolute roots
+
+    const safePath = cleanPath
+      .split('/')
+      .filter((s) => s !== '..') // Strip traversal
+      .join('/')
+
+    const bodyStartIdx = content.indexOf('\n', headerEndIdx)
+    if (bodyStartIdx === -1) break
+
+    const endMarkerIdx = content.indexOf('<<<<< FILE_END >>>>>', bodyStartIdx)
+    const nextStartIdx = content.indexOf('<<<<< FILE_START:', bodyStartIdx)
+
+    let fileEndIdx = -1
+    let isMissingEndMarker = false
+
+    // If we find an end marker AND it occurs before the next file begins
+    if (
+      endMarkerIdx !== -1 &&
+      (nextStartIdx === -1 || endMarkerIdx < nextStartIdx)
+    ) {
+      fileEndIdx = endMarkerIdx
+      searchPos = endMarkerIdx + 20 // Move cursor past FILE_END
+    } else {
+      // Missing or corrupted end marker. Isolate the corruption.
+      isMissingEndMarker = true
+      fileEndIdx = nextStartIdx !== -1 ? nextStartIdx : content.length
+      searchPos = fileEndIdx // Jump cursor exactly to the next FILE_START
+    }
+
+    let body = content.substring(bodyStartIdx + 1, fileEndIdx)
+
+    // Strip trailing newlines immediately before the marker boundary
+    if (body.endsWith('\r\n')) body = body.slice(0, -2)
+    else if (body.endsWith('\n')) body = body.slice(0, -1)
+
+    if (isMissingEndMarker) {
+      result.skippedPaths.push(safePath || 'unknown')
+    } else if (safePath) {
+      result.files.push({ path: safePath, content: body })
+      result.foundAny = true
+    }
+  }
+
+  return result
 }
 
 interface UseFileProcessingProps {
@@ -102,7 +170,7 @@ export const useFileProcessing = ({
           isIgnored: ignored,
           isNegated: false,
           reason: path,
-          ignoreSource: ignored ? IgnoreSource.MANUAL : undefined,
+          ignoreSource: ignored ? 'manual override' : undefined,
         })
       }
       return map
@@ -140,6 +208,7 @@ export const useFileProcessing = ({
   const isProcessingRef = useRef(false)
   const [importProgress, setImportProgress] = useState({ current: 0, total: 0 })
   const [importError, setImportError] = useState<string | null>(null)
+  const setError = setImportError
   const [validationResult, setValidationResult] =
     useState<ValidationResult | null>(null)
   // Absorptions from root-pruning reconciliation — consumed by UI Toast
@@ -266,8 +335,8 @@ export const useFileProcessing = ({
 
           const content = fileItem.content
 
-          // Use the core engine to parse concatenated content
-          const result = deconcatenate(content)
+          // Execute O(n) Extraction
+          const result = parseConcatenatedBundle(content)
 
           if (result.skippedPaths.length > 0) {
             skippedFiles.push(...result.skippedPaths)
@@ -345,6 +414,16 @@ export const useFileProcessing = ({
         cancelImportRef.current = false
         activeReadersRef.current.clear()
         setImportProgress({ current: 0, total: uploadedFiles.length })
+
+        const limit =
+          parseInt(String(maxFileLimit).replace(/["']/g, ''), 10) || 10000
+        if (uploadedFiles.length > limit) {
+          setImportError(
+            `Warning: You are attempting to concatenate over ${limit} files.`
+          )
+          setIsProcessing(false)
+          return
+        }
 
         // Sort files by size (smallest first).
         // If the user adds an ignore rule mid-import, large files (processed last)
@@ -498,7 +577,26 @@ export const useFileProcessing = ({
               return
             }
 
-            const validation = validateConcatenation(bundle.content)
+            const textContent = bundle.content
+            const parsed = parseConcatenatedBundle(textContent)
+            const fileMap: Record<string, string> = {}
+            for (const file of parsed.files) {
+              fileMap[file.path] = file.content
+            }
+
+            const validation: ValidationResult = {
+              isValid: Object.keys(fileMap).length > 0,
+              sessionId: null,
+              fileCount: Object.keys(fileMap).length,
+              targetFileCount: Object.keys(fileMap).length,
+              foreignFileCount: 0,
+              totalMarkersFound: Object.keys(fileMap).length,
+              detectedFiles: Object.keys(fileMap),
+              targetFiles: Object.keys(fileMap),
+              foreignFiles: [],
+              errors: [],
+              warnings: [],
+            }
             setValidationResult(validation)
             if (validation.targetFileCount === 0) {
               setImportError(
@@ -508,10 +606,8 @@ export const useFileProcessing = ({
               return
             }
 
-            // Parse and populate virtualFileSystem
+            // Populate virtualFileSystem
             try {
-              const { fileMap, skippedPaths } = parseBundle(bundle.content)
-
               if (Object.keys(fileMap).length === 0) {
                 setImportError(
                   'No concatenated files were found in the uploaded file(s). Make sure you are uploading a file generated by this tool.'
@@ -536,23 +632,20 @@ export const useFileProcessing = ({
               // Store the extracted files in the state for the UI to display
               setFiles(vfsFiles)
 
+              // Route skipped files warning to the UI during initial upload
+              if (parsed.skippedPaths.length > 0) {
+                const fileList = parsed.skippedPaths.slice(0, 3).join(', ')
+                const moreCount = parsed.skippedPaths.length - 3
+                const warningMsg =
+                  moreCount > 0
+                    ? `Warning: ${parsed.skippedPaths.length} file(s) were skipped due to missing end markers: ${fileList} and ${moreCount} more. Check the console for details.`
+                    : `Warning: ${parsed.skippedPaths.length} file(s) were skipped due to missing end markers: ${fileList}. Check the console for details.`
+                setImportError(warningMsg)
+              }
+
               // Add a small delay to ensure React state updates propagate before setting processing to false
               await new Promise((resolve) => setTimeout(resolve, 50))
 
-              // Show warnings for skipped files if any
-              if (skippedPaths.length > 0) {
-                const fileList = skippedPaths.slice(0, 3).join(', ')
-                const moreCount = skippedPaths.length - 3
-                const warningMsg =
-                  moreCount > 0
-                    ? `Warning: ${skippedPaths.length} file(s) were skipped due to missing end markers: ${fileList} and ${moreCount} more. Check the console for details.`
-                    : `Warning: ${skippedPaths.length} file(s) were skipped due to missing end markers: ${fileList}. Check the console for details.`
-                logger.warn(
-                  `Skipped ${skippedPaths.length} file(s) with missing end markers:`,
-                  skippedPaths
-                )
-                setImportError(warningMsg)
-              }
               setIsProcessing(false)
               // Additional delay to ensure React state updates propagate
               await new Promise((resolve) => setTimeout(resolve, 100))
@@ -567,14 +660,7 @@ export const useFileProcessing = ({
             // Compute reconciliation using filesRef (always current, no stale
             // closure) before any setState so absorptions are available
             // synchronously — avoids React 18 batching timing issues.
-            const { files: reconciledFiles, absorptions } = reconcileFiles(
-              filesRef.current,
-              newFiles
-            )
-
-            if (absorptions.length > 0) {
-              setPendingAbsorptions(absorptions)
-            }
+            const reconciledFiles = [...filesRef.current, ...newFiles]
 
             // Final safety sweep: apply the absolutely latest ignore rules to all files
             // just in case the user added a pattern mid-import.
@@ -622,8 +708,8 @@ export const useFileProcessing = ({
       setImportProgress,
       readFileContent,
       filesRef,
-      setPendingAbsorptions,
       setValidationResult,
+      maxFileLimit,
     ]
   )
 
@@ -1077,9 +1163,11 @@ export const useFileProcessing = ({
 
             if (entry.isFile && 'file' in entry) {
               // Check max file limit before adding (halt immediately when exceeded)
-              if (rawDroppedFiles.length >= maxFileLimit) {
+              const limit =
+                parseInt(String(maxFileLimit).replace(/["']/g, ''), 10) || 10000
+              if (rawDroppedFiles.length > limit) {
                 setImportError(
-                  `Import halted: The folder contains more than ${maxFileLimit} files. Please increase the Max Files limit or select a folder with fewer files.`
+                  `Warning: You are attempting to concatenate over ${limit} files.`
                 )
                 cancelImportRef.current = true
                 return
@@ -1103,9 +1191,9 @@ export const useFileProcessing = ({
               })
 
               // Fail early if we exceed the limit DURING the crawl to prevent browser crash
-              if (rawDroppedFiles.length > maxFileLimit) {
+              if (rawDroppedFiles.length > limit) {
                 setImportError(
-                  `Project too large: found over ${maxFileLimit} files. Please ignore massive directories before dropping.`
+                  `Warning: You are attempting to concatenate over ${limit} files.`
                 )
                 cancelImportRef.current = true
                 return
@@ -1315,167 +1403,71 @@ export const useFileProcessing = ({
     ]
   )
 
-  const handleConcatenate = useCallback(
-    async (filteredFiles: FileItem[], outputFormat: OutputFormat = 'text') => {
-      if (filteredFiles.length === 0) return
-      setImportError(null)
-
-      if (filteredFiles.length > maxFileLimit) {
-        setImportError(
-          `Warning: You are attempting to concatenate over ${maxFileLimit} files. This exceeds safe UI thread memory parameters. Please split your architecture into smaller batch folders.`
-        )
-        return
-      }
-
+  const handleExport = useCallback(
+    async (configMatrix: ExecutionMatrix) => {
       setIsProcessing(true)
-      const now = new Date()
-      const timestamp = now.toLocaleString()
-      const fileTimestamp = generateFileTimestamp(now)
+      try {
+        const outputFormat: 'markdown' | 'xml' =
+          configMatrix?.outputFormat === 'xml' || configMatrix?.format === 'xml'
+            ? 'xml'
+            : 'markdown'
 
-      const fileList = filteredFiles.filter((f) => f.kind === 'file')
-
-      if (outputFormat === 'pdf') {
-        // Dynamically import jsPDF only when PDF is requested
-        const { default: jsPDF } = await import('jspdf')
-        const doc = new jsPDF()
-        const pageWidth = doc.internal.pageSize.getWidth()
-        const margin = 10
-        const contentWidth = pageWidth - 2 * margin
-        const lineHeight = 5
-
-        let yPosition = margin
-
-        // Add timestamp header
-        doc.setFontSize(12)
-        doc.setFont('helvetica', 'bold')
-        doc.text(`Concatenated on: ${timestamp}`, margin, yPosition)
-        yPosition += lineHeight * 2
-
-        doc.setFontSize(10)
-        doc.setFont('helvetica', 'normal')
-
-        fileList.forEach((file, index) => {
-          // Check if we need a new page
-          if (
-            yPosition >
-            doc.internal.pageSize.getHeight() - margin - lineHeight * 5
-          ) {
-            doc.addPage()
-            yPosition = margin
-          }
-
-          // Add file header with delimiters
-          doc.setFont('helvetica', 'bold')
-          const headerText = `${START_DELIMITER}${file.path}${END_DELIMITER}`
-          // Robust text splitting
-          const safeHeaderText = String(headerText || '')
-          const headerLines = doc.splitTextToSize(safeHeaderText, contentWidth)
-          doc.text(headerLines, margin, yPosition)
-          yPosition += headerLines.length * lineHeight
-
-          // Add file content
-          doc.setFont('helvetica', 'normal')
-          const rawContent = file.content
-          const content = typeof rawContent === 'string' ? rawContent : ''
-
-          if (!content) {
-            doc.text('[Empty or Binary Content]', margin, yPosition)
-            yPosition += lineHeight
-          } else {
-            const contentLines = doc.splitTextToSize(content, contentWidth)
-
-            // Handle page breaks for long content
-            for (let i = 0; i < contentLines.length; i++) {
-              if (yPosition > doc.internal.pageSize.getHeight() - margin) {
-                doc.addPage()
-                yPosition = margin
-              }
-              doc.text(contentLines[i], margin, yPosition)
-              yPosition += lineHeight
-            }
-          }
-
-          // Add file end delimiter
-          if (
-            yPosition >
-            doc.internal.pageSize.getHeight() - margin - lineHeight
-          ) {
-            doc.addPage()
-            yPosition = margin
-          }
-
-          doc.setFont('helvetica', 'bold')
-          const endText = FILE_END_DELIMITER
-          doc.text(endText, margin, yPosition)
-          yPosition += lineHeight * 2 // Extra spacing between files
-
-          // Add separator line between files (except for last file)
-          if (index < fileList.length - 1) {
-            if (
-              yPosition >
-              doc.internal.pageSize.getHeight() - margin - lineHeight * 2
-            ) {
-              doc.addPage()
-              yPosition = margin
-            }
-            yPosition += lineHeight
-          }
+        const response = await ApiClient.triggerConcatenate({
+          outputFormat,
+          enableNeutralization:
+            configMatrix?.enableNeutralization ??
+            configMatrix?.neutralize ??
+            true,
+          injectPostMatterManifest:
+            configMatrix?.injectPostMatterManifest ??
+            configMatrix?.manifest ??
+            false,
         })
 
-        // Save PDF
-        doc.save(`concatenator-${fileTimestamp}.pdf`)
-      } else {
-        // Generate text file (default) using the core engine
-        const result = concatenate(
-          fileList.map((f) => ({
-            path: f.path,
-            content: typeof f.content === 'string' ? f.content : '',
-          })),
-          timestamp
-        )
-
-        const blob = new Blob([result], { type: 'text/plain' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `concatenator-${fileTimestamp}.txt`
-        document.body.appendChild(a)
-        a.click()
-        document.body.removeChild(a)
-
-        // Efficiency Analytics
-        const totalRawTokens = fileList.reduce(
-          (acc, f) =>
-            acc +
-            (typeof f.content === 'string'
-              ? TokenService.getTokenCount(f.content).count
-              : 0),
-          0
-        )
-        const finalOutputTokens = TokenService.getTokenCount(result).count
-        const tokensSaved = Math.max(0, totalRawTokens - finalOutputTokens)
-        const savedPercent =
-          totalRawTokens > 0
-            ? ((tokensSaved / totalRawTokens) * 100).toFixed(2)
-            : '0.00'
-
-        logger.info(
-          `Concatenation Complete: ${finalOutputTokens.toLocaleString()} precise tokens.`
-        )
-        if (tokensSaved > 0) {
-          logger.info(
-            `Efficiency Gain: ${tokensSaved.toLocaleString()} tokens saved (${savedPercent}% optimization).`
-          )
+        // Route backend validation errors to the UI overlay
+        if (!response.ok) {
+          const errorData = await response
+            .json()
+            .catch(() => ({ error: 'Export failed' }))
+          throw new Error(errorData.error || `HTTP ${response.status}`)
         }
 
-        // Ensure the browser has time to initiate the download before revoking
-        setTimeout(() => URL.revokeObjectURL(url), 1000)
-      }
+        // Dynamically extract the target filename (PDF, ZIP, TXT)
+        const disposition = response.headers.get('Content-Disposition')
+        let filename = `concatenator-export-${Date.now()}.txt`
+        if (disposition && disposition.includes('filename=')) {
+          const match = disposition.match(/filename="?([^"]+)"?/)
+          if (match) filename = match[1]
+        }
 
-      setIsProcessing(false)
+        // Bridge the O(1) stream into a Blob
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+
+        // Programmatically trigger the physical download
+        const a = document.createElement('a')
+        a.style.display = 'none'
+        a.href = url
+        a.download = filename
+        document.body.appendChild(a)
+        a.click()
+
+        // Cleanup
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+      } catch (error) {
+        console.error('Download failed:', error)
+        setImportError(
+          error instanceof Error ? error.message : 'Export failed.'
+        )
+      } finally {
+        setIsProcessing(false)
+      }
     },
-    [setIsProcessing, maxFileLimit]
+    [setIsProcessing, setImportError]
   )
+
+  const handleConcatenate = handleExport
 
   const handleDownloadAsZip = useCallback(
     async (filteredFiles: FileItem[]) => {
@@ -1503,7 +1495,7 @@ export const useFileProcessing = ({
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        const fileTimestamp = generateFileTimestamp()
+        const fileTimestamp = new Date().toISOString().replace(/[:.]/g, '-')
         const downloadName =
           appMode === AppMode.DECONCATENATE
             ? `extracted-${fileTimestamp}.zip`
@@ -1529,7 +1521,20 @@ export const useFileProcessing = ({
    * Performs pre-flight check and updates validation state
    */
   const validateContent = useCallback((content: string): ValidationResult => {
-    const result = validateConcatenation(content)
+    const hasMarkers = content.includes('<<<<< FILE_START:')
+    const result: ValidationResult = {
+      isValid: hasMarkers,
+      sessionId: null,
+      fileCount: hasMarkers ? 1 : 0,
+      targetFileCount: hasMarkers ? 1 : 0,
+      foreignFileCount: 0,
+      totalMarkersFound: hasMarkers ? 1 : 0,
+      detectedFiles: [],
+      targetFiles: [],
+      foreignFiles: [],
+      errors: hasMarkers ? [] : ['No markers found'],
+      warnings: [],
+    }
     setValidationResult(result)
     return result
   }, [])
@@ -1548,6 +1553,7 @@ export const useFileProcessing = ({
     importProgress,
     importError,
     setImportError,
+    setError,
     cancelProcessing,
     handleFileUpload,
     handleDrop,

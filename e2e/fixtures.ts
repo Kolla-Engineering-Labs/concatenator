@@ -36,7 +36,7 @@ export const test = baseTest.extend<TestFixtures>({
   // Test-scoped fixture: provides API context with worker ID header
   apiContext: async ({ playwright, baseURL }, use, testInfo) => {
     const workerId = getWorkerId(testInfo.workerIndex)
-    const apiToken = process.env.CONCATENATOR_API_TOKEN || ''
+    const apiToken = process.env.KEL_TEST_TOKEN || 'kel-test-token-001'
     const apiContext = await playwright.request.newContext({
       baseURL,
       extraHTTPHeaders: {
@@ -55,18 +55,36 @@ export const test = baseTest.extend<TestFixtures>({
   page: async ({ page }, use, testInfo) => {
     const workerId = getWorkerId(testInfo.workerIndex)
     // Add X-Worker-Id and auth token headers to all requests from the page
-    const apiToken = process.env.CONCATENATOR_API_TOKEN || ''
+    const apiToken = process.env.KEL_TEST_TOKEN || 'kel-test-token-001'
     await page.setExtraHTTPHeaders({
       'X-Worker-Id': workerId,
       ...(apiToken && { 'X-Concatenator-Token': apiToken }),
     })
 
-    // Also persist the token to sessionStorage so ApiClient can find it
-    if (apiToken) {
-      await page.addInitScript((token) => {
-        sessionStorage.setItem('CONCATENATOR_TOKEN', token)
-      }, apiToken)
-    }
+    // ── Zero-Trust Handshake — Timing Guarantee ───────────────────────────────
+    // Playwright's addInitScript() registers a function that executes in the
+    // browser context BEFORE the page's own scripts (including the React bundle)
+    // are evaluated. This is guaranteed by the Playwright worker lifecycle:
+    //
+    //   1. Browser navigates to the URL (page.goto triggers network request)
+    //   2. HTML document is parsed; inline scripts and init scripts fire FIRST
+    //   3. addInitScript callbacks run synchronously before any <script> tags
+    //   4. React bundle evaluates; App.tsx mounts; ApiClient.getHeaders() runs
+    //
+    // Because sessionStorage is populated in step 3, ApiClient.getHeaders() in
+    // step 4 is guaranteed to find CONCATENATOR_TOKEN and WORKER_ID already set.
+    //
+    // ⚠️  DO NOT replace addInitScript with page.evaluate() after page.goto().
+    //     evaluate() runs AFTER the page has loaded — by which point the React
+    //     app has already mounted and ApiClient may have already fired its first
+    //     authenticated request with a missing or empty token (401/403 race).
+    await page.addInitScript(
+      ({ injectedToken, workerId }) => {
+        window.sessionStorage.setItem('CONCATENATOR_TOKEN', injectedToken)
+        window.sessionStorage.setItem('WORKER_ID', workerId)
+      },
+      { injectedToken: apiToken, workerId: testInfo.workerIndex.toString() }
+    )
 
     // Mock /api/vfs to return an empty tree so tests start in a clean state
     await page.route('**/api/vfs', (route) => {

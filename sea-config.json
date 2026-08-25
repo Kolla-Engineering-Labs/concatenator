@@ -1,15 +1,11 @@
 {
   "assets": {
-    "assets/IgnoreList-CWACdOa8.js": "dist/assets/IgnoreList-CWACdOa8.js",
+    "assets/IgnoreList-BouGBFad.js": "dist/assets/IgnoreList-BouGBFad.js",
     "assets/index.css": "dist/assets/index.css",
-    "assets/index.es-w7G9JSh3.js": "dist/assets/index.es-w7G9JSh3.js",
     "assets/index.js": "dist/assets/index.js",
-    "assets/token.worker.js": "dist/assets/token.worker.js",
     "assets/vendor-icons-C9xaBN9q.js": "dist/assets/vendor-icons-C9xaBN9q.js",
-    "assets/vendor-jspdf-BIg3Kt2I.js": "dist/assets/vendor-jspdf-BIg3Kt2I.js",
     "assets/vendor-motion-CcbxGfu5.js": "dist/assets/vendor-motion-CcbxGfu5.js",
     "assets/vendor-react-CJ9asxqG.js": "dist/assets/vendor-react-CJ9asxqG.js",
-    "assets/vendor-utils-D-MZptme.js": "dist/assets/vendor-utils-D-MZptme.js",
     "favicon/apple-touch-icon.png": "dist/favicon/apple-touch-icon.png",
     "favicon/favicon-96x96.png": "dist/favicon/favicon-96x96.png",
     "favicon/favicon.ico": "dist/favicon/favicon.ico",

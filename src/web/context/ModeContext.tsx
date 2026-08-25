@@ -3,9 +3,7 @@ import { useLocalStorage } from '../hooks/useLocalStorage'
 import { AppMode, ViewPreference } from '../types/workbench'
 import { ModeContext } from './ModeContextCore'
 import { DEFAULT_IGNORE_LIST } from '../../core/constants'
-import { IgnoreEngine } from '../../core/ignore/IgnoreEngine'
-import { IgnoreSource } from '../../core/types'
-import { hydrateVFS } from '../../core/VFSHydrator'
+import type { HydratedFile } from '../../core/VFSHydrator'
 import { ApiClient } from '../services/ApiClient'
 import { logger } from '../../lib/logger'
 
@@ -53,6 +51,18 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
   const pendingSync = React.useRef(false)
   const ignoreListRef = React.useRef(ignoreList)
   ignoreListRef.current = ignoreList
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [, setVfsState] = React.useState<any>(null)
+
+  const refreshVFS = useCallback(async () => {
+    try {
+      const updatedTree = await ApiClient.fetchVFS()
+      setVfsState(updatedTree)
+    } catch (error) {
+      console.error('Failed to refresh VFS:', error)
+    }
+  }, [])
 
   // Fetch initial ignore list from server and sync with local
   React.useEffect(() => {
@@ -165,6 +175,7 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
       try {
         await ApiClient.updateIgnoreList(listToSync)
         lastSyncedList.current = listToSync
+        await refreshVFS()
       } catch {
         logger.error('Failed to sync ignore list to server')
       } finally {
@@ -176,7 +187,7 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     }
     saveToServer()
-  }, [ignoreList, autoSaveIgnore])
+  }, [ignoreList, autoSaveIgnore, refreshVFS])
 
   const [isSidebarOpen, setIsSidebarOpen] = useLocalStorage<boolean>(
     'concat_sidebar',
@@ -252,25 +263,98 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
     return ignoreList.filter((pattern) => !suspendedRules.includes(pattern))
   }, [ignoreList, suspendedRules])
 
-  const ignoreEngine = React.useMemo(() => {
-    return new IgnoreEngine(
-      activeIgnoreList.map((pattern) => {
-        if (DEFAULT_IGNORE_LIST.includes(pattern)) {
-          return { pattern, source: IgnoreSource.DEFAULT }
+  const isExplicitlyNegated = useCallback(
+    (path: string) => {
+      if (!path) return false
+      const normalizedPath = path.replace(/\\/g, '/')
+      return activeIgnoreList.some((pat) => {
+        if (!pat || !pat.startsWith('!')) return false
+        const rawPat = pat.slice(1)
+        const cleanPat = rawPat.replace(/^\//, '').replace(/\/$/, '')
+        if (rawPat.startsWith('/') && rawPat.endsWith('/')) {
+          return new RegExp(cleanPat, 'i').test(normalizedPath)
         }
-        return { pattern, source: IgnoreSource.MANUAL }
+        const regexStr = cleanPat
+          .split('*')
+          .map((s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+          .join('.*')
+        return new RegExp(regexStr, 'i').test(normalizedPath)
       })
-    )
-  }, [activeIgnoreList])
-
-  const isIgnored = useCallback(
-    (path: string) => ignoreEngine.isIgnored(path),
-    [ignoreEngine]
+    },
+    [activeIgnoreList]
   )
 
-  const isExplicitlyNegated = useCallback(
-    (path: string) => ignoreEngine.isExplicitlyNegated(path),
-    [ignoreEngine]
+  const isIgnored = useCallback(
+    (path: string) => {
+      if (!path) return false
+      if (isExplicitlyNegated(path)) return false
+      const normalizedPath = path.replace(/\\/g, '/')
+      return activeIgnoreList.some((pat) => {
+        if (!pat || pat.startsWith('!')) return false
+        const cleanPat = pat.replace(/^\//, '').replace(/\/$/, '')
+        if (pat.startsWith('/') && pat.endsWith('/')) {
+          return new RegExp(cleanPat, 'i').test(normalizedPath)
+        }
+        const regexStr = `(^|/)${cleanPat
+          .split('*')
+          .map((s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+          .join('.*')}(/|$)`
+        return new RegExp(regexStr, 'i').test(normalizedPath)
+      })
+    },
+    [activeIgnoreList, isExplicitlyNegated]
+  )
+
+  const getIgnoreResult = useCallback(
+    (path: string) => {
+      const normalizedPath = path.replace(/\\/g, '/')
+      const matchPattern = (pat: string) => {
+        if (!pat) return false
+        const cleanPat = pat.replace(/^\//, '').replace(/\/$/, '')
+        if (pat.startsWith('/') && pat.endsWith('/')) {
+          return new RegExp(cleanPat, 'i').test(normalizedPath)
+        }
+        const regexStr = `(^|/)${cleanPat
+          .split('*')
+          .map((s) => s.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+          .join('.*')}(/|$)`
+        return new RegExp(regexStr, 'i').test(normalizedPath)
+      }
+
+      let matchedDefaultPattern = ''
+      const isDefault = DEFAULT_IGNORE_LIST.some((pat) => {
+        const matches = matchPattern(pat)
+        if (matches) matchedDefaultPattern = pat
+        return matches
+      })
+
+      let matchedManualPattern = ''
+      const ignored = activeIgnoreList.some((pat) => {
+        if (!pat || pat.startsWith('!')) return false
+        const matches = matchPattern(pat)
+        if (matches) matchedManualPattern = pat
+        return matches
+      })
+
+      const negated = isExplicitlyNegated(path)
+
+      return {
+        ignored: (ignored || isDefault) && !negated,
+        negated,
+        reason: isDefault
+          ? matchedDefaultPattern
+          : ignored
+            ? matchedManualPattern
+            : undefined,
+        ignoreSource:
+          (ignored || isDefault) && !negated
+            ? isDefault
+              ? 'default'
+              : 'manual override'
+            : undefined,
+      }
+    },
+    [activeIgnoreList, isExplicitlyNegated]
   )
 
   const [tokenBudget, setTokenBudget] = useLocalStorage<number>(
@@ -284,8 +368,20 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
   )
 
   const hydrateFiles = useCallback(
-    (paths: string[]) => hydrateVFS(paths, ignoreEngine),
-    [ignoreEngine]
+    (paths: string[]) => {
+      const map = new Map<string, HydratedFile>()
+      for (const p of paths) {
+        const result = getIgnoreResult(p)
+        map.set(p, {
+          isIgnored: result.ignored,
+          isNegated: result.negated,
+          reason: result.reason,
+          ignoreSource: result.ignoreSource,
+        })
+      }
+      return map
+    },
+    [getIgnoreResult]
   )
 
   const handleModeChange = (newMode: AppMode) => {
@@ -304,7 +400,7 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
         suspendedRules,
         isIgnored,
         isSidebarOpen,
-        compiledIgnores: ignoreEngine.patterns,
+        compiledIgnores: activeIgnoreList,
         forceMode,
         virtualFileSystem,
         tokenBudget,
@@ -328,9 +424,10 @@ export const ModeProvider: React.FC<{ children: React.ReactNode }> = ({
         showIgnored,
         setShowIgnored,
         isExplicitlyNegated,
-        shouldRecurse: (path: string) => ignoreEngine.shouldRecurse(path),
-        getIgnoreResult: (path: string) => ignoreEngine.getIgnoreResult(path),
+        shouldRecurse: () => false,
+        getIgnoreResult,
         hydrateFiles,
+        refreshVFS,
       }}
     >
       {children}

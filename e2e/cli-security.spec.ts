@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 import { execSync } from 'child_process'
 
 test.describe('CLI Security Brief', () => {

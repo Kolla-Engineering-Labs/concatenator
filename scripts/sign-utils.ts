@@ -1,4 +1,4 @@
-import { execSync } from 'child_process'
+import { execFileSync } from 'child_process'
 import { existsSync, writeFileSync, unlinkSync } from 'fs'
 import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
@@ -14,11 +14,11 @@ const __dirname = dirname(__filename)
 export function checkTools(platform) {
   try {
     if (platform === 'win32') {
-      execSync('signtool /?', { stdio: 'ignore' })
+      execFileSync('signtool', ['/?'], { stdio: 'ignore' })
       return true
     } else if (platform === 'darwin') {
-      execSync('codesign --version', { stdio: 'ignore' })
-      execSync('xcrun --version', { stdio: 'ignore' })
+      execFileSync('codesign', ['--version'], { stdio: 'ignore' })
+      execFileSync('xcrun', ['--version'], { stdio: 'ignore' })
       return true
     }
   } catch {
@@ -55,7 +55,7 @@ export function isSigningEnabled(platform) {
 export function applyAdHocSignature(filePath) {
   console.log(`🖋️  Applying ad-hoc signature: ${filePath}...`)
   try {
-    execSync(`codesign -s - "${filePath}"`, { stdio: 'inherit' })
+    execFileSync('codesign', ['-s', '-', filePath], { stdio: 'inherit' })
     console.log('✅ Ad-hoc signature applied.')
     return true
   } catch (error) {
@@ -106,8 +106,22 @@ export function signBinary(filePath, platform) {
         process.env.TIMESTAMP_SERVER || 'http://timestamp.digicert.com'
       const password = process.env.SIGNING_CERT_PASSWORD
 
-      execSync(
-        `signtool sign /f "${certPath}" /p "${password}" /tr ${tsServer} /td sha256 /fd sha256 "${filePath}"`,
+      execFileSync(
+        'signtool',
+        [
+          'sign',
+          '/f',
+          certPath,
+          '/p',
+          password,
+          '/tr',
+          tsServer,
+          '/td',
+          'sha256',
+          '/fd',
+          'sha256',
+          filePath,
+        ],
         { stdio: 'inherit' }
       )
     } finally {
@@ -125,8 +139,19 @@ export function signBinary(filePath, platform) {
     const certName = process.env.MACOS_CERT_NAME
 
     // 1. Sign with Hardened Runtime
-    execSync(
-      `codesign --force --options runtime --entitlements "${entitlementsPath}" --sign "${certName}" --timestamp "${filePath}"`,
+    execFileSync(
+      'codesign',
+      [
+        '--force',
+        '--options',
+        'runtime',
+        '--entitlements',
+        entitlementsPath,
+        '--sign',
+        certName,
+        '--timestamp',
+        filePath,
+      ],
       { stdio: 'inherit' }
     )
 
@@ -137,14 +162,26 @@ export function signBinary(filePath, platform) {
     const teamId = process.env.APPLE_TEAM_ID
 
     // Using notarytool (recommended)
-    execSync(
-      `xcrun notarytool submit "${filePath}" --apple-id "${appleId}" --password "${appleIdPassword}" --team-id "${teamId}" --wait`,
+    execFileSync(
+      'xcrun',
+      [
+        'notarytool',
+        'submit',
+        filePath,
+        '--apple-id',
+        appleId,
+        '--password',
+        appleIdPassword,
+        '--team-id',
+        teamId,
+        '--wait',
+      ],
       { stdio: 'inherit' }
     )
 
     // 3. Staple
     console.log('📎 Stapling notarization ticket...')
-    execSync(`xcrun stapler staple "${filePath}"`, { stdio: 'inherit' })
+    execFileSync('xcrun', ['stapler', 'staple', filePath], { stdio: 'inherit' })
   }
 
   return true
@@ -160,14 +197,20 @@ export function verifyBinary(filePath, platform) {
 
   try {
     if (platform === 'win32') {
-      execSync(`signtool verify /pa "${filePath}"`, { stdio: 'inherit' })
+      execFileSync('signtool', ['verify', '/pa', filePath], {
+        stdio: 'inherit',
+      })
     } else if (platform === 'darwin') {
       if (isSigningEnabled(platform)) {
-        execSync(`spctl --assess --verbose --type execute "${filePath}"`, {
-          stdio: 'inherit',
-        })
+        execFileSync(
+          'spctl',
+          ['--assess', '--verbose', '--type', 'execute', filePath],
+          {
+            stdio: 'inherit',
+          }
+        )
       } else {
-        execSync(`codesign --verify --verbose "${filePath}"`, {
+        execFileSync('codesign', ['--verify', '--verbose', filePath], {
           stdio: 'inherit',
         })
         console.log(

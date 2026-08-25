@@ -13,7 +13,7 @@ import {
   FileText,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'motion/react'
-import { FileItem } from '../../../../core/types'
+import type { FileItem } from '../../../../core/types'
 import { isImageFile, isPdfFile, cn } from '../../../../lib/utils'
 import { logger } from '../../../../lib/logger'
 

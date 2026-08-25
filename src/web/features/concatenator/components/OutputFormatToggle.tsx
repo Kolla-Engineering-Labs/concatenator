@@ -5,7 +5,7 @@
 
 import React from 'react'
 import { cn } from '../../../../lib/utils'
-import { OutputFormat } from '../../../../core/types'
+import type { OutputFormat } from '../../../../core/types'
 
 interface OutputFormatToggleProps {
   outputFormat: OutputFormat

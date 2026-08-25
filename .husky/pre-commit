@@ -1,1 +1,1 @@
-npx eslint . --fix
+npx lint-staged && npm run type-check

@@ -3,8 +3,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 // Mocking child_process for GPG keychain checks
 vi.mock('child_process', () => ({
   execSync: vi.fn(),
+  execFileSync: vi.fn(),
   default: {
     execSync: vi.fn(),
+    execFileSync: vi.fn(),
   },
   __esModule: true,
 }))

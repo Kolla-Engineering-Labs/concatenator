@@ -15,7 +15,8 @@
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@concatenator/core": ["./src/core/engine.ts"]
     },
     "allowImportingTsExtensions": true,
     "noEmit": true

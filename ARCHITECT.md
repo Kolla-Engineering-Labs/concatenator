@@ -1,4 +1,4 @@
-# System Knowledge Document: Concatenator (v0.9.0)
+# System Knowledge Document: Concatenator (v0.9.5)
 
 ## 1. Executive System Overview
 
@@ -137,11 +137,16 @@ The entire application adheres to a strict Core-First / Thin-Consumer software p
 │ │ └── HeaderParser.ts # Strategy for regex-based header format payloads
 │ ├── types.ts # Core type definitions including IgnoreSource enum (DEFAULT / FILE / SESSION)
 │ ├── LifecycleManager.ts # Graceful server shutdowns, pid management, and lockfile sweeps
+│ ├── streams/
+│ │ └── NeutralizationStream.ts # On-the-fly Web TransformStream that escapes triple backticks with chunk-boundary split safety
 │ └── ignore/
 │ └── IgnoreEngine.ts # picomatch-based pattern compiler; last-match-wins semantics; supports IgnoreSource tagging
 │
 ├── cli/ # @concatenator/cli domains
-│ └── index.ts # Commander.js command schema (concat, extract, validate, ui)
+│ ├── index.ts # Commander.js command schema (concat, extract, validate, ui)
+│ └── api/
+│ └── controllers/
+│ └── concatenate.ts # Zero-trust POST /api/concatenate controller; 1MB circuit breaker; streams Web ReadableStream to http.ServerResponse
 │
 └── web/ # @concatenator/web browser assets
 ├── types/
@@ -216,15 +221,18 @@ During the development, hardening, and testing phases of the Concatenator projec
       - `SessionParser.ts`, `LegacyParser.ts`, `HeaderParser.ts`: Pure strategies implementing `IContextParser` and consuming `ParserUtils.ts`.
       - `engine.ts`: Lightweight factory & orchestrator evaluating signature payloads and instantiating the matching parser strategy, while re-exporting `sanitizePath` and `dedupePath` for full backward compatibility across the Vitest suite.
 
+19. **Zero-Trust API Server & Native Web Streams Pipeline (`server.ts`, `src/cli/api/controllers/concatenate.ts`, `src/core/streams/NeutralizationStream.ts`)**:
+    - _Problem_: The original concatenation API serialized entire file trees into a single in-memory string accumulator, creating an O(n) memory profile that could exhaust the V8 heap on large codebases. The API also lacked any authentication boundary, exposing it to CSRF and LAN probing.
+    - _Solution_: Re-engineered the HTTP delivery layer around native Web Streams. `createConcatenationStream` in `engine.ts` is a Node 22 `AsyncGenerator` that yields per-file header/footer chunks directly from `Readable.toWeb(createReadStream(file.fullPath))` without accumulation. A dedicated `NeutralizationStream` (`TransformStream<Uint8Array, Uint8Array>`) sits inline in the pipeline and escapes LLM-breaking triple backticks on-the-fly with a strictly bounded 2-character tail buffer for chunk-boundary split safety. The `POST /api/concatenate` controller enforces a 1 MB JSON payload circuit breaker (`req.destroy()` on overflow) and streams the Web `ReadableStream` directly into `http.ServerResponse` via `Readable.fromWeb(webStream).pipe(res)`. The Express server exports a `startServer(portOverride?, tokenOverride?, cwdOverride?, uiOriginOverride?)` factory, binds strictly to `127.0.0.1`, and enforces zero-trust `x-concatenator-token` header validation (403 Forbidden on invalid or missing tokens). Worker sandboxing is achieved via the `X-Worker-Id` header, routing each Playwright test worker to its own isolated `.concatenate-ignore` file on disk.
+
 ---
 
 ## 6. Future Roadmap & Pending Features
 
 The upcoming development cycle focuses on scaling the utility, optimizing performance, and preparing for team-focused corporate compliance:
 
-- **E2E Observability Coverage (In Progress — v0.8.x)**:
-  - The `e2e/observability.spec.ts` Playwright suite now validates the Gas Gauge red overage state (token budget exceeded), the `reason` + `ignoreSource` badge rendering for default-ignored directories like `node_modules`, and the negation-discovery pipeline. All tests use the native DOM input upload path to remain WebKit-compatible.
-
+- **CHANGELOG v0.9.5 Entry (Immediate)**:
+  - A `[0.9.5]` CHANGELOG entry documenting the Zero-Trust API Server, Native Web Streams pipeline, Thin-Consumer architecture, Playwright E2E parallel fixture isolation, Max File Limit enforcement, Phase B CI/CD sanitization, and the SEA packaging pipeline must be authored before tagging the release.
 - **Automatic Dependency Pruning / Smart Filters**:
   - Implement active pre-filtering within `IgnoreEngine` to detect and automatically skip high-token, zero-signal system lockfiles or compiled bundles (e.g. `package-lock.json`, `pnpm-lock.yaml`, `*.js.map`).
 - **Sovereign Key Discovery Protocol**:

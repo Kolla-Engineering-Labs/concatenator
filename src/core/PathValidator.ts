@@ -3,16 +3,24 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import * as fs from 'node:fs'
-import * as path from 'node:path'
 import { SymlinkRejectedError, PathTraversalError } from './errors.js'
 
-// Dynamic index access to prevent Vite/Rollup AST parser export verification warnings on externalized browser modules
-const fsMod: Record<string, unknown> = fs as unknown as Record<string, unknown>
-const pathMod: Record<string, unknown> = path as unknown as Record<
-  string,
-  unknown
->
+// Safe runtime acquisition of Node.js modules without top-level static import statements
+// to ensure Vite/Rollup browser compilation works seamlessly.
+let fsMod: Record<string, unknown> | undefined = undefined
+let pathMod: Record<string, unknown> | undefined = undefined
+
+try {
+  if (typeof process !== 'undefined' && process.versions?.node) {
+    const req = typeof require === 'function' ? require : null
+    if (req) {
+      fsMod = req('node:fs')
+      pathMod = req('node:path')
+    }
+  }
+} catch {
+  /* Browser environment fallback */
+}
 
 /**
  * Safe path resolution helper working across Node.js and browser environments.
@@ -29,7 +37,9 @@ function safeResolve(base: string, target?: string): string {
 
   if (typeof resolveFn === 'function') {
     try {
-      return (resolveFn as (b: string, t: string) => string)(base, target || '')
+      return target !== undefined
+        ? (resolveFn as (b: string, t: string) => string)(base, target)
+        : (resolveFn as (b: string) => string)(base)
     } catch {
       /* fallthrough to browser fallback */
     }
@@ -45,7 +55,11 @@ function safeResolve(base: string, target?: string): string {
       stack.push(part)
     }
   }
-  const isAbs = normalized.startsWith('/') || /^[a-zA-Z]:/.test(normalized)
+  const isWindowsDrive = /^[a-zA-Z]:/.test(stack[0] || '')
+  if (isWindowsDrive) {
+    return stack.join('/')
+  }
+  const isAbs = normalized.startsWith('/')
   return (isAbs ? '/' : '') + stack.join('/')
 }
 
@@ -204,7 +218,9 @@ export function resolveAndJail(targetPath: string, rootDir: string): string {
     for (const part of parts) {
       currentPath = safeJoin(currentPath, part)
       try {
-        const stats = (lstatFn as (p: string) => fs.Stats)(currentPath)
+        const stats = (lstatFn as (p: string) => import('node:fs').Stats)(
+          currentPath
+        )
         if (
           stats &&
           typeof stats.isSymbolicLink === 'function' &&

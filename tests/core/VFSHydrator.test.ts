@@ -6,7 +6,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { hydrateVFS } from '../../src/core/VFSHydrator'
 import { IgnoreEngine } from '../../src/core/ignore/IgnoreEngine'
-import { IgnoreSource } from '../../src/core/types'
+import type { IgnoreSource } from '../../src/core/types'
 
 describe('VFSHydrator', () => {
   it('should return a Map (enabling O(1) lookups) with hydrated paths using a mocked IgnoreEngine', () => {
@@ -17,7 +17,7 @@ describe('VFSHydrator', () => {
           ignored: true,
           negated: false,
           reason: 'node_modules',
-          source: IgnoreSource.DEFAULT,
+          source: 'default' as IgnoreSource,
         }
       }
       if (path === 'custom-config.json') {
@@ -25,7 +25,7 @@ describe('VFSHydrator', () => {
           ignored: true,
           negated: false,
           reason: 'custom-config.json',
-          source: IgnoreSource.SESSION,
+          source: 'session' as IgnoreSource,
         }
       }
       if (path === 'src/index.ts') {
@@ -65,17 +65,17 @@ describe('VFSHydrator', () => {
     )
     expect(mockGetIgnoreResult).toHaveBeenCalledWith('custom-config.json')
 
-    // 5. Assert IgnoreSource.DEFAULT mapping
+    // 5. Assert default mapping
     const defaultItem = result.get('node_modules/lodash/index.js')
     expect(defaultItem).toBeDefined()
     expect(defaultItem?.isIgnored).toBe(true)
-    expect(defaultItem?.ignoreSource).toBe(IgnoreSource.DEFAULT)
+    expect(defaultItem?.ignoreSource).toBe('default')
 
-    // 6. Assert IgnoreSource.SESSION mapping
+    // 6. Assert session mapping
     const sessionItem = result.get('custom-config.json')
     expect(sessionItem).toBeDefined()
     expect(sessionItem?.isIgnored).toBe(true)
-    expect(sessionItem?.ignoreSource).toBe(IgnoreSource.SESSION)
+    expect(sessionItem?.ignoreSource).toBe('session')
 
     // 7. Assert unignored mapping
     const unignoredItem = result.get('src/index.ts')
@@ -97,7 +97,7 @@ describe('VFSHydrator', () => {
           ignored: true,
           negated: false,
           reason: 'manual-rule',
-          source: IgnoreSource.MANUAL,
+          source: 'manual override' as IgnoreSource,
         }
       }
       if (path.startsWith('src/module_1/')) {
@@ -105,7 +105,7 @@ describe('VFSHydrator', () => {
           ignored: true,
           negated: false,
           reason: 'default-rule',
-          source: IgnoreSource.DEFAULT,
+          source: 'default' as IgnoreSource,
         }
       }
       if (path.startsWith('src/module_2/')) {
@@ -113,7 +113,7 @@ describe('VFSHydrator', () => {
           ignored: true,
           negated: false,
           reason: '.gitignore-rule',
-          source: IgnoreSource.FILE,
+          source: 'file' as IgnoreSource,
         }
       }
       return {
@@ -132,8 +132,6 @@ describe('VFSHydrator', () => {
     expect(hydrationMap).toBeInstanceOf(Map)
     expect(hydrationMap.size).toBe(totalNodes)
 
-    // Padded timing assertion for 15,000 O(1) lookups to prevent CI/parallel-runner CPU contention flakiness (< 500ms)
-    // Note: Keep expect() calls outside the timed loop to avoid Vitest assertion framework overhead
     let foundCount = 0
     const startTime = performance.now()
     for (let i = 0; i < totalNodes; i++) {
@@ -151,7 +149,7 @@ describe('VFSHydrator', () => {
       isIgnored: true,
       isNegated: false,
       reason: 'manual-rule',
-      ignoreSource: IgnoreSource.MANUAL,
+      ignoreSource: 'manual override',
     })
     expect(manualItem?.ignoreSource).toBe('manual override')
 
@@ -160,7 +158,7 @@ describe('VFSHydrator', () => {
       isIgnored: true,
       isNegated: false,
       reason: 'default-rule',
-      ignoreSource: IgnoreSource.DEFAULT,
+      ignoreSource: 'default',
     })
     expect(defaultItem?.ignoreSource).toBe('default')
 
@@ -169,7 +167,7 @@ describe('VFSHydrator', () => {
       isIgnored: true,
       isNegated: false,
       reason: '.gitignore-rule',
-      ignoreSource: IgnoreSource.FILE,
+      ignoreSource: 'file',
     })
     expect(fileItem?.ignoreSource).toBe('file')
   })

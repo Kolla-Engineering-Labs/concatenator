@@ -20,14 +20,13 @@ import {
   AppMode as WorkbenchMode,
   ViewPreference,
 } from '../../../types/workbench'
-import {
+import type {
   FileItem,
   TreeItem,
   OutputFormat,
   ValidationResult,
 } from '../../../../core/types'
 import { TreeNode } from './TreeNode'
-import { OutputFormatToggle } from './OutputFormatToggle'
 import { FileTable } from './FileTable'
 import { QuickLook } from './QuickLook'
 import { logger } from '../../../../lib/logger'
@@ -44,7 +43,6 @@ interface FileViewProps {
   onRemoveFile: (file: FileItem) => void
   onDownloadAsZip?: () => void
   outputFormat: OutputFormat
-  setOutputFormat: (format: OutputFormat) => void
   validationResult?: ValidationResult | null
   tokenBudget?: number
   totalTokens?: number
@@ -68,7 +66,6 @@ export const FileView: React.FC<FileViewProps> = ({
   onRemoveFile,
   onDownloadAsZip,
   outputFormat,
-  setOutputFormat,
   validationResult,
   tokenBudget,
   totalTokens = 0,
@@ -261,13 +258,8 @@ export const FileView: React.FC<FileViewProps> = ({
         {mode === WorkbenchMode.CONCATENATE ? (
           <div className="space-y-6">
             <div className="flex items-center justify-between gap-4">
-              {/* Left: Format Toggle */}
-              <div className="flex items-center gap-4 min-w-[140px]">
-                <OutputFormatToggle
-                  outputFormat={outputFormat}
-                  setOutputFormat={setOutputFormat}
-                />
-              </div>
+              {/* Left spacer */}
+              <div className="flex items-center gap-4 min-w-[140px]" />
 
               {/* Center: Budget warning or info pill */}
               <div className="flex-1 flex justify-center">

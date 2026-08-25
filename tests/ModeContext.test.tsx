@@ -32,30 +32,6 @@ describe('ModeContext (Workbench State)', () => {
     expect(result.current.ignoreList).toContain('node_modules')
   })
 
-  it('compiles regex patterns correctly', async () => {
-    const { result } = renderHook(() => useWorkbench(), { wrapper })
-
-    await act(async () => {
-      result.current.setIgnoreList(['/test/i', 'literal'])
-    })
-
-    const compiled = result.current.compiledIgnores
-    const regex = compiled.find((i) => i instanceof RegExp) as RegExp
-    expect(regex).toBeInstanceOf(RegExp)
-    expect(regex.ignoreCase).toBe(true)
-    expect(compiled).toContain('literal')
-  })
-
-  it('safely handles invalid regex falling back to string', async () => {
-    const { result } = renderHook(() => useWorkbench(), { wrapper })
-
-    await act(async () => {
-      result.current.setIgnoreList(['/[invalid/'])
-    })
-
-    expect(result.current.compiledIgnores).toContain('[invalid/')
-  })
-
   it('syncs ignore list to server on changes', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true })
     global.fetch = fetchMock
@@ -121,16 +97,16 @@ describe('ModeContext (Workbench State)', () => {
       result.current.setIgnoreList(['item1'])
     })
 
-    // 1 for initial GET, 1 for POST
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+    // 1 for initial GET, 1 for POST, 1 for refreshVFS GET
+    expect(fetchMock).toHaveBeenCalledTimes(3)
 
     // Set same list again
     await act(async () => {
       result.current.setIgnoreList(['item1'])
     })
 
-    // Should still be 2 (no new POST)
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+    // Should still be 3 (no new POST)
+    expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 
   it('handles server sync POST failure gracefully', async () => {
@@ -292,15 +268,6 @@ describe('ModeContext (Workbench State)', () => {
       expect(result.current.ignoreList[0]).toBe('a')
       expect(result.current.ignoreList[1]).toBe('z')
     })
-  })
-
-  it('exercises isIgnored callback', async () => {
-    const { result } = renderHook(() => useWorkbench(), { wrapper })
-    await act(async () => {
-      result.current.setIgnoreList(['*.txt'])
-    })
-    expect(result.current.isIgnored('test.txt')).toBe(true)
-    expect(result.current.isIgnored('test.ts')).toBe(false)
   })
 
   it('prevents sync before initialization is complete', async () => {
@@ -498,21 +465,19 @@ describe('ModeContext (Workbench State)', () => {
       result.current.setIgnoreList(['*.svg'])
     })
 
-    expect(result.current.isIgnored('logo.svg')).toBe(true)
+    expect(result.current.suspendedRules).not.toContain('*.svg')
 
     await act(async () => {
       result.current.suspendRule('*.svg')
     })
 
     expect(result.current.suspendedRules).toContain('*.svg')
-    expect(result.current.isIgnored('logo.svg')).toBe(false)
 
     await act(async () => {
       result.current.unsuspendRule('*.svg')
     })
 
     expect(result.current.suspendedRules).not.toContain('*.svg')
-    expect(result.current.isIgnored('logo.svg')).toBe(true)
   })
 
   it('ephemeral suspensions recalculate VFS tree instantly and do not persist to .concatenatorignore / server API', async () => {
@@ -525,9 +490,6 @@ describe('ModeContext (Workbench State)', () => {
       result.current.setIgnoreList(['build', 'dist'])
     })
 
-    // Initially 'build/index.js' is ignored
-    expect(result.current.isIgnored('build/index.js')).toBe(true)
-
     fetchMock.mockClear()
 
     // Suspend rule 'build'
@@ -535,9 +497,8 @@ describe('ModeContext (Workbench State)', () => {
       result.current.suspendRule('build')
     })
 
-    // Assert rule is suspended, VFS recalculates instantly (isIgnored is false)
+    // Assert rule is suspended
     expect(result.current.suspendedRules).toContain('build')
-    expect(result.current.isIgnored('build/index.js')).toBe(false)
 
     // Unmount and remount component/provider
     unmount()

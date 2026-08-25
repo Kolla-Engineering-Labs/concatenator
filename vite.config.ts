@@ -9,12 +9,25 @@ import { config } from 'dotenv'
 import fs from 'fs'
 import istanbul from 'vite-plugin-istanbul'
 
+const DEV_BUILD_HASH = 'dev-hash'
+const DEV_FINGERPRINT = 'dev-fingerprint'
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '')
 
+  // Keep explicit union type to avoid ts suppression on plugin config.
+  const codecovLogLevel: 'debug' | 'info' =
+    mode === 'development' || !!env.CI ? 'debug' : 'info'
+
   // Load .secrets file if it exists (suppress dotenv logging)
   if (fs.existsSync('.secrets')) {
-    const secrets = config({ path: '.secrets', debug: false }).parsed || {}
+    const secretsResult = config({ path: '.secrets', debug: false })
+    if (secretsResult.error) {
+      console.warn(
+        `[vite-config] Failed to parse .secrets file: ${secretsResult.error.message}`
+      )
+    }
+    const secrets = secretsResult.parsed || {}
     Object.assign(env, secrets)
   }
 
@@ -27,6 +40,7 @@ export default defineConfig(({ mode }) => {
       // after each test, preventing leaks without requiring manual afterEach calls.
       clearMocks: true,
       restoreMocks: true,
+      setupFiles: ['./workbench-ui/src/setupTests.ts'],
       exclude: ['e2e/**/*', 'node_modules/**/*'],
       reporters: env.CI ? ['default', 'junit'] : ['default'],
       outputFile: {
@@ -78,8 +92,8 @@ export default defineConfig(({ mode }) => {
               res.end(
                 JSON.stringify({
                   version: pkg.version,
-                  buildHash: 'dev-hash',
-                  fingerprint: 'dev-fingerprint',
+                  buildHash: DEV_BUILD_HASH,
+                  fingerprint: DEV_FINGERPRINT,
                 })
               )
               return
@@ -95,8 +109,8 @@ export default defineConfig(({ mode }) => {
         oidc: {
           useGitHubOIDC: true,
         },
-        // @ts-expect-error - Keep debug logs for development/CI; reduce noise in production builds
-        logLevel: mode === 'development' || !!env.CI ? 'debug' : 'info',
+        // Keep debug logs for development/CI; reduce noise in production builds
+        logLevel: codecovLogLevel,
       }),
       visualizer({
         open: false,
@@ -140,6 +154,23 @@ export default defineConfig(({ mode }) => {
         '^/api': {
           target: 'http://127.0.0.1:3000',
           changeOrigin: true,
+          // Ensure custom KEL Protocol headers survive the proxy boundary
+          configure: (proxy) => {
+            proxy.on('proxyReq', (proxyReq, req) => {
+              if (req.headers['x-concatenator-token']) {
+                proxyReq.setHeader(
+                  'x-concatenator-token',
+                  req.headers['x-concatenator-token'] as string
+                )
+              }
+              if (req.headers['x-worker-id']) {
+                proxyReq.setHeader(
+                  'x-worker-id',
+                  req.headers['x-worker-id'] as string
+                )
+              }
+            })
+          },
         },
       },
       hmr: process.env.DISABLE_HMR !== 'true',
