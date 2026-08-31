@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.9.6] - 2026-08-29
+
+### Patch Changes
+
+- ### CI/CD & Pipeline Governance
+  - **Infrastructure as Code (IaC):** Enforced strict tag-driven deployments in Vercel via `vercel.json`, replacing UI-based heuristics with a surgical edge-routing script.
+  - **Pipeline Hygiene:** Optimized the `prepare` script to bypass Husky initialization in ephemeral CI environments, eliminating `.git` resolution misfires and accelerating Vercel dependency hydration.
+
 ## [0.9.5] - 2026-08-23
 
 ### Minor Changes
