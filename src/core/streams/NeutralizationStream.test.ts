@@ -3,8 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, test } from 'vitest'
 import { NeutralizationStream } from './NeutralizationStream.js'
+import { ManifestInterceptorStream } from './ManifestInterceptorStream.js'
+import { IVFSAdapter } from '../PathValidator.js'
 
 async function streamToString(
   stream: ReadableStream<Uint8Array>
@@ -19,6 +21,13 @@ async function streamToString(
   }
   result += decoder.decode()
   return result
+}
+
+// Provide a zero-op passthrough VFS for the state machine test
+const mockVFS: IVFSAdapter = {
+  lstat: async () => ({ isSymbolicLink: () => false }),
+  realpath: async (p) => p,
+  exists: async () => true,
 }
 
 describe('NeutralizationStream', () => {
@@ -144,5 +153,31 @@ describe('NeutralizationStream', () => {
     const outputStream = readable.pipeThrough(transform)
     const result = await streamToString(outputStream)
     expect(result).toBe('text ``')
+  })
+
+  test('State Machine Transition: Preserves exact byte alignment on PASSTHROUGH', async () => {
+    const stream = new ManifestInterceptorStream({ vfsAdapter: mockVFS })
+    const writer = stream.writable.getWriter()
+    const reader = stream.readable.getReader()
+
+    // Construct a payload where the exact byte following the newline is 0xAA
+    const preamble = Buffer.from(
+      '<<<<< KEL_MANIFEST_START >>>>>\nfile.txt|0644|hash\n<<<<< KEL_MANIFEST_END >>>>>\n'
+    )
+    const payload = Buffer.from([0xaa, 0xbb, 0xcc])
+    const combined = Buffer.concat([preamble, payload])
+
+    // Intentional slice right down the middle of the END delimiter to stress the chunk accumulator
+    const sliceIndex = preamble.length - 5
+    void writer.write(combined.subarray(0, sliceIndex))
+    void writer.write(combined.subarray(sliceIndex))
+    void writer.close()
+
+    const { value } = await reader.read()
+
+    // If Antigravity missed a +1 on the index slice, this will be the '>' character (0x3E) instead of 0xAA
+    expect(value).toBeDefined()
+    expect(value![0]).toBe(0xaa)
+    expect(value!.length).toBe(3)
   })
 })

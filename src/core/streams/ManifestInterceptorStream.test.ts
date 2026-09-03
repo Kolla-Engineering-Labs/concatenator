@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, test } from 'vitest'
 import { ManifestInterceptorStream } from './ManifestInterceptorStream.js'
 import {
   PathTraversalError,
@@ -236,5 +236,46 @@ describe('ManifestInterceptorStream', () => {
 
     await collectStream(source.pipeThrough(interceptor))
     expect(lstatSpy).toHaveBeenCalled()
+  })
+
+  test('Batch Concurrency: Throttles VFS validation to batchSize limits', async () => {
+    let inFlight = 0
+    let maxInFlight = 0
+
+    // Synthetic IVFSAdapter that tracks parallel execution width
+    const trackerVFS = {
+      lstat: async (_path: string) => {
+        inFlight++
+        maxInFlight = Math.max(maxInFlight, inFlight)
+        await new Promise((resolve) => setTimeout(resolve, 5)) // Artificial I/O delay
+        inFlight--
+        return { isSymbolicLink: () => false }
+      },
+    }
+
+    const stream = new ManifestInterceptorStream({
+      vfsAdapter: trackerVFS,
+      batchSize: 64,
+    })
+    const writer = stream.writable.getWriter()
+
+    // Generate a massive 1,000 file manifest
+    let bigManifest = '<<<<< KEL_MANIFEST_START >>>>>\n'
+    for (let i = 0; i < 1000; i++) bigManifest += `file${i}.ts|0644|hash\n`
+    bigManifest += '<<<<< KEL_MANIFEST_END >>>>>\n'
+
+    void writer.write(Buffer.from(bigManifest))
+    void writer.close()
+
+    // Consume stream via reader to trigger the validation and bypass TS DOM definitions
+    const reader = stream.readable.getReader()
+    while (true) {
+      const { done } = await reader.read()
+      if (done) break
+    }
+
+    // If this equals 1000, Antigravity mapped the promises before slicing the batches
+    expect(maxInFlight).toBeLessThanOrEqual(64)
+    expect(maxInFlight).toBeGreaterThan(0)
   })
 })
