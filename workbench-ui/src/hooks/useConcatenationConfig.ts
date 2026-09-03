@@ -3,7 +3,7 @@ import { usePersistentState } from './usePersistentState'
 export interface ConcatenationConfig {
   outputFormat: 'markdown' | 'xml'
   enableNeutralization: boolean
-  injectPostMatterManifest: boolean
+  injectManifest: boolean
   stripComments: boolean
 }
 
@@ -20,7 +20,7 @@ export function useConcatenationConfig() {
     true
   )
 
-  // Telemetry injection at EOF
+  // Telemetry manifest injection
   const [manifest, setManifest] = usePersistentState<boolean>(
     'kel:config_manifest',
     true
@@ -36,7 +36,7 @@ export function useConcatenationConfig() {
   const getPayloadMatrix = (): ConcatenationConfig => ({
     outputFormat: format,
     enableNeutralization: neutralize,
-    injectPostMatterManifest: manifest,
+    injectManifest: manifest,
     stripComments: stripComments,
   })
 

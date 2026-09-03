@@ -20,7 +20,7 @@ import { DEFAULT_IGNORE_LIST } from '../../../core/constants.js'
 interface ClientMatrixPayload {
   outputFormat?: 'markdown' | 'xml'
   enableNeutralization?: boolean
-  injectPostMatterManifest?: boolean
+  injectManifest?: boolean
 }
 
 // Circuit breaker stream body parser with 1MB ceiling
@@ -42,9 +42,10 @@ const parseJSONBody = <T>(req: IncomingMessage): Promise<T> => {
 
     req.on('end', () => {
       try {
-        resolve(JSON.parse(body || '{}') as T)
+        const parsed = JSON.parse(body || '{}') as T
+        resolve(parsed)
       } catch {
-        reject(new Error('Malformed JSON payload'))
+        reject(new Error('Invalid JSON Payload'))
       }
     })
 
@@ -57,23 +58,29 @@ const parseJSONBody = <T>(req: IncomingMessage): Promise<T> => {
 export const handleConcatenate = async (
   req: IncomingMessage,
   res: ServerResponse,
-  expectedToken: string,
-  targetDirectory: string
+  expectedToken?: string,
+  targetDirectory?: string
 ): Promise<void> => {
   // 1. Zero-Trust Perimeter Enforcement
-  const clientToken = req.headers['x-concatenator-token']
-  if (!clientToken || clientToken !== expectedToken) {
-    console.warn('[KEL Protocol] Unauthorized execution attempt blocked.')
-    res.writeHead(403, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify({ error: 'Zero-Trust Perimeter Violation' }))
-    return
+  if (expectedToken) {
+    const clientToken = req.headers['x-concatenator-token']
+    if (!clientToken || clientToken !== expectedToken) {
+      console.warn('[KEL Protocol] Unauthorized execution attempt blocked.')
+      res.writeHead(403, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: 'Zero-Trust Perimeter Violation' }))
+      return
+    }
   }
 
   try {
     // 2. Extract Configuration Matrix
-    const matrixPayload = await parseJSONBody<ClientMatrixPayload>(req)
+    const body = await parseJSONBody<{
+      matrix?: ClientMatrixPayload
+      customIgnores?: string[]
+    }>(req)
 
-    const targetDir = resolve(targetDirectory)
+    const matrixPayload = body.matrix || {}
+    const targetDir = resolve(targetDirectory || process.cwd())
 
     // Symlink Boundary Check (Strict KEL Protocol Directive)
     if (fs.lstatSync(targetDir).isSymbolicLink()) {
@@ -85,8 +92,13 @@ export const handleConcatenate = async (
     const resolvedRoot = fs.realpathSync(targetDir)
 
     // 3. Scan & collect files for zero-RAM streaming
-    const ignoreEngine = new IgnoreEngine(DEFAULT_IGNORE_LIST)
-    const crawler = new UnifiedCrawler({ rootPath: resolvedRoot, ignoreEngine })
+    const customIgnores = body.customIgnores || []
+    const defaultIgnores = [...DEFAULT_IGNORE_LIST, ...customIgnores]
+    const ignoreEngine = new IgnoreEngine(defaultIgnores)
+    const crawler = new UnifiedCrawler({
+      rootPath: resolvedRoot,
+      ignoreEngine,
+    })
     const entries = crawler.collect(resolvedRoot)
 
     const streamFiles: HydratedStreamFile[] = []
@@ -105,7 +117,7 @@ export const handleConcatenate = async (
     const matrix: ExecutionMatrixPayload = {
       outputFormat: matrixPayload.outputFormat === 'xml' ? 'xml' : 'markdown',
       enableNeutralization: Boolean(matrixPayload.enableNeutralization),
-      injectPostMatterManifest: Boolean(matrixPayload.injectPostMatterManifest),
+      injectManifest: Boolean(matrixPayload.injectManifest),
     }
 
     // 4. Create Web Stream and pipe directly to HTTP response

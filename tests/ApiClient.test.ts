@@ -243,7 +243,7 @@ describe('ApiClient', () => {
       const matrix = {
         outputFormat: 'markdown' as const,
         enableNeutralization: true,
-        injectPostMatterManifest: false,
+        injectManifest: false,
       }
 
       const result = await ApiClient.concatenate(matrix)
@@ -272,7 +272,7 @@ describe('ApiClient', () => {
       const matrix = {
         outputFormat: 'xml' as const,
         enableNeutralization: false,
-        injectPostMatterManifest: true,
+        injectManifest: true,
       }
 
       await ApiClient.concatenate(matrix)
@@ -295,7 +295,7 @@ describe('ApiClient', () => {
       const matrix = {
         outputFormat: 'markdown' as const,
         enableNeutralization: true,
-        injectPostMatterManifest: true,
+        injectManifest: true,
       }
 
       await expect(ApiClient.concatenate(matrix)).rejects.toThrow(
@@ -313,7 +313,7 @@ describe('ApiClient', () => {
       const matrix = {
         outputFormat: 'markdown' as const,
         enableNeutralization: true,
-        injectPostMatterManifest: true,
+        injectManifest: true,
       }
 
       await expect(ApiClient.concatenate(matrix)).rejects.toThrow(

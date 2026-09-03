@@ -2,6 +2,18 @@
 
 This document outlines the strategic trajectory for Concatenator, mapping the progression from the current release through to v2.0.0. Our overarching objective is to evolve the project from a highly functional utility into an industrial-grade standard for LLM context management, anchored in local-first principles and Clean Architecture.
 
+## v1.0.0: Protocol Stability Release (General Availability)
+
+_Target: Architectural Freeze, Security Auditing, and Zero-Dependency Portability_
+
+v1.0.0 marks the transition to a stable, production-ready standard. The core architecture will be frozen to guarantee backward compatibility.
+
+- **API & Schema Guarantee:** Committing to strict backward compatibility for the `@concatenator/core` engine API, CLI execution flags, and the local-first UI state schemas (localStorage VFS structures).
+- **The Pre-Matter Header Resolution:** Complete migration from Post-Matter EOF manifests to Pre-Matter Headers. This structural shift guarantees $O(1)$ stream memory processing, allowing `fflate` to intercept payload manifests and execute `fs.lstatSync` zero-trust boundary checks before any file content is buffered to disk.
+- **Phase C: Zero-Trust Security Auditing:** Hardening the local `127.0.0.1` API perimeter, enforcing strict CORS boundaries, and validating ephemeral cryptographic handshakes. All code must explicitly pass Snyk vulnerability scans and SonarCloud quality gates before merge.
+- **Phase D: Core Engine Scaling:** Stress-testing the $O(n)$ extraction engine against massive monorepo payloads to guarantee V8 memory stability under heavy stream loads.
+- **Phase E: Node 22 SEA Validation:** Final, rigorous validation of the standalone Node 22 Single Executable Application payload, ensuring flawless operation in offline, air-gapped enterprise environments.
+
 ## v0.9.0: The Security & Decoupling Sprint (Phase C)
 
 _Target: Structural Integrity and VFS Hardening_

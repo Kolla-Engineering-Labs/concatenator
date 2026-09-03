@@ -8,9 +8,6 @@ coverage/
 .env*
 !.env.example
 .secrets
-.antigravityrules
-.cursorrules
-.windsurfrules
 .agents/
 .claude/
 diff.txt

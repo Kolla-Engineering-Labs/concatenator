@@ -56,7 +56,7 @@ export class ApiClient {
   static async concatenate(matrix: {
     outputFormat: 'markdown' | 'xml'
     enableNeutralization: boolean
-    injectPostMatterManifest: boolean
+    injectManifest: boolean
   }): Promise<Blob> {
     const res = await this.triggerConcatenate(matrix)
     return res.blob()

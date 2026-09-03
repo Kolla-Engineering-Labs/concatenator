@@ -43,3 +43,15 @@ export class SymlinkRejectedError extends SecurityViolation {
     this.name = 'SymlinkRejectedError'
   }
 }
+
+/**
+ * Custom error class for stream manifest size limit violations.
+ */
+export class ManifestSizeExceededError extends SecurityViolation {
+  constructor(
+    message: string = 'Security Violation: Manifest preamble size exceeded maximum allowed threshold'
+  ) {
+    super(message)
+    this.name = 'ManifestSizeExceededError'
+  }
+}

@@ -24,7 +24,7 @@ export interface ExecutionMatrix {
   manifest?: boolean
   stripComments?: boolean
   enableNeutralization?: boolean
-  injectPostMatterManifest?: boolean
+  injectManifest?: boolean
 }
 
 const RESERVED_WINDOWS_NAMES = new Set([
@@ -1418,10 +1418,8 @@ export const useFileProcessing = ({
             configMatrix?.enableNeutralization ??
             configMatrix?.neutralize ??
             true,
-          injectPostMatterManifest:
-            configMatrix?.injectPostMatterManifest ??
-            configMatrix?.manifest ??
-            false,
+          injectManifest:
+            configMatrix?.injectManifest ?? configMatrix?.manifest ?? false,
         })
 
         // Route backend validation errors to the UI overlay

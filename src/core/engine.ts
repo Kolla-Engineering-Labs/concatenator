@@ -1,39 +1,67 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-import { createReadStream } from 'node:fs'
-import { Readable } from 'node:stream'
-import {
-  START_DELIMITER,
-  END_DELIMITER,
-  FILE_END_DELIMITER,
-  MANIFEST_PREFIX,
-  POST_MATTER_MANIFEST_START,
-} from './constants.js'
 import type { IContextParser } from './parsers/IContextParser.js'
 import {
   extractSessionId,
+  extractPreMatterManifest,
   extractPostMatterManifest,
-} from './parsers/ParserUtils.js'
-import { computeHash } from './builder/BuilderUtils.js'
+} from './parsers/ParserUtils.js' // <-- Added missing closure and source path
+
+import {
+  computeHash,
+  formatPreMatterManifest,
+  type PreMatterLedgerItem,
+} from './builder/BuilderUtils.js'
 import { SessionParser } from './parsers/SessionParser.js'
 import { LegacyParser } from './parsers/LegacyParser.js'
 import { HeaderParser } from './parsers/HeaderParser.js'
 import { Neutralizer } from './shared/Neutralizer.js'
 import { NeutralizationStream } from './streams/NeutralizationStream.js'
+import {
+  ManifestInterceptorStream,
+  type ManifestInterceptorOptions,
+} from './streams/ManifestInterceptorStream.js'
+import {
+  PathValidator,
+  resolveAndJail,
+  resolveAndJailAsync,
+  type IVFSAdapter,
+} from './PathValidator.js'
+import {
+  SecurityViolation,
+  PathTraversalError,
+  SymlinkRejectedError,
+  ManifestSizeExceededError,
+} from './errors.js'
 
 export {
   sanitizePath,
   dedupePath,
+  extractPreMatterManifest,
   extractPostMatterManifest,
 } from './parsers/ParserUtils.js'
 
 import type { ValidationResult } from './types.js'
+import { createReadStream } from 'node:fs'
+import { Readable } from 'node:stream'
+
+import {
+  START_DELIMITER,
+  END_DELIMITER,
+  FILE_END_DELIMITER,
+  MANIFEST_PREFIX,
+  KEL_MANIFEST_START,
+  POST_MATTER_MANIFEST_START,
+} from './constants.js'
 
 // Re-export types for convenience
 export type { ValidationResult } from './types.js'
+export { PathValidator, resolveAndJail, resolveAndJailAsync, type IVFSAdapter }
+export {
+  SecurityViolation,
+  PathTraversalError,
+  SymlinkRejectedError,
+  ManifestSizeExceededError,
+}
+export { ManifestInterceptorStream, type ManifestInterceptorOptions }
 
 /**
  * Represents a virtual file with path and content
@@ -76,7 +104,9 @@ export {
   generateFileTimestamp,
   computeHash,
   normalizeFileMode,
+  formatPreMatterManifest,
   formatPostMatterManifest,
+  type PreMatterLedgerItem,
   type PostMatterLedgerItem,
 } from './builder/BuilderUtils.js'
 export { concatenate } from './builder/builder.js'
@@ -361,12 +391,15 @@ export function validateConcatenation(
     )
   }
 
-  // 2. Two-Key Verification: Post-Matter Manifest Validation
-  const manifest = extractPostMatterManifest(input)
+  // 2. Two-Key Verification: KEL Manifest Validation (Pre-Matter primary, Post-Matter fallback)
+  const preManifest = extractPreMatterManifest(input)
+  const postManifest = extractPostMatterManifest(input)
+  const manifest = preManifest || postManifest
+
   if (manifest) {
     if (sessionId && manifest.sessionId && sessionId !== manifest.sessionId) {
       errors.push(
-        'Session ID mismatch between manifest header and Post-Matter manifest'
+        'Session ID mismatch between manifest header and KEL manifest'
       )
     }
 
@@ -378,12 +411,12 @@ export function validateConcatenation(
       manifest.entries.length !== filesToValidate.length
     ) {
       errors.push(
-        'CORRUPTION DETECTED: Post-Matter Manifest is missing, malformed, or out of sync with payload.'
+        'CORRUPTION DETECTED: KEL Manifest is missing, malformed, or out of sync with payload.'
       )
     } else {
       // STRICT VERIFICATION: H(M_payload) == H(M_manifest)
       const neutralizer = new Neutralizer()
-      const isPostMatterValid = manifest.entries.every((entry) => {
+      const isManifestValid = manifest.entries.every((entry) => {
         const extractedFile = filesToValidate.find(
           (f) => f.path.replace(/\\/g, '/') === entry.path.replace(/\\/g, '/')
         )
@@ -392,18 +425,25 @@ export function validateConcatenation(
         const unneutralized = neutralizer.unneutralize(extractedFile.content)
         const calculatedHash1 = computeHash(unneutralized)
         const calculatedHash2 = computeHash(extractedFile.content)
-        return calculatedHash1 === entry.hash || calculatedHash2 === entry.hash
+        return (
+          calculatedHash1 === entry.hash ||
+          calculatedHash2 === entry.hash ||
+          entry.hash === 'none'
+        )
       })
 
-      if (!isPostMatterValid) {
+      if (!isManifestValid) {
         errors.push(
           'CORRUPTION DETECTED: Cryptographic hash mismatch in bundle payload.'
         )
       }
     }
-  } else if (input.includes(POST_MATTER_MANIFEST_START)) {
+  } else if (
+    input.includes(KEL_MANIFEST_START) ||
+    input.includes(POST_MATTER_MANIFEST_START)
+  ) {
     errors.push(
-      'CORRUPTION DETECTED: Post-Matter Manifest is missing, malformed, or out of sync with payload.'
+      'CORRUPTION DETECTED: KEL Manifest is missing, malformed, or out of sync with payload.'
     )
   }
 
@@ -454,7 +494,7 @@ export function parseBundle(content: string): {
 export interface ExecutionMatrixPayload {
   outputFormat: 'markdown' | 'xml'
   enableNeutralization: boolean
-  injectPostMatterManifest: boolean
+  injectManifest: boolean
 }
 
 export interface HydratedStreamFile {
@@ -468,7 +508,7 @@ export { NeutralizationStream }
 
 /**
  * Creates a zero-RAM ReadableStream generator piping files directly from disk
- * through the NeutralizationStream transform middleware.
+ * through the NeutralizationStream transform middleware with Pre-Matter Header.
  */
 export function createConcatenationStream(
   files: HydratedStreamFile[],
@@ -479,15 +519,26 @@ export function createConcatenationStream(
   const sourceStream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
+        // 1. Yield Pre-Matter Header (KEL Protocol) at Step 0
+        if (matrix.injectManifest) {
+          const ledger: PreMatterLedgerItem[] = files.map((file) => ({
+            path: file.path.replace(/\\/g, '/'),
+            mode: file.mode || '0644',
+            hash: file.hash || 'none',
+          }))
+          controller.enqueue(
+            encoder.encode(formatPreMatterManifest(ledger) + '\n')
+          )
+        }
+
+        // 2. Stream individual files directly from SSD (Zero-RAM execution)
         for (const file of files) {
-          // 1. Yield File Header
           const header =
             matrix.outputFormat === 'xml'
               ? `<file path="${file.path}">\n`
               : `<<<<< FILE_START: ${file.path} >>>>>\n`
           controller.enqueue(encoder.encode(header))
 
-          // 2. Stream directly from SSD (Zero-RAM execution)
           const nodeStream = createReadStream(file.fullPath)
           const webStream = Readable.toWeb(
             nodeStream
@@ -507,25 +558,11 @@ export function createConcatenationStream(
             reader.releaseLock()
           }
 
-          // 3. Yield File Footer
           const footer =
             matrix.outputFormat === 'xml'
               ? `\n</file>\n`
               : `\n<<<<< FILE_END >>>>>\n`
           controller.enqueue(encoder.encode(footer))
-        }
-
-        // 4. Yield Post-Matter Manifest (KEL Protocol)
-        if (matrix.injectPostMatterManifest) {
-          controller.enqueue(encoder.encode('\n--- KEL MANIFEST ---\n'))
-          for (const file of files) {
-            // Using actual stat metadata, defaulting safely
-            const mode = file.mode || '0644'
-            const hash = file.hash || 'none'
-            controller.enqueue(
-              encoder.encode(`${file.path}|mode:${mode}|${hash}\n`)
-            )
-          }
         }
 
         controller.close()

@@ -8,16 +8,20 @@ import {
   END_DELIMITER,
   MANIFEST_PREFIX,
   MANIFEST_SUFFIX,
+  KEL_MANIFEST_START,
+  KEL_MANIFEST_END,
   POST_MATTER_MANIFEST_START,
   POST_MATTER_MANIFEST_END,
 } from '../constants.js'
 import type { ConcatenateInputFile } from './contracts/IFormatter.js'
 
-export interface PostMatterLedgerItem {
+export interface PreMatterLedgerItem {
   path: string
   mode: string
   hash: string
 }
+
+export type PostMatterLedgerItem = PreMatterLedgerItem
 
 /**
  * Compute an xxHash32 8-character hexadecimal string digest on raw buffer or string
@@ -153,7 +157,28 @@ export function normalizeFileMode(stats?: { mode?: number }): string {
 }
 
 /**
- * Generate pipe-delimited Post-Matter EOF manifest block
+ * Generate pipe-delimited Pre-Matter KEL manifest block at the head of the bundle
+ *
+ * @param ledger - Array of PreMatterLedgerItem tuples
+ * @param sessionId - Optional session ID
+ * @returns Formatted Pre-Matter KEL manifest chunk
+ */
+export function formatPreMatterManifest(
+  ledger: PreMatterLedgerItem[],
+  sessionId?: string
+): string {
+  const sidPart = sessionId ? ` (ID: ${sessionId})` : ''
+  let result = `${KEL_MANIFEST_START}${sidPart} >>>>>\n`
+  for (const item of ledger) {
+    const normalizedPath = item.path.replace(/\\/g, '/')
+    result += `${normalizedPath}|${item.mode}|${item.hash}\n`
+  }
+  result += `${KEL_MANIFEST_END}\n`
+  return result
+}
+
+/**
+ * Generate pipe-delimited Post-Matter EOF manifest block (legacy compatibility)
  *
  * @param ledger - Array of PostMatterLedgerItem tuples
  * @param sessionId - Optional session ID
