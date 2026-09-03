@@ -1,11 +1,11 @@
 # Project State: Concatenator
 
 **Current Version:** v1.0.0-rc (Release Candidate Pipeline)
-**Last Updated:** 2026-08-24
+**Last Updated:** 2026-09-02
 
 ## Active Context & Architecture
 
-- **Core Engine Separation:** The `engine.ts` God Class is actively queued for dismantling into isolated, pure Strategy Pattern functions (`SessionParser`, `LegacyParser`, `HeaderParser`) within the `@concatenator/core/parsers/` namespace.
+- **Core Engine Separation:** Strategy Pattern classes (`SessionParser`, `LegacyParser`, `HeaderParser`) and pure utilities (`ParserUtils`) are decoupled under `@concatenator/core/parsers/` with dedicated pure contract test suites in `tests/core/parsers/`.
 - **CLI Command Routing:** Queued refactor for CLI execution into a strict Command Pattern architecture to decouple file system utilities from command flags.
 - **Web VFS Memory Optimization:** Planning the replacement of `JSZip` with `fflate` in the browser to stream compression in chunks.
 - **Zero-Trust Local Networking:** Queued hardening of `server.ts` to strictly bind to `127.0.0.1` and enforce cryptographic ephemeral tokens.
@@ -18,6 +18,13 @@
 - **Core Optimization (AST Pruning):** Integrate `tree-sitter` as an optional peer dependency within the core workspace to enable structural payload skeletonization for large context models (e.g., DeepSeek, Nova).
 
 ## Recently Completed Milestones (Stable - Do Not Revisit)
+
+- **Parser Strategy Test Architecture & Pure Contracts (`tests/core/parsers/ParserUtils.test.ts`, `tests/core/parsers/HeaderParser.test.ts`, `tests/core/parsers/LegacyParser.test.ts`, `tests/core/parsers/SessionParser.test.ts`):**
+  - **Single Responsibility Unit Test Suites:** Created isolated, dedicated test suites mirroring `src/core/parsers/` into `tests/core/parsers/` for each strategy class (`SessionParser`, `LegacyParser`, `HeaderParser`) and pure helper suite (`ParserUtils`).
+  - **Pure String Contracts & Zero-I/O Invariants:** Enforced pure string manipulation testing across all parser modules without importing or mocking `node:fs` or `IVFSAdapter`.
+  - **System Contract Testing:** Structured all tests under strict `import { test, expect } from 'vitest'` contracts without `describe`/`it` blocks.
+  - **Pre-Matter & Post-Matter Boundary Assertions:** Validated exact boundary extraction, corrupted line filtering (missing hashes/delimiters), unclosed payload skipping with telemetry tracking, and backward-compatible null-logger handling for legacy post-matter deprecation.
+  - **Session & Header Protocol Isolation:** Verified delimiter matching, whitespace variations in session ID headers, session token scoping, and header file parsing with path deduplication and path traversal rejection telemetry.
 
 - **Phase D: Pre-Matter Pipeline & Stream Hardening (`src/core/streams/ManifestInterceptorStream.ts`, `src/core/PathValidator.ts`, `src/core/engine.ts`, `src/core/builder/`, `tests/core/stream-memory.test.ts`):**
   - **Protocol Inversion (Pre-Matter KEL Manifest):** Inverted the KEL manifest from a trailing Post-Matter EOF block to a leading Pre-Matter Header (`KEL_MANIFEST_START` / `KEL_MANIFEST_END`). Enables the read pipeline to inspect, validate, and destroy malicious streams before file payloads are buffered to disk or memory ($O(1)$ memory mandate).
