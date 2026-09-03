@@ -91,7 +91,7 @@ describe('ExecutionWorkbench', () => {
     expect(onExecuteMock).toHaveBeenCalledWith({
       outputFormat: 'markdown',
       enableNeutralization: true,
-      injectPostMatterManifest: true,
+      injectManifest: true,
       stripComments: false,
     })
   })

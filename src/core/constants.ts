@@ -126,6 +126,67 @@ const POST_MATTER_END_PARTS = [
   '>',
 ]
 
+const KEL_MANIFEST_START_PARTS = [
+  '<',
+  '<',
+  '<',
+  '<',
+  '<',
+  ' ',
+  'K',
+  'E',
+  'L',
+  '_',
+  'M',
+  'A',
+  'N',
+  'I',
+  'F',
+  'E',
+  'S',
+  'T',
+  '_',
+  'S',
+  'T',
+  'A',
+  'R',
+  'T',
+]
+const KEL_MANIFEST_END_PARTS = [
+  '<',
+  '<',
+  '<',
+  '<',
+  '<',
+  ' ',
+  'K',
+  'E',
+  'L',
+  '_',
+  'M',
+  'A',
+  'N',
+  'I',
+  'F',
+  'E',
+  'S',
+  'T',
+  '_',
+  'E',
+  'N',
+  'D',
+  ' ',
+  '>',
+  '>',
+  '>',
+  '>',
+  '>',
+]
+
+export const KEL_MANIFEST_START = KEL_MANIFEST_START_PARTS.join('')
+export const KEL_MANIFEST_END = KEL_MANIFEST_END_PARTS.join('')
+export const DEFAULT_MAX_MANIFEST_BYTES = 5 * 1024 * 1024 // 5MB
+
 export const POST_MATTER_MANIFEST_START = POST_MATTER_START_PARTS.join('')
 export const POST_MATTER_MANIFEST_END = POST_MATTER_END_PARTS.join('')
 

@@ -11,7 +11,22 @@
 - **Zero-Trust Local Networking:** Queued hardening of `server.ts` to strictly bind to `127.0.0.1` and enforce cryptographic ephemeral tokens.
 - **Husky Tiering:** `pre-commit` restricted to fast static analysis (types, linting, unit tests); heavy E2E suites relegated to `pre-push` to maintain developer velocity.
 
+## Pending Roadmap Tasks (Immediate Focus)
+
+- **Phase C (Zero-Trust Security Auditing):** Register Kolla Engineering Labs org accounts on SonarCloud and Snyk. Add `SONAR_TOKEN` and `SNYK_TOKEN` to GitHub Actions secrets.
+- **Phase E (Final Compilation):** Execute the Node 22 SEA (Single Executable Application) binary generation for portable CLI distribution.
+- **Core Optimization (AST Pruning):** Integrate `tree-sitter` as an optional peer dependency within the core workspace to enable structural payload skeletonization for large context models (e.g., DeepSeek, Nova).
+
 ## Recently Completed Milestones (Stable - Do Not Revisit)
+
+- **Phase D: Pre-Matter Pipeline & Stream Hardening (`src/core/streams/ManifestInterceptorStream.ts`, `src/core/PathValidator.ts`, `src/core/engine.ts`, `src/core/builder/`, `tests/core/stream-memory.test.ts`):**
+  - **Protocol Inversion (Pre-Matter KEL Manifest):** Inverted the KEL manifest from a trailing Post-Matter EOF block to a leading Pre-Matter Header (`KEL_MANIFEST_START` / `KEL_MANIFEST_END`). Enables the read pipeline to inspect, validate, and destroy malicious streams before file payloads are buffered to disk or memory ($O(1)$ memory mandate).
+  - **Decoupled Asynchronous VFS Sandboxing (`PathValidator.resolveAndJailAsync` & `IVFSAdapter`):** Implemented non-blocking async path jail resolution backed by `fs.promises.lstat` via dependency injection (`IVFSAdapter`), preserving event-loop elasticity across 10,000+ files and enabling in-memory test mocks in Playwright and Vitest.
+  - **Bounded Concurrency & EMFILE Mitigation (`ManifestInterceptorStream.ts`):** Enforced chunked batching (`batchSize: 64`) for parallel async VFS resolution, saturating disk I/O without exhausting OS file descriptors.
+  - **Preamble Circuit Breaker (`MAX_MANIFEST_BYTES`):** Injected a strict 5MB cumulative byte threshold in the interceptor accumulator; breaches immediately abort the stream with `ManifestSizeExceededError`.
+  - **Unified `injectManifest` Contract:** Replaced all legacy matrix parameters with `injectManifest` across `@concatenator/core`, CLI controllers, API clients, and Workbench UI components.
+  - **Legacy Deprecation Guard:** Injected `logger.warn` deprecation logging into `extractPostMatterManifest` to announce active perimeter rejection of EOF manifests in v2.0.0.
+  - **500MB O(1) Memory Stress Test & Early Abort Benchmark (`tests/core/stream-memory.test.ts`):** Validated flat heap usage ($\le 50\text{MB}$ delta) while streaming a synthetic 500MB (10,000 files) payload, and verified $< 5\text{MB}$ memory consumption on immediate stream abort during traversal attacks.
 
 - **Architectural Amendment: Dynamic Port Allocation for Windows CI (`tests/cli/api_server.test.ts`):**
   - **Kernel-Assigned Ephemeral Ports (`tests/cli/api_server.test.ts`):** Replaced static random port arithmetic with `startServer(0, ...)`, extracting dynamic ports via `(server.address() as AddressInfo).port` for primary test servers and symlink test instances. Eliminates Windows `EACCES` test crashes caused by Hyper-V dynamic port reservation blocks.

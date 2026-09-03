@@ -197,7 +197,7 @@ Content C
   })
 
   describe('Two-Key Verification with Post-Matter Manifest', () => {
-    it('validates a complete bundle with valid Post-Matter Manifest', () => {
+    it('validates a complete bundle with valid Pre-Matter KEL Manifest', () => {
       const bundle = concatenate([
         { path: 'src/index.ts', content: 'console.log("hello")' },
         { path: 'src/utils.ts', content: 'export const x = 42' },
@@ -223,7 +223,7 @@ Content C
       )
     })
 
-    it('fails closed when Post-Matter Manifest entry count is out of sync with payload', () => {
+    it('fails closed when KEL Manifest entry count is out of sync with payload', () => {
       let bundle = concatenate([
         { path: 'src/index.ts', content: 'console.log("hello")' },
         { path: 'src/extra.ts', content: 'export const extra = true' },
@@ -239,21 +239,21 @@ Content C
       const result = validateConcatenation(bundle)
       expect(result.isValid).toBe(false)
       expect(result.errors).toContain(
-        'CORRUPTION DETECTED: Post-Matter Manifest is missing, malformed, or out of sync with payload.'
+        'CORRUPTION DETECTED: KEL Manifest is missing, malformed, or out of sync with payload.'
       )
     })
 
-    it('fails closed when Post-Matter Manifest block is malformed', () => {
+    it('fails closed when Pre-Matter KEL Manifest block is malformed', () => {
       const bundle = `--- CONCATENATOR_SESSION_ID: 123456 ---
+<<<<< KEL_MANIFEST_START (ID: 123456) >>>>>
 <<<<< FILE_START: src/file.txt (ID: 123456) >>>>>
 hello
 <<<<< FILE_END >>>>>
-<<<<< POST_MATTER_MANIFEST_START (ID: 123456) >>>>>
 `
       const result = validateConcatenation(bundle)
       expect(result.isValid).toBe(false)
       expect(result.errors).toContain(
-        'CORRUPTION DETECTED: Post-Matter Manifest is missing, malformed, or out of sync with payload.'
+        'CORRUPTION DETECTED: KEL Manifest is missing, malformed, or out of sync with payload.'
       )
     })
   })

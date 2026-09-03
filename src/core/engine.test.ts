@@ -439,7 +439,7 @@ trailing data`
   })
 
   describe('createConcatenationStream', () => {
-    it('streams files directly from disk with markdown formatting and post-matter manifest', async () => {
+    it('streams files directly from disk with markdown formatting and leading Pre-Matter manifest', async () => {
       const fs = await import('node:fs')
       const path = await import('node:path')
       const os = await import('node:os')
@@ -461,7 +461,7 @@ trailing data`
           {
             outputFormat: 'markdown',
             enableNeutralization: true,
-            injectPostMatterManifest: true,
+            injectManifest: true,
           }
         )
 
@@ -476,11 +476,17 @@ trailing data`
         }
         output += decoder.decode()
 
-        expect(output).toContain('<<<<< FILE_START: file1.txt >>>>>')
+        const manifestIndex = output.indexOf('KEL_MANIFEST_START')
+        const fileStartIndex = output.indexOf(
+          '<<<<< FILE_START: file1.txt >>>>>'
+        )
+
+        expect(manifestIndex).toBeGreaterThanOrEqual(0)
+        expect(fileStartIndex).toBeGreaterThan(manifestIndex)
+        expect(output).toContain('file1.txt|0644|abc123hash')
+        expect(output).toContain('KEL_MANIFEST_END')
         expect(output).toContain('Hello \\`\\`\\`world\\`\\`\\`')
         expect(output).toContain('<<<<< FILE_END >>>>>')
-        expect(output).toContain('--- KEL MANIFEST ---')
-        expect(output).toContain('file1.txt|mode:0644|abc123hash')
       } finally {
         fs.rmSync(tmpDir, { recursive: true, force: true })
       }
@@ -506,7 +512,7 @@ trailing data`
           {
             outputFormat: 'xml',
             enableNeutralization: false,
-            injectPostMatterManifest: false,
+            injectManifest: false,
           }
         )
 

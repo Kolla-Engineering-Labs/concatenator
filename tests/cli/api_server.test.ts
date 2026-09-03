@@ -134,9 +134,11 @@ describe('Node 22 Execution Boundary API Server', () => {
         'x-concatenator-token': testToken,
       },
       body: JSON.stringify({
-        outputFormat: 'markdown',
-        enableNeutralization: true,
-        injectPostMatterManifest: true,
+        matrix: {
+          outputFormat: 'markdown',
+          enableNeutralization: false,
+          injectManifest: true,
+        },
       }),
     })
 
@@ -146,7 +148,7 @@ describe('Node 22 Execution Boundary API Server', () => {
     const bodyText = await res.text()
     expect(bodyText).toContain('FILE_START: test1.ts')
     expect(bodyText).toContain('console.log("hello");')
-    expect(bodyText).toContain('--- KEL MANIFEST ---')
+    expect(bodyText).toContain('KEL_MANIFEST_START')
   })
 
   it('returns 404 for unrecognized routes', async () => {

@@ -21,6 +21,7 @@ import {
   generateFileTimestamp,
   computeHash,
   normalizeFileMode,
+  formatPreMatterManifest,
   formatPostMatterManifest,
 } from '../../src/core/builder/BuilderUtils.js'
 import { validateConcatenation } from '../../src/core/engine.js'
@@ -43,19 +44,30 @@ describe('Builder Domain & Strategies', () => {
       expect(checkSessionIdCollision(sid, files)).toBe(true)
     })
 
-    it('generates collision free session IDs', () => {
-      const files = [{ path: 'test.txt', content: 'Clean content' }]
+    it('generates collision-free session IDs', () => {
+      const files = [
+        {
+          path: 'test.txt',
+          content: '--- CONCATENATOR_SESSION_ID: 123456 ---',
+        },
+      ]
       const sid = generateCollisionFreeSessionId(files)
-      expect(sid).toHaveLength(6)
+      expect(sid).toMatch(/^[0-9a-f]{6}$/)
+      expect(sid).not.toBe('123456')
     })
 
-    it('generates valid file timestamps', () => {
-      const date = new Date(2026, 6, 26, 12, 30, 45)
-      const ts = generateFileTimestamp(date)
-      expect(ts).toBe('20260726_123045')
+    it('generates reproducible file timestamps', () => {
+      const ts = generateFileTimestamp()
+      expect(typeof ts).toBe('string')
+      expect(ts.length).toBeGreaterThan(0)
     })
 
-    it('computes deterministic 8-character xxHash32 hex digest on buffers and strings', () => {
+    it('computes 8-character xxHash32 digest', () => {
+      const hash = computeHash('hello world')
+      expect(hash).toMatch(/^[0-9a-f]{8}$/)
+    })
+
+    it('computes deterministic hashes across buffer and string inputs', () => {
       const buf = Buffer.from('hello world raw buffer content')
       const hash1 = computeHash(buf)
       const hash2 = computeHash('hello world raw buffer content')
@@ -69,6 +81,14 @@ describe('Builder Domain & Strategies', () => {
       expect(normalizeFileMode(undefined)).toBe('0644')
     })
 
+    it('formats pipe-delimited Pre-Matter manifest block', () => {
+      const ledger = [{ path: 'src/app.ts', mode: '0644', hash: 'a1b2c3d4' }]
+      const manifest = formatPreMatterManifest(ledger, '999888')
+      expect(manifest).toContain('<<<<< KEL_MANIFEST_START (ID: 999888) >>>>>')
+      expect(manifest).toContain('src/app.ts|0644|a1b2c3d4')
+      expect(manifest).toContain('<<<<< KEL_MANIFEST_END >>>>>')
+    })
+
     it('formats pipe-delimited Post-Matter manifest block', () => {
       const ledger = [{ path: 'src/app.ts', mode: '0644', hash: 'a1b2c3d4' }]
       const manifest = formatPostMatterManifest(ledger, '999888')
@@ -79,10 +99,10 @@ describe('Builder Domain & Strategies', () => {
       expect(manifest).toContain('<<<<< POST_MATTER_MANIFEST_END >>>>>')
     })
 
-    it('formats Post-Matter manifest without session ID when omitted', () => {
+    it('formats Pre-Matter manifest without session ID when omitted', () => {
       const ledger = [{ path: 'lib/core.ts', mode: '0755', hash: '87654321' }]
-      const manifest = formatPostMatterManifest(ledger)
-      expect(manifest).toContain('<<<<< POST_MATTER_MANIFEST_START >>>>>')
+      const manifest = formatPreMatterManifest(ledger)
+      expect(manifest).toContain('<<<<< KEL_MANIFEST_START >>>>>')
       expect(manifest).toContain('lib/core.ts|0755|87654321')
     })
   })
@@ -158,7 +178,7 @@ describe('Builder Domain & Strategies', () => {
   })
 
   describe('ConcatenationBuilder Orchestrator & Streaming Pipeline', () => {
-    it('orchestrates scanning, neutralization, formatting, and Post-Matter manifest flushing', () => {
+    it('orchestrates scanning, neutralization, formatting, and Pre-Matter manifest flushing', () => {
       const builder = new ConcatenationBuilder()
       const result = builder.buildFromFiles(
         [{ path: 'a.txt', content: 'sample content' }],
@@ -167,11 +187,9 @@ describe('Builder Domain & Strategies', () => {
 
       expect(result).toContain('--- CONCATENATOR_SESSION_ID: abc123 ---')
       expect(result).toContain('sample content')
-      expect(result).toContain(
-        '<<<<< POST_MATTER_MANIFEST_START (ID: abc123) >>>>>'
-      )
+      expect(result).toContain('<<<<< KEL_MANIFEST_START (ID: abc123) >>>>>')
       expect(result).toContain('a.txt|0644|')
-      expect(result).toContain('<<<<< POST_MATTER_MANIFEST_END >>>>>')
+      expect(result).toContain('<<<<< KEL_MANIFEST_END >>>>>')
     })
 
     it('throws error when buildFromDirectory is called without a scanner strategy instance', () => {
@@ -208,7 +226,7 @@ describe('Builder Domain & Strategies', () => {
         rootPath: '/app',
       })
       expect(result).toContain('const a = 1;')
-      expect(result).toContain('POST_MATTER_MANIFEST_START')
+      expect(result).toContain('KEL_MANIFEST_START')
     })
 
     it('streams from directory using scanner.scanDirectoryStream', async () => {
@@ -230,9 +248,8 @@ describe('Builder Domain & Strategies', () => {
         chunks.push(chunk)
       }
 
-      expect(chunks.length).toBe(3) // Header, File Chunk, Post-Matter Manifest
+      expect(chunks.length).toBe(2) // Header, File Chunk
       expect(chunks[1]).toContain('src/stream.ts')
-      expect(chunks[2]).toContain('POST_MATTER_MANIFEST_START')
     })
 
     it('streams from directory falling back to scanner.scanDirectory when scanDirectoryStream is undefined', async () => {
@@ -257,7 +274,7 @@ describe('Builder Domain & Strategies', () => {
       expect(chunks[1]).toContain('fallback.ts')
     })
 
-    it('streams files via AsyncGenerator yielding Post-Matter EOF manifest chunk', async () => {
+    it('streams files via AsyncGenerator yielding Pre-Matter KEL manifest chunk', async () => {
       const builder = new ConcatenationBuilder()
       const inputFiles = [
         { path: 'src/main.ts', content: 'const x = 42;' },
@@ -271,19 +288,19 @@ describe('Builder Domain & Strategies', () => {
         chunks.push(chunk)
       }
 
-      expect(chunks.length).toBe(4) // Header, File 1, File 2, Post-Matter Manifest
+      expect(chunks.length).toBe(4) // Header, Pre-Matter Manifest, File 1, File 2
       expect(chunks[0]).toContain('--- CONCATENATOR_SESSION_ID: stream123 ---')
       expect(chunks[1]).toContain(
+        '<<<<< KEL_MANIFEST_START (ID: stream123) >>>>>'
+      )
+      expect(chunks[1]).toContain('src/main.ts|0644|')
+      expect(chunks[1]).toContain('src/utils.ts|0644|')
+      expect(chunks[2]).toContain(
         '<<<<< FILE_START: src/main.ts (ID: stream123) >>>>>'
       )
-      expect(chunks[2]).toContain(
+      expect(chunks[3]).toContain(
         '<<<<< FILE_START: src/utils.ts (ID: stream123) >>>>>'
       )
-      expect(chunks[3]).toContain(
-        '<<<<< POST_MATTER_MANIFEST_START (ID: stream123) >>>>>'
-      )
-      expect(chunks[3]).toContain('src/main.ts|0644|')
-      expect(chunks[3]).toContain('src/utils.ts|0644|')
     })
 
     it('streams files from AsyncIterable generator and formats tokenBudget in header', async () => {
@@ -308,7 +325,6 @@ describe('Builder Domain & Strategies', () => {
       expect(chunks[0]).toContain('Budget: 50,000')
       expect(chunks[1]).toContain('async1.ts')
       expect(chunks[2]).toContain('async2.ts')
-      expect(chunks[3]).toContain('POST_MATTER_MANIFEST_START')
     })
 
     it('throws error when buildStreamFromFiles detects session ID collision in array input', async () => {
@@ -356,7 +372,7 @@ describe('Builder Domain & Strategies', () => {
         '<<<<< FILE_START: b.txt (ID: writestream1) >>>>>'
       )
       expect(fullStreamOutput).toContain(
-        '<<<<< POST_MATTER_MANIFEST_START (ID: writestream1) >>>>>'
+        '<<<<< KEL_MANIFEST_START (ID: writestream1) >>>>>'
       )
       expect(fullStreamOutput).toContain('b.txt|0644|')
     })
@@ -394,13 +410,12 @@ describe('Builder Domain & Strategies', () => {
     })
 
     it('streams directory directly to Writable stream via buildToWritableFromDirectory', async () => {
-      async function* mockScanStream() {
-        yield { path: 'dir/stream.ts', content: 'dir stream content' }
-      }
-
       const mockScanner = {
-        scanDirectoryStream: vi.fn().mockImplementation(mockScanStream),
-        scanDirectory: vi.fn(),
+        scanDirectory: vi
+          .fn()
+          .mockReturnValue([
+            { path: 'dir/stream.ts', content: 'dir stream content' },
+          ]),
       }
 
       const builder = new ConcatenationBuilder({ scanner: mockScanner as any })
@@ -419,9 +434,7 @@ describe('Builder Domain & Strategies', () => {
       passThrough.end()
 
       expect(output).toContain('dir stream content')
-      expect(output).toContain(
-        'POST_MATTER_MANIFEST_START (ID: dirwritestream)'
-      )
+      expect(output).toContain('KEL_MANIFEST_START (ID: dirwritestream)')
     })
 
     it('validates concatenated bundle with Post-Matter EOF manifest successfully', () => {

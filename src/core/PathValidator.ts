@@ -265,6 +265,140 @@ export function resolveAndJail(targetPath: string, rootDir: string): string {
   return candidatePath
 }
 
+/**
+ * Minimal interface for decoupled, asynchronous Virtual File System operations.
+ */
+export interface IVFSAdapter {
+  lstat?: (
+    path: string
+  ) => Promise<{ isSymbolicLink?(): boolean } | null | undefined>
+  realpath?: (path: string) => Promise<string>
+  exists?: (path: string) => Promise<boolean>
+}
+
+/**
+ * Asynchronous PathValidator utility for non-blocking stream interception and event-loop elasticity.
+ *
+ * @param targetPath - The relative or candidate file path to validate and jail.
+ * @param rootDir - The root directory boundary.
+ * @param adapter - Optional injectable async VFS adapter (defaults to Node.js fs.promises if available).
+ * @returns Promise resolving to safe absolute path within root jail.
+ * @throws {SymlinkRejectedError} If any path component evaluates to a symbolic link.
+ * @throws {PathTraversalError} If target path escapes boundary or contains null bytes.
+ */
+export async function resolveAndJailAsync(
+  targetPath: string,
+  rootDir: string,
+  adapter?: IVFSAdapter
+): Promise<string> {
+  if (!targetPath) {
+    throw new PathTraversalError('Invalid target path: path cannot be empty')
+  }
+
+  if (targetPath.includes('\0') || (rootDir && rootDir.includes('\0'))) {
+    throw new PathTraversalError('Security Violation: Path contains null bytes')
+  }
+
+  // Reject absolute path injections (POSIX leading slash, Windows drive letter, or UNC)
+  if (
+    safeIsAbsolute(targetPath) ||
+    targetPath.startsWith('/') ||
+    targetPath.startsWith('\\') ||
+    /^[a-zA-Z]:/.test(targetPath)
+  ) {
+    throw new PathTraversalError(
+      `Security Violation: Absolute path injection rejected: ${targetPath}`
+    )
+  }
+
+  let lstatAsyncFn:
+    ((path: string) => Promise<{ isSymbolicLink?(): boolean }>) | undefined =
+    adapter?.lstat
+
+  let realpathAsyncFn: ((path: string) => Promise<string>) | undefined =
+    adapter?.realpath
+
+  if (!lstatAsyncFn) {
+    try {
+      if (fsMod && typeof fsMod === 'object' && fsMod['promises']) {
+        const promisesMod = fsMod['promises'] as Record<string, unknown>
+        if (typeof promisesMod['lstat'] === 'function') {
+          lstatAsyncFn = promisesMod['lstat'] as (
+            p: string
+          ) => Promise<{ isSymbolicLink?(): boolean }>
+        }
+        if (!realpathAsyncFn && typeof promisesMod['realpath'] === 'function') {
+          realpathAsyncFn = promisesMod['realpath'] as (
+            p: string
+          ) => Promise<string>
+        }
+      }
+    } catch {
+      /* Vitest mock proxy / browser fallback */
+    }
+  }
+
+  // Normalize rootDir and resolve physical root if available
+  let resolvedRoot = safeResolve(rootDir)
+  if (realpathAsyncFn) {
+    try {
+      resolvedRoot = await realpathAsyncFn(resolvedRoot)
+    } catch {
+      /* fallback to safeResolve */
+    }
+  }
+
+  const sanitized = targetPath.replace(/\\/g, '/')
+
+  // Async component-by-component walk for symlink checking
+  if (lstatAsyncFn) {
+    let currentPath = resolvedRoot
+    const parts = sanitized.split('/').filter(Boolean)
+
+    for (const part of parts) {
+      currentPath = safeJoin(currentPath, part)
+      try {
+        const stats = await lstatAsyncFn(currentPath)
+        if (
+          stats &&
+          typeof stats.isSymbolicLink === 'function' &&
+          stats.isSymbolicLink()
+        ) {
+          throw new SymlinkRejectedError(
+            `Security Violation: Symbolic link rejected: ${targetPath}`
+          )
+        }
+      } catch (err: unknown) {
+        if (err instanceof SymlinkRejectedError) {
+          throw err
+        }
+        // ENOENT trap: Target component does not exist on disk yet
+        if (
+          err &&
+          typeof err === 'object' &&
+          'code' in err &&
+          (err as { code?: string }).code === 'ENOENT'
+        ) {
+          break
+        }
+        break
+      }
+    }
+  }
+
+  const candidatePath = safeResolve(resolvedRoot, sanitized)
+  const relativePath = safeRelative(resolvedRoot, candidatePath)
+
+  if (relativePath.startsWith('..') || safeIsAbsolute(relativePath)) {
+    throw new PathTraversalError(
+      `Security Violation: Path traversal outside root boundary: ${targetPath}`
+    )
+  }
+
+  return candidatePath
+}
+
 export const PathValidator = {
   resolveAndJail,
+  resolveAndJailAsync,
 }

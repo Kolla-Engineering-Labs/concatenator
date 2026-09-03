@@ -20,10 +20,11 @@ import {
   checkSessionIdCollision,
   buildFileStartMarker,
   computeHash,
-  formatPostMatterManifest,
-  type PostMatterLedgerItem,
+  formatPreMatterManifest,
+  type PreMatterLedgerItem,
 } from './BuilderUtils.js'
 import {
+  START_DELIMITER,
   MANIFEST_PREFIX,
   MANIFEST_SUFFIX,
   FILE_END_DELIMITER,
@@ -66,14 +67,14 @@ export class ConcatenationBuilder {
   }
 
   /**
-   * Apply neutralization to provided files and build formatted bundle string
+   * Apply neutralization to provided files and build formatted bundle string with leading Pre-Matter Header
    */
   public buildFromFiles(
     files: ConcatenateInputFile[],
     formatterOptions?: FormatterOptions
   ): string {
     const normalizedFiles = normalizeInputFiles(files)
-    const ledger: PostMatterLedgerItem[] = []
+    const ledger: PreMatterLedgerItem[] = []
 
     const neutralizedFiles = normalizedFiles.map((file) => {
       const hash = file.hash || computeHash(file.content)
@@ -94,12 +95,16 @@ export class ConcatenationBuilder {
       sessionId: sid,
     })
 
-    const postMatterManifest = formatPostMatterManifest(ledger, sid)
-    return `${formattedContent}${postMatterManifest}`
+    const preMatterManifest = formatPreMatterManifest(ledger, sid)
+    const firstFileIndex = formattedContent.indexOf(START_DELIMITER)
+    if (firstFileIndex !== -1) {
+      return `${formattedContent.slice(0, firstFileIndex)}${preMatterManifest}\n${formattedContent.slice(firstFileIndex)}`
+    }
+    return `${preMatterManifest}\n${formattedContent}`
   }
 
   /**
-   * Stream scanning, neutralization, formatting chunks, and Post-Matter manifest from directory
+   * Stream scanning, neutralization, formatting chunks, and Pre-Matter manifest from directory
    */
   public async *buildStreamFromDirectory(
     scanOptions: ScanOptions,
@@ -124,7 +129,7 @@ export class ConcatenationBuilder {
   }
 
   /**
-   * Stream file concatenation chunks as an AsyncGenerator, ending with Post-Matter EOF Manifest
+   * Stream file concatenation chunks as an AsyncGenerator, yielding Pre-Matter KEL Manifest at the top
    */
   public async *buildStreamFromFiles(
     files:
@@ -163,18 +168,22 @@ export class ConcatenationBuilder {
 
     yield header
 
-    const ledger: PostMatterLedgerItem[] = []
+    // Emit leading Pre-Matter KEL Manifest chunk if files array is available
+    if (inputFilesArray.length > 0) {
+      const ledger: PreMatterLedgerItem[] = inputFilesArray.map((raw) => ({
+        path: raw.path.replace(/\\/g, '/'),
+        mode: raw.mode || '0644',
+        hash: raw.hash || computeHash(raw.content),
+      }))
+      yield `${formatPreMatterManifest(ledger, sid)}\n`
+    }
+
     const iterableFiles:
       AsyncIterable<ConcatenateInputFile> | Iterable<ConcatenateInputFile> =
       files
 
     for await (const rawFile of iterableFiles) {
       const path = rawFile.path.replace(/\\/g, '/')
-      const hash = rawFile.hash || computeHash(rawFile.content)
-      const mode = rawFile.mode || '0644'
-
-      ledger.push({ path, mode, hash })
-
       const neutralized = this.neutralizer.neutralize(rawFile.content)
       let fileChunk = `${buildFileStartMarker(path, sid)}\n`
       fileChunk += typeof neutralized === 'string' ? neutralized : ''
@@ -182,9 +191,6 @@ export class ConcatenationBuilder {
 
       yield fileChunk
     }
-
-    // Flush Post-Matter EOF Manifest as the final chunk
-    yield formatPostMatterManifest(ledger, sid)
   }
 
   /**

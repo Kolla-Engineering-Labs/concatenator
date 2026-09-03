@@ -18,7 +18,7 @@ describe('useConcatenationConfig', () => {
     expect(result.current.getPayloadMatrix()).toEqual({
       outputFormat: 'markdown',
       enableNeutralization: true,
-      injectPostMatterManifest: true,
+      injectManifest: true,
       stripComments: false,
     })
   })
@@ -42,7 +42,7 @@ describe('useConcatenationConfig', () => {
     expect(result.current.getPayloadMatrix()).toEqual({
       outputFormat: 'xml',
       enableNeutralization: false,
-      injectPostMatterManifest: false,
+      injectManifest: false,
       stripComments: true,
     })
   })
@@ -86,9 +86,7 @@ describe('useConcatenationConfig', () => {
     expect(window.localStorage.getItem('kel:config_manifest')).toBe(
       JSON.stringify(false)
     )
-    expect(result.current.getPayloadMatrix().injectPostMatterManifest).toBe(
-      false
-    )
+    expect(result.current.getPayloadMatrix().injectManifest).toBe(false)
   })
 
   it('updates stripComments state and syncs to localStorage', () => {

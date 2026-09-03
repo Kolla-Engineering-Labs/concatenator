@@ -8,9 +8,12 @@ import { SymlinkRejectedError, PathTraversalError } from '../errors.js'
 import {
   START_DELIMITER,
   END_DELIMITER,
+  KEL_MANIFEST_START,
+  KEL_MANIFEST_END,
   POST_MATTER_MANIFEST_START,
   POST_MATTER_MANIFEST_END,
 } from '../constants.js'
+import { logger } from '../../lib/logger.js'
 import type { VirtualFile, TelemetryPayload } from '../engine.js'
 
 /**
@@ -105,21 +108,20 @@ export function dedupePath(path: string, existingPaths: Set<string>): string {
     finalPath = `${baseName}(${counter})${extension}`
     counter++
   }
-
   return finalPath
 }
 
 /**
- * Process extracted file: sanitize path, check jailing, deduplicate, and record telemetry
+ * Safely validate and add an extracted file to results
  *
- * @param rawPath - Raw path string extracted from marker
- * @param fileContent - Content extracted from marker bounds
- * @param rootDir - Root directory for path jailing assertion
- * @param files - Target virtual file array
- * @param skippedPaths - Array tracking skipped raw paths
- * @param addedPaths - Set tracking accumulated unique paths
- * @param telemetry - Observability telemetry payload
- * @returns true if file was successfully validated and added, false otherwise
+ * @param rawPath - The raw path from marker
+ * @param fileContent - The extracted content
+ * @param rootDir - Root directory boundary
+ * @param files - Results array to append to
+ * @param skippedPaths - Array to record skipped paths
+ * @param addedPaths - Set tracking deduplicated paths
+ * @param telemetry - Telemetry payload for tracking skipped files
+ * @returns True if file was added, false if skipped
  */
 export function processExtractedFile(
   rawPath: string,
@@ -130,20 +132,23 @@ export function processExtractedFile(
   addedPaths: Set<string>,
   telemetry: TelemetryPayload
 ): boolean {
-  const sanitizedPath = sanitizePath(rawPath)
-  if (!sanitizedPath) return false
-
   try {
-    resolveAndJail(sanitizedPath, rootDir)
-
-    const finalPath = dedupePath(sanitizedPath, addedPaths)
+    resolveAndJail(rawPath, rootDir)
+    const sanitized = sanitizePath(rawPath)
+    const finalPath = dedupePath(sanitized, addedPaths)
     addedPaths.add(finalPath)
-    files.push({ path: finalPath, content: fileContent })
+    files.push({
+      path: finalPath,
+      content: fileContent,
+    })
     return true
   } catch (err: unknown) {
     if (err instanceof SymlinkRejectedError) {
       skippedPaths.push(rawPath)
-      telemetry.skipped.push({ path: rawPath, reason: 'Symlink Rejected' })
+      telemetry.skipped.push({
+        path: rawPath,
+        reason: 'Symbolic Link Rejected',
+      })
       telemetry.symlinksRejected++
       return false
     }
@@ -166,13 +171,74 @@ export interface PostMatterEntry {
   hash: string
 }
 
+export type PreMatterEntry = PostMatterEntry
+
 export interface PostMatterManifest {
   sessionId: string | null
   entries: PostMatterEntry[]
 }
 
+export type PreMatterManifest = PostMatterManifest
+
 /**
- * Extract Post-Matter EOF manifest from concatenated content
+ * Extract Pre-Matter KEL manifest from the head of concatenated content
+ *
+ * Format:
+ * <<<<< KEL_MANIFEST_START (ID: sessionId) >>>>>
+ * path/to/file|0644|hash
+ * <<<<< KEL_MANIFEST_END >>>>>
+ *
+ * @param content - The concatenated content
+ * @returns PreMatterManifest or null if not found
+ */
+export function extractPreMatterManifest(
+  content: string
+): PreMatterManifest | null {
+  const startIndex = content.indexOf(KEL_MANIFEST_START)
+  if (startIndex === -1) return null
+
+  const endIndex = content.indexOf(KEL_MANIFEST_END, startIndex)
+  if (endIndex === -1) return null
+
+  const lineEnd = content.indexOf('\n', startIndex)
+  const startLine =
+    lineEnd !== -1
+      ? content.substring(startIndex, lineEnd)
+      : content.substring(startIndex)
+
+  const sessionMatch = startLine.match(/\(ID:\s*([a-zA-Z0-9]+)\s*\)/i)
+  const sessionId = sessionMatch ? sessionMatch[1] : null
+
+  const manifestBody = content.substring(
+    lineEnd !== -1 ? lineEnd + 1 : startIndex + startLine.length,
+    endIndex
+  )
+
+  const lines = manifestBody.split(/\r?\n/)
+  const entries: PreMatterEntry[] = []
+
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (!trimmed) continue
+
+    const parts = trimmed.split('|')
+    if (parts.length >= 3) {
+      entries.push({
+        path: parts[0].trim(),
+        mode: parts[1].trim(),
+        hash: parts[2].trim(),
+      })
+    }
+  }
+
+  return {
+    sessionId,
+    entries,
+  }
+}
+
+/**
+ * Extract Post-Matter EOF manifest from concatenated content (legacy compatibility)
  *
  * Format:
  * <<<<< POST_MATTER_MANIFEST_START (ID: sessionId) >>>>>
@@ -187,6 +253,10 @@ export function extractPostMatterManifest(
 ): PostMatterManifest | null {
   const startIndex = content.indexOf(POST_MATTER_MANIFEST_START)
   if (startIndex === -1) return null
+
+  logger.warn(
+    '[DEPRECATION WARNING] Post-Matter EOF manifests are deprecated and will be actively rejected in v2.0.0. Migrate bundles to KEL Pre-Matter headers.'
+  )
 
   const endIndex = content.indexOf(POST_MATTER_MANIFEST_END, startIndex)
   if (endIndex === -1) return null
