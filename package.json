@@ -1,6 +1,8 @@
 {
   "name": "@kolla/concatenator",
   "version": "0.9.6",
+  "description": "Professional-grade utility for LLM context management",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public"
   },
