@@ -19,6 +19,10 @@
 
 ## Recently Completed Milestones (Stable - Do Not Revisit)
 
+- **CI Build Step & Unit Test Mock Stub Isolation (`.github/workflows/sonarcloud.yml`, `tests/cli/utils.test.ts`):**
+  - **CI Build Preconditioning (`.github/workflows/sonarcloud.yml`):** Injected `npm run build` prior to `npm run test:coverage` in SonarCloud workflow pipeline to ensure distribution manifests and web-asset compilation artifacts are generated in clean CI environments.
+  - **Isolated Dynamic Import Stubbing (`tests/cli/utils.test.ts`):** Replaced manual runtime mock invocations with `vi.hoisted` and static `vi.mock` bindings across Node built-ins (`node:fs`, `fs`, `node:child_process`, `child_process`, `node:crypto`, `crypto`), `UIServer`, and `web-assets.js` / `webAssets.js`. Guarantees standalone Vitest CLI unit test execution without physical disk dependency on uncommitted or pre-existing build artifacts.
+
 - **Parser Strategy Test Architecture & Pure Contracts (`tests/core/parsers/ParserUtils.test.ts`, `tests/core/parsers/HeaderParser.test.ts`, `tests/core/parsers/LegacyParser.test.ts`, `tests/core/parsers/SessionParser.test.ts`):**
   - **Single Responsibility Unit Test Suites:** Created isolated, dedicated test suites mirroring `src/core/parsers/` into `tests/core/parsers/` for each strategy class (`SessionParser`, `LegacyParser`, `HeaderParser`) and pure helper suite (`ParserUtils`).
   - **Pure String Contracts & Zero-I/O Invariants:** Enforced pure string manipulation testing across all parser modules without importing or mocking `node:fs` or `IVFSAdapter`.

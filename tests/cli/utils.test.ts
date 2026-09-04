@@ -2,47 +2,84 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 import { join, resolve } from 'node:path'
 
-// Mocking Node built-ins
-const mockFs = {
-  readdirSync: vi.fn(),
-  readFileSync: vi.fn(),
-  statSync: vi.fn(),
-  writeFileSync: vi.fn(),
-  mkdirSync: vi.fn(),
-  existsSync: vi.fn(),
-  rmSync: vi.fn(),
-}
+// Mocking Node built-ins and dependencies with vi.hoisted
+const { mockFs, mockChildProcess, mockCrypto, mockLogger, mockFsUtils } =
+  vi.hoisted(() => {
+    const mockFs = {
+      readdirSync: vi.fn(),
+      readFileSync: vi.fn(),
+      statSync: vi.fn(),
+      writeFileSync: vi.fn(),
+      mkdirSync: vi.fn(),
+      existsSync: vi.fn(),
+      rmSync: vi.fn(),
+    }
 
-const mockChildProcess = {
-  execSync: vi.fn(),
-  execFileSync: vi.fn(),
-  exec: vi.fn(),
-}
+    const mockChildProcess = {
+      execSync: vi.fn(),
+      execFileSync: vi.fn(),
+      exec: vi.fn(),
+    }
 
-const mockCrypto = {
-  createHash: vi.fn(),
-  randomBytes: vi.fn(),
-}
+    const mockCrypto = {
+      createHash: vi.fn(),
+      randomBytes: vi.fn(),
+    }
 
-vi.doMock('node:fs', () => mockFs)
-vi.doMock('node:child_process', () => mockChildProcess)
-vi.doMock('node:crypto', () => mockCrypto)
+    const mockLogger = {
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
+      debug: vi.fn(),
+      raw: vi.fn((msg: any) => console.log(msg)),
+      rawError: vi.fn((msg: any) => console.error(msg)),
+    }
+
+    const mockFsUtils = {
+      isDirectoryTainted: vi.fn().mockReturnValue(false),
+    }
+
+    return {
+      mockFs,
+      mockChildProcess,
+      mockCrypto,
+      mockLogger,
+      mockFsUtils,
+    }
+  })
+
+vi.mock('node:fs', () => ({
+  default: mockFs,
+  ...mockFs,
+}))
+vi.mock('fs', () => ({
+  default: mockFs,
+  ...mockFs,
+}))
+vi.mock('node:child_process', () => ({
+  default: mockChildProcess,
+  ...mockChildProcess,
+}))
+vi.mock('child_process', () => ({
+  default: mockChildProcess,
+  ...mockChildProcess,
+}))
+vi.mock('node:crypto', () => ({
+  default: mockCrypto,
+  ...mockCrypto,
+}))
+vi.mock('crypto', () => ({
+  default: mockCrypto,
+  ...mockCrypto,
+}))
 
 // Mock logger
-const mockLogger = {
-  info: vi.fn(),
-  warn: vi.fn(),
-  error: vi.fn(),
-  debug: vi.fn(),
-  raw: vi.fn((msg) => console.log(msg)),
-  rawError: vi.fn((msg) => console.error(msg)),
-}
-vi.doMock('../../src/lib/logger.js', () => ({
+vi.mock('../../src/lib/logger.js', () => ({
   logger: mockLogger,
 }))
 
 // Mock TokenService and IgnoreEngine if needed, but they are relatively safe to use or mock lightly
-vi.doMock('../../src/core/TokenService.js', () => ({
+vi.mock('../../src/core/TokenService.js', () => ({
   TokenService: {
     getTokenEstimate: vi.fn().mockReturnValue(10),
     getTokenCount: vi.fn().mockReturnValue({ count: 10, model: 'heuristic' }),
@@ -50,17 +87,17 @@ vi.doMock('../../src/core/TokenService.js', () => ({
 }))
 
 // Mock UIServer to avoid starting a real server
-vi.doMock('../../src/core/UIServer.js', () => ({
+vi.mock('../../src/core/UIServer.js', () => ({
   UIServer: class {
     start = vi.fn().mockResolvedValue(1234)
   },
 }))
 
 // Mock IgnoreEngine
-vi.doMock('../../src/core/ignore/IgnoreEngine.js', () => {
+vi.mock('../../src/core/ignore/IgnoreEngine.js', () => {
   const parseIgnoreFile = vi
     .fn()
-    .mockImplementation((content) => content.split('\n'))
+    .mockImplementation((content: string) => content.split('\n'))
   return {
     IgnoreEngine: {
       parseIgnoreFile,
@@ -72,20 +109,23 @@ vi.doMock('../../src/core/ignore/IgnoreEngine.js', () => {
 })
 
 // Mock web-assets
-vi.doMock('../../src/cli/web-assets.js', () => ({
+vi.mock('../../src/cli/web-assets.js', () => ({
+  webAssets: {},
+}))
+vi.mock('../../src/cli/webAssets.js', () => ({
   webAssets: {},
 }))
 
 // Mock engine
-vi.doMock('../../src/core/engine.js', () => ({
+vi.mock('../../src/core/engine.js', () => ({
   generateSessionId: vi.fn().mockReturnValue('mock-session'),
 }))
 
 // Mock fs-utils
-const mockFsUtils = {
-  isDirectoryTainted: vi.fn().mockReturnValue(false),
-}
-vi.doMock('../../src/core/utils/fs-utils.js', () => mockFsUtils)
+vi.mock('../../src/core/utils/fs-utils.js', () => ({
+  default: mockFsUtils,
+  ...mockFsUtils,
+}))
 
 // Mock fetch
 global.fetch = vi.fn()
