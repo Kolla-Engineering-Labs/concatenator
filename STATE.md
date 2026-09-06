@@ -1,25 +1,37 @@
 # Project State: Concatenator
 
-**Current Version:** v1.0.0-rc (Release Candidate Pipeline)
-**Last Updated:** 2026-09-02
+**Current Version:** v0.9.7 (Release Candidate Pipeline)
+**Last Updated:** 2026-09-05
 
 ## Active Context & Architecture
 
-- **Core Engine Separation:** Strategy Pattern classes (`SessionParser`, `LegacyParser`, `HeaderParser`) and pure utilities (`ParserUtils`) are decoupled under `@concatenator/core/parsers/` with dedicated pure contract test suites in `tests/core/parsers/`.
+- **Zero-Trust Stream Physics:** Implementing the Phase C mandate for the Pre-Matter Header. Enforcing $O(1)$ memory consumption by validating strict `fs.lstatSync` directory traversal bounds before stream buffering.
+- **Core Engine Separation:** Strategy Pattern classes (`SessionParser`, `LegacyParser`, `HeaderParser`) and pure utilities (`ParserUtils`) are decoupled under `@concatenator/core/parsers/` with dedicated pure contract test suites.
 - **CLI Command Routing:** Queued refactor for CLI execution into a strict Command Pattern architecture to decouple file system utilities from command flags.
 - **Web VFS Memory Optimization:** Planning the replacement of `JSZip` with `fflate` in the browser to stream compression in chunks.
-- **Zero-Trust Local Networking:** Queued hardening of `server.ts` to strictly bind to `127.0.0.1` and enforce cryptographic ephemeral tokens.
 - **Husky Tiering:** `pre-commit` restricted to fast static analysis (types, linting, unit tests); heavy E2E suites relegated to `pre-push` to maintain developer velocity.
 
 ## Pending Roadmap Tasks (Immediate Focus)
 
-- **Phase C (Zero-Trust Security Auditing):** Register Kolla Engineering Labs org accounts on SonarCloud and Snyk. Add `SONAR_TOKEN` and `SNYK_TOKEN` to GitHub Actions secrets.
+- **Phase C (Zero-Trust Security Auditing & Stream Slicing):**
+  - **Blocker:** Audit the `TransformStream` byte-slicing logic. Ensure the `<<<<< KEL_MANIFEST_END >>>>>` boundary chunk is cleanly severed without corrupting the initial bytes of the target file payload.
+  - Register Kolla Engineering Labs org accounts on SonarCloud and Snyk. Add `SONAR_TOKEN` and `SNYK_TOKEN` to GitHub Actions secrets.
+- **Phase D (Core Optimization):** Promote the AST pruning prototype from sandbox into `@concatenator/core` as an optional payload transformation step for large LLM context budgets.
 - **Phase E (Final Compilation):** Execute the Node 22 SEA (Single Executable Application) binary generation for portable CLI distribution.
-- **Core Optimization (AST Pruning):** Integrate `tree-sitter` as an optional peer dependency within the core workspace to enable structural payload skeletonization for large context models (e.g., DeepSeek, Nova).
 
 ## Recently Completed Milestones (Stable - Do Not Revisit)
 
-- **CI Build Step & Unit Test Mock Stub Isolation (`.github/workflows/sonarcloud.yml`, `tests/cli/utils.test.ts`):**
+- **Phase F: Release v0.9.7 — Local Routing Synchronization, Zero-Trust API Firewall & Vercel CI Governance**
+  - **Deterministic Filesystem-Based UI Mounting (`server.ts`):** Replaced environment-variable locks (`process.env.NODE_ENV === 'production'`) with physical filesystem presence checks (`existsSync(distPath)`).
+  - **Zero-Trust `/api` Firewall Guard (`server.ts`):** Injected a strict 404 JSON fallback middleware before the SPA catch-all handler, preventing unrecognized API endpoints from returning false HTML 200 responses.
+  - **Vercel Tag-Driven Deployment Gate Enforcement:** Corrected `ignoreCommand` to execute `bash scripts/vercel-build-gate.sh` at the repository root, ensuring edge deployments strictly trigger only on authorized tag/release patterns.
+
+- **Sandbox Tree-sitter AST Pruning Middleware Prototype**
+  - **Extension-Based Multiplexer Dispatcher:** Implemented `pruneSource` routing for `.ts`, `.tsx`, `.js`, `.jsx` to the Tree-sitter WASM pruner while gracefully passing through unsupported extensions unaltered.
+  - **WASM AST Pruning & Fallback:** Implemented AST traversal to replace block bodies with `{ /* [PRUNED BY CONCATENATOR] */ }`, backed by an $O(n)$ forward-scanning brace-balancing approximation fallback.
+  - **Isolated Vitest Contract Suite:** Verified 100% pass rate for TypeScript class body shedding and exact Markdown payload pass-through preservation.
+
+  - **CI Build Step & Unit Test Mock Stub Isolation (`.github/workflows/sonarcloud.yml`, `tests/cli/utils.test.ts`):**
   - **CI Build Preconditioning (`.github/workflows/sonarcloud.yml`):** Injected `npm run build` prior to `npm run test:coverage` in SonarCloud workflow pipeline to ensure distribution manifests and web-asset compilation artifacts are generated in clean CI environments.
   - **Isolated Dynamic Import Stubbing (`tests/cli/utils.test.ts`):** Replaced manual runtime mock invocations with `vi.hoisted` and static `vi.mock` bindings across Node built-ins (`node:fs`, `fs`, `node:child_process`, `child_process`, `node:crypto`, `crypto`), `UIServer`, and `web-assets.js` / `webAssets.js`. Guarantees standalone Vitest CLI unit test execution without physical disk dependency on uncommitted or pre-existing build artifacts.
 
