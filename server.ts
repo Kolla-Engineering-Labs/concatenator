@@ -2,7 +2,7 @@ import 'dotenv/config'
 import express from 'express'
 import path from 'path'
 import fs from 'fs/promises'
-import { mkdirSync } from 'fs'
+import { mkdirSync, existsSync } from 'fs'
 import { rateLimit } from 'express-rate-limit'
 import { logger } from './src/lib/logger.js'
 import { DEFAULT_IGNORE_LIST } from './src/core/constants.js'
@@ -405,12 +405,31 @@ export async function startServer(
     }
   })
 
+  // ── API Firewall (Zero-Trust Fallback) ───────────────────────────────────────
+  // Ensure unrecognized API routes return strict 404 JSON before the SPA catch-all
+  // intercepts them and incorrectly returns a 200 OK with index.html.
+  app.use('/api', (req, res) => {
+    res
+      .status(404)
+      .json({ error: 'API endpoint not found or unsupported method.' })
+  })
+
   // Vite middleware removed since we use concurrently with Vite dev server directly
-  if (process.env.NODE_ENV === 'production') {
-    const distPath = path.join(process.cwd(), 'dist')
+  const distPath = path.join(process.cwd(), 'dist')
+
+  if (existsSync(distPath)) {
+    logger.info(`[Routing] Mounting static frontend from ${distPath}`)
     app.use(express.static(distPath))
     app.get('*', staticFileLimiter, (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'))
+    })
+  } else {
+    logger.warn(
+      `[Routing] 'dist' directory not found. Static UI routing bypassed. Run 'npm run build'.`
+    )
+    // API probing fallback for when the UI isn't built
+    app.get('/', (req, res) => {
+      res.status(404).json({ error: 'Frontend UI not built. API is active.' })
     })
   }
 
