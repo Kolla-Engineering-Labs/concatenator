@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.9.7] - 2026-09-05
+
+### Patch Changes
+
+- ### Patch Changes
+  - **Infrastructure:** Synchronized local Express routing and Vercel CI deployment gates.
+    - Fixed an issue where `npm run server` would return `Cannot GET /` by replacing environment-variable routing locks with deterministic physical filesystem checks.
+    - Corrected the Vercel `ignoreCommand` path traversal to ensure the "No Junk" tag-enforcement script reliably executes at the repository root.
+    - Implemented a strict `/api` firewall to prevent the SPA fallback router from swallowing unrecognized API endpoints and breaking test assertions.
+
 ## [0.9.6] - 2026-08-29
 
 ### Patch Changes
