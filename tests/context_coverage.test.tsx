@@ -11,6 +11,7 @@ vi.mock('../src/web/services/ApiClient', () => ({
     getIgnoreList: vi.fn(),
     updateIgnoreList: vi.fn(),
     getVfsState: vi.fn(),
+    fetchVFS: vi.fn().mockResolvedValue({ tree: null, partial: false }),
   },
 }))
 
@@ -50,6 +51,7 @@ describe('ModeContext Coverage', () => {
   })
 
   it('handles server fetch error gracefully', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.mocked(ApiClient.getIgnoreList).mockRejectedValue(
       new Error('Network error')
     )
@@ -63,6 +65,7 @@ describe('ModeContext Coverage', () => {
     await waitFor(() => {
       expect(ApiClient.getIgnoreList).toHaveBeenCalled()
     })
+    warnSpy.mockRestore()
     // Should not crash
   })
 

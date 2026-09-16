@@ -20,6 +20,7 @@ import {
 } from 'fs'
 import { tmpdir } from 'os'
 import { join, normalize, sep } from 'path'
+import { createRequire } from 'node:module'
 
 interface CLIResult {
   status: number
@@ -27,12 +28,9 @@ interface CLIResult {
   stderr: string
 }
 
-const TSX_BIN = join(
-  process.cwd(),
-  'node_modules',
-  '.bin',
-  process.platform === 'win32' ? 'tsx.cmd' : 'tsx'
-)
+const require = createRequire(import.meta.url)
+
+const TSX_BIN = require.resolve('tsx/cli')
 const CLI_ENTRY = join(process.cwd(), 'src/cli/index.ts')
 
 /**
@@ -42,11 +40,10 @@ function runCLI(args: string[], options: { cwd?: string } = {}): CLIResult {
   const env = { ...process.env }
   delete env.VITEST
 
-  const result = spawnSync(TSX_BIN, [CLI_ENTRY, ...args], {
+  const result = spawnSync(process.execPath, [TSX_BIN, CLI_ENTRY, ...args], {
     encoding: 'utf-8',
     cwd: options.cwd || process.cwd(),
     timeout: 60000,
-    shell: true,
     env,
   })
 

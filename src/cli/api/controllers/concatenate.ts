@@ -117,7 +117,8 @@ export const handleConcatenate = async (
     const matrix: ExecutionMatrixPayload = {
       outputFormat: matrixPayload.outputFormat === 'xml' ? 'xml' : 'markdown',
       enableNeutralization: Boolean(matrixPayload.enableNeutralization),
-      injectManifest: Boolean(matrixPayload.injectManifest),
+      // KEL Protocol: Enforce Pre-Matter Header for O(1) stream interception
+      injectManifest: true,
     }
 
     // 4. Create Web Stream and pipe directly to HTTP response

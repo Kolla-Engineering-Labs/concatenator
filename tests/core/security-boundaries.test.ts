@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
@@ -18,6 +18,12 @@ import {
   ITiktokenEncoder,
 } from '../../src/core/TokenService.js'
 import { TreeItem } from '../../src/core/types.js'
+
+afterEach(() => {
+  process.removeAllListeners('uncaughtException')
+  process.removeAllListeners('SIGINT')
+  process.removeAllListeners('SIGTERM')
+})
 
 describe('VFS Security Boundaries & TokenService Edge-Case Audit Suite', () => {
   let tempDir: string
@@ -112,6 +118,7 @@ describe('VFS Security Boundaries & TokenService Edge-Case Audit Suite', () => {
 
   describe('TokenService Resilience & Overflow Boundaries', () => {
     it('PrecisionStrategy gracefully falls back to Heuristic when encoder throws an error', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const faultyEncoder: ITiktokenEncoder = {
         encode: () => {
           throw new Error('Simulated BPE Encoder Failure')
@@ -123,6 +130,7 @@ describe('VFS Security Boundaries & TokenService Edge-Case Audit Suite', () => {
 
       expect(result.model).toBe('heuristic')
       expect(result.count).toBe(8)
+      warnSpy.mockRestore()
     })
 
     it('hashContent handles empty strings with sentinel key', () => {

@@ -27,6 +27,8 @@ describe('UIServer Coverage Extensions', () => {
   }
 
   beforeEach(async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
     tmpDir = mkdtempSync(join(tmpdir(), 'ui-cov-test-'))
     server = new UIServer(0, assets, {
       path: tmpDir,
@@ -38,6 +40,7 @@ describe('UIServer Coverage Extensions', () => {
   afterEach(() => {
     server.stop()
     rmSync(tmpDir, { recursive: true, force: true })
+    vi.restoreAllMocks()
   })
 
   const makeRequest = (
@@ -159,10 +162,12 @@ describe('UIServer Coverage Extensions', () => {
     })
 
     it('should reject heartbeat with invalid token', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       const res = await makeRequest('/api/heartbeat', 'POST', {
         'X-Concatenator-Token': 'wrong',
       })
       expect(res.status).toBe(403)
+      warnSpy.mockRestore()
     })
 
     it('should handle shutdown request', async () => {

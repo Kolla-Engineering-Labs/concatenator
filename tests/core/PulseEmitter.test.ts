@@ -29,6 +29,8 @@ describe('PulseEmitter', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.useFakeTimers()
     vi.mocked(fs.existsSync).mockReturnValue(true)
     emitter = new PulseEmitter(op)
@@ -36,6 +38,7 @@ describe('PulseEmitter', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+    vi.restoreAllMocks()
   })
 
   it('should ensure pulse directory exists on creation', () => {

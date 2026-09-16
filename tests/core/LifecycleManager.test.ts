@@ -12,6 +12,12 @@ vi.mock('node:fs', async () => {
   }
 })
 
+afterEach(() => {
+  process.removeAllListeners('uncaughtException')
+  process.removeAllListeners('SIGINT')
+  process.removeAllListeners('SIGTERM')
+})
+
 describe('LifecycleManager', () => {
   let manager: LifecycleManager
 
@@ -25,6 +31,9 @@ describe('LifecycleManager', () => {
   afterEach(() => {
     vi.useRealTimers()
     LifecycleManager._resetInstance()
+    process.removeAllListeners('uncaughtException')
+    process.removeAllListeners('SIGINT')
+    process.removeAllListeners('SIGTERM')
   })
 
   it('should manage processing state', () => {
@@ -93,6 +102,7 @@ describe('LifecycleManager', () => {
   })
 
   it('should handle errors during lock file cleanup', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.mocked(fs.unlinkSync).mockImplementation(() => {
       throw new Error('unlink fail')
     })
@@ -100,9 +110,11 @@ describe('LifecycleManager', () => {
     await manager.prepareShutdown()
     // Should log warning and continue
     expect(fs.unlinkSync).toHaveBeenCalled()
+    warnSpy.mockRestore()
   })
 
   it('should handle errors during temp dir cleanup', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.mocked(fs.rmSync).mockImplementation(() => {
       throw new Error('rm fail')
     })
@@ -112,9 +124,11 @@ describe('LifecycleManager', () => {
 
     await manager.prepareShutdown()
     expect(fs.rmSync).toHaveBeenCalled()
+    warnSpy.mockRestore()
   })
 
   it('should handle uncaughtException', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const exitSpy = vi
       .spyOn(process, 'exit')
       .mockImplementation((() => {}) as any)
@@ -127,9 +141,11 @@ describe('LifecycleManager', () => {
 
     expect(exitSpy).toHaveBeenCalledWith(1)
     exitSpy.mockRestore()
+    consoleSpy.mockRestore()
   })
 
   it('should handle idle timeout failure', async () => {
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const exitSpy = vi
       .spyOn(process, 'exit')
       .mockImplementation((() => {}) as any)
@@ -143,5 +159,6 @@ describe('LifecycleManager', () => {
 
     expect(exitSpy).toHaveBeenCalledWith(1)
     exitSpy.mockRestore()
+    consoleSpy.mockRestore()
   })
 })

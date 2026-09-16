@@ -3,13 +3,22 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import * as http from 'node:http'
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as os from 'node:os'
 import type { AddressInfo } from 'node:net'
 import { startServer } from '@/server'
+
+beforeEach(() => {
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('Node 22 Execution Boundary API Server', () => {
   let tmpDir: string
@@ -148,6 +157,27 @@ describe('Node 22 Execution Boundary API Server', () => {
     const bodyText = await res.text()
     expect(bodyText).toContain('FILE_START: test1.ts')
     expect(bodyText).toContain('console.log("hello");')
+    expect(bodyText).toContain('KEL_MANIFEST_START')
+  })
+
+  it('enforces Pre-Matter Header injection even if client supplies injectManifest: false', async () => {
+    const res = await fetch(`http://127.0.0.1:${port}/api/concatenate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-concatenator-token': testToken,
+      },
+      body: JSON.stringify({
+        matrix: {
+          outputFormat: 'markdown',
+          enableNeutralization: false,
+          injectManifest: false,
+        },
+      }),
+    })
+
+    expect(res.status).toBe(200)
+    const bodyText = await res.text()
     expect(bodyText).toContain('KEL_MANIFEST_START')
   })
 

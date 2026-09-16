@@ -15,3 +15,6 @@
 *.blob binary
 *.zip binary
 *.exe binary
+
+# Avoid STATE.md collisions
+STATE.md merge=union

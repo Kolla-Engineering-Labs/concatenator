@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import * as fs from 'node:fs'
 import { join } from 'node:path'
 
@@ -25,6 +25,12 @@ vi.mock('node:fs', async () => {
 
 import { LifecycleManager } from '../src/core/LifecycleManager.js'
 import { logger } from '../src/lib/logger.js'
+
+afterEach(() => {
+  process.removeAllListeners('uncaughtException')
+  process.removeAllListeners('SIGINT')
+  process.removeAllListeners('SIGTERM')
+})
 
 describe('LifecycleManager', () => {
   beforeEach(() => {

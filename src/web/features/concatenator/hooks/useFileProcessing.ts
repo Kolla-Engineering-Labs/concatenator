@@ -1404,11 +1404,21 @@ export const useFileProcessing = ({
   )
 
   const handleExport = useCallback(
-    async (configMatrix: ExecutionMatrix) => {
+    async (
+      configMatrixOrFiles?: ExecutionMatrix | FileItem[],
+      formatOverride?: 'markdown' | 'xml'
+    ) => {
       setIsProcessing(true)
       try {
+        const isArray = Array.isArray(configMatrixOrFiles)
+        const configMatrix = isArray
+          ? ({ outputFormat: formatOverride } as ExecutionMatrix)
+          : (configMatrixOrFiles as ExecutionMatrix)
+
         const outputFormat: 'markdown' | 'xml' =
-          configMatrix?.outputFormat === 'xml' || configMatrix?.format === 'xml'
+          formatOverride === 'xml' ||
+          configMatrix?.outputFormat === 'xml' ||
+          configMatrix?.format === 'xml'
             ? 'xml'
             : 'markdown'
 
@@ -1430,9 +1440,10 @@ export const useFileProcessing = ({
           throw new Error(errorData.error || `HTTP ${response.status}`)
         }
 
-        // Dynamically extract the target filename (PDF, ZIP, TXT)
+        // Dynamically extract the target filename (PDF, ZIP, TXT/MD/XML)
         const disposition = response.headers.get('Content-Disposition')
-        let filename = `concatenator-export-${Date.now()}.txt`
+        const extension = outputFormat === 'xml' ? 'xml' : 'markdown'
+        let filename = `concatenator-export-${Date.now()}.${extension}`
         if (disposition && disposition.includes('filename=')) {
           const match = disposition.match(/filename="?([^"]+)"?/)
           if (match) filename = match[1]

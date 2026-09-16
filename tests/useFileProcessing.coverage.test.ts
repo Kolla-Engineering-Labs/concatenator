@@ -7,6 +7,7 @@ import { ApiClient } from '../src/web/services/ApiClient'
 vi.mock('../src/web/services/ApiClient', () => ({
   ApiClient: {
     getFileBlob: vi.fn(),
+    triggerConcatenate: vi.fn(),
   },
 }))
 
@@ -170,5 +171,109 @@ describe('useFileProcessing Coverage Booster', () => {
     })
 
     // If we call it again while processing is true (though it's sync in this mock)
+  })
+
+  it('handleConcatenate sets download extension dynamically to .xml when outputFormat is xml', async () => {
+    window.URL.createObjectURL = vi.fn().mockReturnValue('blob:mock-xml-url')
+    window.URL.revokeObjectURL = vi.fn()
+
+    let clickedDownloadName = ''
+    const originalCreateElement = document.createElement.bind(document)
+    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      const el = originalCreateElement(tag)
+      if (tag === 'a') {
+        el.click = vi.fn().mockImplementation(() => {
+          clickedDownloadName = (el as HTMLAnchorElement).download
+        })
+      }
+      return el
+    })
+
+    const mockBlob = new Blob(['<xml></xml>'], { type: 'application/xml' })
+    const mockHeaders = new Headers() // No Content-Disposition to test fallback extension
+    vi.mocked(ApiClient.triggerConcatenate).mockResolvedValue({
+      ok: true,
+      headers: mockHeaders,
+      blob: async () => mockBlob,
+    } as unknown as Response)
+
+    const { result } = renderHook(() =>
+      useFileProcessing({
+        appMode: AppMode.CONCATENATE,
+        hydrateFiles: mockHydrateFalse,
+        isExplicitlyNegated: () => false,
+        maxFileLimit: 1000,
+        isIgnoreListLoading: false,
+        setVirtualFileSystem: vi.fn(),
+        shouldRecurse: () => true,
+      })
+    )
+
+    const mockFiles = [
+      {
+        name: 'test.ts',
+        path: 'src/test.ts',
+        kind: 'file' as const,
+        size: 10,
+      },
+    ]
+
+    await act(async () => {
+      await result.current.handleConcatenate(mockFiles, 'xml')
+    })
+
+    expect(clickedDownloadName).toMatch(/^concatenator-export-\d+\.xml$/)
+  })
+
+  it('handleConcatenate sets download extension dynamically to .markdown when outputFormat is markdown', async () => {
+    window.URL.createObjectURL = vi.fn().mockReturnValue('blob:mock-md-url')
+    window.URL.revokeObjectURL = vi.fn()
+
+    let clickedDownloadName = ''
+    const originalCreateElement = document.createElement.bind(document)
+    vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
+      const el = originalCreateElement(tag)
+      if (tag === 'a') {
+        el.click = vi.fn().mockImplementation(() => {
+          clickedDownloadName = (el as HTMLAnchorElement).download
+        })
+      }
+      return el
+    })
+
+    const mockBlob = new Blob(['# Markdown'], { type: 'text/markdown' })
+    const mockHeaders = new Headers() // No Content-Disposition
+    vi.mocked(ApiClient.triggerConcatenate).mockResolvedValue({
+      ok: true,
+      headers: mockHeaders,
+      blob: async () => mockBlob,
+    } as unknown as Response)
+
+    const { result } = renderHook(() =>
+      useFileProcessing({
+        appMode: AppMode.CONCATENATE,
+        hydrateFiles: mockHydrateFalse,
+        isExplicitlyNegated: () => false,
+        maxFileLimit: 1000,
+        isIgnoreListLoading: false,
+        setVirtualFileSystem: vi.fn(),
+        shouldRecurse: () => true,
+      })
+    )
+
+    const mockFiles = [
+      {
+        name: 'test.ts',
+        path: 'src/test.ts',
+        kind: 'file' as const,
+        size: 10,
+      },
+    ]
+
+    await act(async () => {
+      await result.current.handleConcatenate(mockFiles, 'markdown')
+    })
+
+    expect(clickedDownloadName).toMatch(/^concatenator-export-\d+\.markdown$/)
   })
 })

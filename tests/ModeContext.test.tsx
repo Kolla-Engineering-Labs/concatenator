@@ -17,8 +17,9 @@ describe('ModeContext (Workbench State)', () => {
     localStorage.clear()
     localStorage.setItem('concat_auto_save_ignore', 'true')
     global.fetch = vi.fn().mockResolvedValue({
-      ok: false,
-      json: () => Promise.resolve([]),
+      ok: true,
+      json: vi.fn().mockResolvedValue({ tree: null, partial: false }),
+      text: vi.fn().mockResolvedValue(''),
     })
   })
 
@@ -30,10 +31,16 @@ describe('ModeContext (Workbench State)', () => {
       DEFAULT_IGNORE_LIST.length
     )
     expect(result.current.ignoreList).toContain('node_modules')
+
+    await waitFor(() => {})
   })
 
   it('syncs ignore list to server on changes', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true })
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ tree: null, partial: false }),
+      text: vi.fn().mockResolvedValue(''),
+    })
     global.fetch = fetchMock
 
     const { result } = renderHook(() => useWorkbench(), { wrapper })
@@ -62,7 +69,11 @@ describe('ModeContext (Workbench State)', () => {
           json: () => Promise.resolve(serverList),
         })
       }
-      return Promise.resolve({ ok: true })
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ tree: null, partial: false }),
+        text: () => Promise.resolve(''),
+      })
     })
 
     localStorage.setItem('concat_ignore', JSON.stringify(['local-item']))
@@ -87,7 +98,11 @@ describe('ModeContext (Workbench State)', () => {
   })
 
   it('skips server sync if ignore list is identical to last synced', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true })
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ tree: null, partial: false }),
+      text: () => Promise.resolve(''),
+    })
     global.fetch = fetchMock
 
     const { result } = renderHook(() => useWorkbench(), { wrapper })
@@ -110,6 +125,7 @@ describe('ModeContext (Workbench State)', () => {
   })
 
   it('handles server sync POST failure gracefully', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     global.fetch = vi.fn().mockRejectedValue(new Error('Network error'))
 
@@ -124,6 +140,7 @@ describe('ModeContext (Workbench State)', () => {
         expect.stringContaining('Failed to sync ignore list to server')
       )
     })
+    warnSpy.mockRestore()
     consoleSpy.mockRestore()
   })
 
@@ -142,7 +159,11 @@ describe('ModeContext (Workbench State)', () => {
   })
 
   it('handles addIgnorePattern and removeIgnorePattern', async () => {
-    global.fetch = vi.fn().mockResolvedValue({ ok: true })
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ tree: null, partial: false }),
+      text: () => Promise.resolve(''),
+    })
     const { result } = renderHook(() => useWorkbench(), { wrapper })
 
     await act(async () => {
@@ -189,7 +210,11 @@ describe('ModeContext (Workbench State)', () => {
   })
 
   it('prevents sync when autoSaveIgnore is false', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true })
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ tree: null, partial: false }),
+      text: () => Promise.resolve(''),
+    })
     global.fetch = fetchMock
 
     // Set auto-save to false in localStorage
@@ -284,7 +309,11 @@ describe('ModeContext (Workbench State)', () => {
       if (url === '/api/ignore-list') {
         return initialPromise
       }
-      return Promise.resolve({ ok: true })
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ tree: null, partial: false }),
+        text: () => Promise.resolve(''),
+      })
     })
 
     const { result } = renderHook(() => useWorkbench(), { wrapper })
@@ -445,7 +474,11 @@ describe('ModeContext (Workbench State)', () => {
       if (url === '/api/ignore-list') {
         return Promise.reject(new Error('Network error'))
       }
-      return Promise.resolve({ ok: true })
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ tree: null, partial: false }),
+        text: () => Promise.resolve(''),
+      })
     })
 
     renderHook(() => useWorkbench(), { wrapper })
@@ -481,7 +514,11 @@ describe('ModeContext (Workbench State)', () => {
   })
 
   it('ephemeral suspensions recalculate VFS tree instantly and do not persist to .concatenatorignore / server API', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true })
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ tree: null, partial: false }),
+      text: () => Promise.resolve(''),
+    })
     global.fetch = fetchMock
 
     const { result, unmount } = renderHook(() => useWorkbench(), { wrapper })

@@ -1,7 +1,7 @@
 # Project State: Concatenator
 
 **Current Version:** v0.9.7 (Release Candidate Pipeline)
-**Last Updated:** 2026-09-05
+**Last Updated:** 2026-09-15
 
 ## Active Context & Architecture
 
@@ -20,6 +20,23 @@
 - **Phase E (Final Compilation):** Execute the Node 22 SEA (Single Executable Application) binary generation for portable CLI distribution.
 
 ## Recently Completed Milestones (Stable - Do Not Revisit)
+
+- **Test Harness Sterilization, Direct TSX Execution & Full QA Verification (`src/cli/cli.e2e.test.ts`, `tests/ModeContext.test.tsx`, `tests/context_coverage.test.tsx`, `tests/cli/api_server.test.ts`, `tests/core/UIServer-coverage.test.ts`, `tests/core/PulseEmitter.test.ts`, `tests/core/LifecycleManager.test.ts`, `tests/core/security-boundaries.test.ts`, `tests/lifecycle.test.ts`):**
+  - **Direct TSX Execution & Shell-Free Child Process Spawning (`src/cli/cli.e2e.test.ts`):** Replaced `.bin/tsx.cmd` path resolution and `shell: true` execution with `createRequire(import.meta.url).resolve('tsx/cli')` directly invoked via `spawnSync(process.execPath, [TSX_BIN, CLI_ENTRY, ...args])`, eliminating cross-platform shell injection risks, Windows path collisions, and CodeQL process execution alerts.
+  - **Universal Fetch & VFS Mock Boundaries (`tests/ModeContext.test.tsx`, `tests/context_coverage.test.tsx`):** Hardened all `global.fetch` mock instances to return standard `{ ok: true, json: () => Promise.resolve({ tree: null, partial: false }), text: () => Promise.resolve('') }` objects, preventing unhandled promise rejections on initial mount VFS sync.
+  - **Scoped Console Error & Warning Silencing (`tests/cli/api_server.test.ts`, `tests/core/UIServer-coverage.test.ts`, `tests/core/PulseEmitter.test.ts`, `tests/ModeContext.test.tsx`, `tests/context_coverage.test.tsx`):** Injected universal and test-scoped `vi.spyOn(console, 'error')` and `vi.spyOn(console, 'warn')` mocks to eliminate stdout/stderr noise on expected 403 zero-trust rejections, CORS blocks, server fetch failures, and filesystem exception tests.
+  - **Top-Level Process Event Listener Teardown (`tests/core/LifecycleManager.test.ts`, `tests/core/security-boundaries.test.ts`, `tests/lifecycle.test.ts`):** Placed `process.removeAllListeners('uncaughtException')`, `process.removeAllListeners('SIGINT')`, and `process.removeAllListeners('SIGTERM')` inside top-level `afterEach` hooks to prevent cross-suite event listener bleeding and `MaxListenersExceededWarning`.
+  - **100% Green Full QA Pipeline Verification (`npm run qa:full`):** Verified clean passing execution across all 75 test suites (859 passing tests, 1 skipped), unified coverage report generation, single executable preparation blob generation, SEA binary packaging, web asset embedding, and production Workbench UI build.
+
+- **Playwright Navigation Hardening & E2E Zero-Trust Security Suite (`e2e/fixtures.ts`, `e2e/cli-security.spec.ts`):**
+  - **SEA Daemon Navigation Simulation (`e2e/fixtures.ts`):** Augmented the Playwright `page.goto` fixture to natively inject `?t=kel-test-token-001` (or active CI test token) on relative and localhost navigation, accurately mirroring the SEA binary daemon browser launch sequence while preserving query parameter overrides and explicit bypass options.
+  - **Zero-Trust Perimeter & Token Handshake Tests (`e2e/cli-security.spec.ts`):** Added comprehensive E2E specs asserting URL query parameter ingestion into `sessionStorage.CONCATENATOR_TOKEN`, address bar query sanitization via `history.replaceState`, and immediate HTTP 403 `Zero-Trust Perimeter Violation` rejection on unauthenticated or invalid token requests.
+  - **Core Security Log Preservation:** Preserved all core server and controller audit logging in `server.ts` and `src/cli/api/controllers/concatenate.ts` untouched, maintaining full perimeter observability during automated testing.
+
+- **Backend Protocol Enforcement & Frontend Export Extension Alignment (`concatenate.ts`, `useFileProcessing.ts`, `tests/`):**
+  - **Hardened Pre-Matter Manifest Injection (`src/cli/api/controllers/concatenate.ts`):** Enforced `injectManifest: true` on the backend matrix payload under standard KEL protocol comments (`// KEL Protocol: Enforce Pre-Matter Header for O(1) stream interception`), decoupling header compliance from client payload state.
+  - **Format-Aware Download Extension Resolution (`src/web/features/concatenator/hooks/useFileProcessing.ts`):** Replaced default `.txt` fallback with dynamic extension derivation (`outputFormat === 'xml' ? 'xml' : 'markdown'`), setting `concatenator-export-${Date.now()}.${extension}` on anchor download triggers.
+  - **Contract Test Coverage (`tests/cli/api_server.test.ts`, `tests/useFileProcessing.coverage.test.ts`):** Added unit test assertions verifying Pre-Matter header injection under client `injectManifest: false` input and verified `.xml` / `.markdown` anchor download filenames.
 
 - **Phase F: Release v0.9.7 — Local Routing Synchronization, Zero-Trust API Firewall & Vercel CI Governance**
   - **Deterministic Filesystem-Based UI Mounting (`server.ts`):** Replaced environment-variable locks (`process.env.NODE_ENV === 'production'`) with physical filesystem presence checks (`existsSync(distPath)`).

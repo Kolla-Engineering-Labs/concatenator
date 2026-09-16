@@ -53,13 +53,47 @@ export const test = baseTest.extend<TestFixtures>({
 
   // Override page fixture to add worker ID header and mock routes
   page: async ({ page }, use, testInfo) => {
-    const workerId = getWorkerId(testInfo.workerIndex)
     // Add X-Worker-Id and auth token headers to all requests from the page
     const apiToken = process.env.KEL_TEST_TOKEN || 'kel-test-token-001'
-    await page.setExtraHTTPHeaders({
-      'X-Worker-Id': workerId,
-      ...(apiToken && { 'X-Concatenator-Token': apiToken }),
-    })
+    // Wrap page.goto to seamlessly inject ?t=kel-test-token-001 (or active test token)
+    // simulating the SEA daemon launch sequence unless query param is already present
+    // or skipped via explicit skipToken flag.
+    const originalGoto = page.goto.bind(page)
+    page.goto = async (
+      url: string,
+      options?: Parameters<typeof originalGoto>[1]
+    ) => {
+      let targetUrl = url
+      if (
+        apiToken &&
+        !targetUrl.includes('?t=') &&
+        !targetUrl.includes('&t=') &&
+        !targetUrl.includes('skipToken=true')
+      ) {
+        if (
+          targetUrl.startsWith('/') ||
+          targetUrl.startsWith('http://') ||
+          targetUrl.startsWith('https://')
+        ) {
+          try {
+            const parsed = new URL(targetUrl, 'http://127.0.0.1:5173')
+            if (
+              !parsed.searchParams.has('t') &&
+              !parsed.searchParams.has('skipToken')
+            ) {
+              parsed.searchParams.set('t', apiToken)
+              targetUrl = targetUrl.startsWith('http')
+                ? parsed.toString()
+                : `${parsed.pathname}${parsed.search}${parsed.hash}`
+            }
+          } catch {
+            const separator = targetUrl.includes('?') ? '&' : '?'
+            targetUrl = `${targetUrl}${separator}t=${encodeURIComponent(apiToken)}`
+          }
+        }
+      }
+      return originalGoto(targetUrl, options)
+    }
 
     // ── Zero-Trust Handshake — Timing Guarantee ───────────────────────────────
     // Playwright's addInitScript() registers a function that executes in the
