@@ -14,6 +14,9 @@
     "concatenator": "./src/cli/index.ts"
   },
   "scripts": {
+    "wasm:copy": "tsx scripts/copy-wasm-assets.ts",
+    "prebuild": "npm run wasm:copy",
+    "predev": "npm run wasm:copy",
     "dev": "concurrently \"npm run server\" \"npm run ui\"",
     "server": "tsx server.ts",
     "ui": "vite",
@@ -34,7 +37,7 @@
     "test:e2e:debug": "playwright test --debug",
     "test:e2e:headed": "playwright test --headed",
     "build:exe": "npx tsx scripts/build-sea.js",
-    "build:sea": "npm run build:exe",
+    "build:sea": "npm run wasm:copy && npm run build:exe",
     "build:manifest": "node scripts/generate-manifest.js",
     "test:release": "tsx scripts/verify-release-candidate.ts",
     "pre-release": "npm run test:release",
@@ -64,7 +67,8 @@
     "posthog-js": "^1.369.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "tailwind-merge": "^3.5.0"
+    "tailwind-merge": "^3.5.0",
+    "web-tree-sitter": "^0.27.0"
   },
   "devDependencies": {
     "@changesets/cli": "^2.31.0",
@@ -94,6 +98,7 @@
     "prettier": "^3.5.3",
     "rollup-plugin-visualizer": "^7.0.1",
     "tailwindcss": "^4.1.14",
+    "tree-sitter-typescript": "^0.23.2",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "typescript-eslint": "^8.30.1",

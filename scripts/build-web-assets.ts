@@ -40,6 +40,7 @@ const getMimeType = (ext: string) => {
     '.woff': 'font/woff',
     '.woff2': 'font/woff2',
     '.ttf': 'font/ttf',
+    '.wasm': 'application/wasm',
   }
   return mimes[ext] || 'application/octet-stream'
 }

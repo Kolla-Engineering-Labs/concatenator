@@ -172,6 +172,23 @@ if (existsSync(distAssetsDir)) {
   walk(distAssetsDir)
 }
 
+const publicWasmDir = join(rootDir, 'public', 'wasm')
+if (existsSync(publicWasmDir)) {
+  const walkWasm = (dir) => {
+    const files = readdirSync(dir).sort()
+    for (const file of files) {
+      const fullPath = join(dir, file)
+      const stats = statSync(fullPath)
+      if (!stats.isDirectory() && file.endsWith('.wasm')) {
+        const relPath =
+          'wasm/' + relative(publicWasmDir, fullPath).replace(/\\/g, '/')
+        assets[relPath] = relative(rootDir, fullPath).replace(/\\/g, '/')
+      }
+    }
+  }
+  walkWasm(publicWasmDir)
+}
+
 const seaConfig = {
   main: 'dist/sea/concatenator.js',
   output: 'dist/sea/concatenator.blob',
