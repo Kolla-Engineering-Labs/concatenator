@@ -5,7 +5,7 @@ import viteConfig from './vite.config'
 export default defineConfig((configEnv) =>
   mergeConfig(
     typeof viteConfig === 'function' ? viteConfig(configEnv) : viteConfig,
-    defineConfig({
+    {
       test: {
         exclude: [
           '**/node_modules/**',
@@ -33,6 +33,6 @@ export default defineConfig((configEnv) =>
           ],
         },
       },
-    })
+    }
   )
 )
