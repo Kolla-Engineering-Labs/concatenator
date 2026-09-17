@@ -14,6 +14,7 @@ import {
   validateConcatenation,
   generateFileTimestamp,
   createConcatenationStream,
+  Engine,
 } from './engine'
 
 describe('engine', () => {
@@ -162,8 +163,8 @@ describe('engine', () => {
       expect(result.files.map((f) => f.path)).not.toContain('fake.txt')
     })
 
-    it('handles backwards compatibility with legacy format', () => {
-      // Old format without manifest header
+    it('fails closed and ignores legacy format lacking session ID header', () => {
+      // Old format without manifest header should not be parsed after legacy parser eradication
       const legacyContent = `Concatenated on: 2024-01-01
 
 <<<<< FILE_START: legacy.txt >>>>>
@@ -172,10 +173,8 @@ legacy content
 `
       const result = deconcatenate(legacyContent)
 
-      expect(result.foundAny).toBe(true)
-      expect(result.files).toHaveLength(1)
-      expect(result.files[0].path).toBe('legacy.txt')
-      expect(result.files[0].content).toBe('legacy content')
+      expect(result.foundAny).toBe(false)
+      expect(result.files).toHaveLength(0)
     })
 
     it('populates telemetry payload and safely continues extraction when encountering skipped or malformed file entries', () => {
@@ -533,6 +532,37 @@ trailing data`
       } finally {
         fs.rmSync(tmpDir, { recursive: true, force: true })
       }
+    })
+  })
+
+  describe('Engine', () => {
+    it('initializes TreeSitterService parserReady lock eagerly on instantiation', async () => {
+      const engine = new Engine()
+      const readyPromise = engine.getReadyPromise()
+      expect(readyPromise).toBeInstanceOf(Promise)
+      await expect(readyPromise).resolves.toBeUndefined()
+    })
+
+    it('bypasses AST parsing and passes raw string content directly for unmapped text files', async () => {
+      const engine = new Engine()
+
+      const txtContent = 'Plain text note without grammar'
+      const mdContent = '# Markdown Document\n- List item'
+      const envContent = 'PORT=3000\nNODE_ENV=production'
+
+      const processedTxt = await engine.processFileContent(
+        txtContent,
+        'notes.txt'
+      )
+      const processedMd = await engine.processFileContent(
+        mdContent,
+        'README.md'
+      )
+      const processedEnv = await engine.processFileContent(envContent, '.env')
+
+      expect(processedTxt).toBe(txtContent)
+      expect(processedMd).toBe(mdContent)
+      expect(processedEnv).toBe(envContent)
     })
   })
 })

@@ -4,6 +4,8 @@
  */
 
 import { Parser, Language, type Tree } from 'web-tree-sitter'
+import { fileURLToPath } from 'node:url'
+import { dirname, join } from 'node:path'
 
 /**
  * Isomorphically loads a WASM binary buffer across Browser, Node SEA, and Node dev runtimes.
@@ -27,15 +29,20 @@ export async function loadWasmBuffer(assetPath: string): Promise<Uint8Array> {
         // Non-SEA or node:sea not active; fallback to local filesystem
       }
 
-      // Node.js local filesystem fallback (for dev / testing)
+      // Node.js local filesystem fallback (for dev / testing / CLI)
       try {
         const fs = await import('node:fs')
-        const path = await import('node:path')
+
+        // Resolve the physical location of this file, then traverse up to the package root
+        const __filename = fileURLToPath(import.meta.url)
+        const __dirname = dirname(__filename)
+        // Adjust the traversal depth ('../../..') depending on where your compiled output lands vs src
+        const packageRoot = join(__dirname, '../../..')
 
         const candidatePaths = [
-          path.join(process.cwd(), 'public', normalizedKey),
-          path.join(process.cwd(), 'dist', normalizedKey),
-          path.join(process.cwd(), normalizedKey),
+          join(packageRoot, 'public', normalizedKey),
+          join(packageRoot, 'dist', normalizedKey),
+          join(process.cwd(), normalizedKey), // Keep as absolute final fallback for SEA
         ]
 
         for (const p of candidatePaths) {
@@ -146,22 +153,19 @@ export class TreeSitterService {
 
     this.initPromise = (async () => {
       try {
-        const isBrowserEnv =
-          typeof window !== 'undefined' || typeof process === 'undefined'
+        // Strict Node detection bypasses JSDOM/HappyDOM false-positives in Vitest
+        const isNodeEnv =
+          typeof process !== 'undefined' && !!process.versions?.node
 
-        if (isBrowserEnv) {
+        if (isNodeEnv) {
+          // Node / SEA / Vitest environment: Mandate our isomorphic buffer loader
+          const wasmBinary = await loadWasmBuffer('wasm/tree-sitter.wasm')
+          await Parser.init({ wasmBinary })
+        } else {
+          // Pure Browser environment
           await Parser.init({
             locateFile: () => '/wasm/tree-sitter.wasm',
           })
-        } else {
-          // Node / SEA environment: Load wasmBinary directly
-          try {
-            const wasmBinary = await loadWasmBuffer('wasm/tree-sitter.wasm')
-            await Parser.init({ wasmBinary })
-          } catch {
-            // Fallback to locateFile if buffer resolution is handled by web-tree-sitter
-            await Parser.init()
-          }
         }
 
         this.parser = new Parser()
@@ -243,15 +247,34 @@ export class TreeSitterService {
   }
 
   /**
-   * Parse source code into a syntax Tree asynchronously
+   * Check whether a grammar is registered or available for a given language/extension
+   */
+  public isLanguageSupported(languageOrExtension: string): boolean {
+    const canonical =
+      this.resolveLanguageName(languageOrExtension) ??
+      languageOrExtension.trim().toLowerCase()
+    return this.grammars.has(canonical) || this.grammarAssetMap.has(canonical)
+  }
+
+  /**
+   * Parse source code into a syntax Tree asynchronously.
+   * If the file type is unmapped / unsupported (e.g. .txt, .env, .md), returns null cleanly.
    */
   public async parse(
     code: string,
     languageOrExtension: string
   ): Promise<Tree | null> {
+    const canonicalLang =
+      this.resolveLanguageName(languageOrExtension) ??
+      languageOrExtension.trim().toLowerCase()
+
+    if (!this.isLanguageSupported(languageOrExtension)) {
+      return null
+    }
+
     try {
       await this.initialize()
-      const language = await this.loadLanguage(languageOrExtension)
+      const language = await this.loadLanguage(canonicalLang)
       if (!this.parser) {
         throw new Error('Parser is not initialized')
       }

@@ -4,6 +4,7 @@
  */
 
 import { test, expect, afterEach, vi } from 'vitest'
+import { Parser } from 'web-tree-sitter'
 import {
   TreeSitterService,
   treeSitterService,
@@ -43,6 +44,41 @@ test('TreeSitterService.isInitialized: reports false initially before initializa
 test('TreeSitterService.dispose: resets initialization state and clears grammars', () => {
   const service = TreeSitterService.getInstance()
   service.dispose()
+  expect(service.isInitialized()).toBe(false)
+})
+
+test('TreeSitterService.initialize: successfully initializes with isomorphic buffer loader in Node', async () => {
+  const service = TreeSitterService.getInstance()
+  await service.initialize()
+  expect(service.isInitialized()).toBe(true)
+})
+
+test('TreeSitterService.initialize: prioritizes Node environment even if window global is present', async () => {
+  const originalWindow = (globalThis as any).window
+  try {
+    ;(globalThis as any).window = {}
+    const service = TreeSitterService.getInstance()
+    await service.initialize()
+    expect(service.isInitialized()).toBe(true)
+  } finally {
+    if (originalWindow === undefined) {
+      delete (globalThis as any).window
+    } else {
+      ;(globalThis as any).window = originalWindow
+    }
+  }
+})
+
+test('TreeSitterService.initialize: fails loudly when Parser.init rejects and resets initPromise', async () => {
+  vi.spyOn(Parser, 'init').mockRejectedValueOnce(
+    new Error('WASM binary rejected')
+  )
+
+  const service = TreeSitterService.getInstance()
+
+  await expect(service.initialize()).rejects.toThrow(
+    /\[TreeSitterService\] Failed to initialize web-tree-sitter engine: WASM binary rejected/
+  )
   expect(service.isInitialized()).toBe(false)
 })
 
@@ -86,16 +122,38 @@ test('TreeSitterService.parseSync: returns null when uninitialized or grammar no
   expect(tree).toBeNull()
 })
 
-test('TreeSitterService.parse: gracefully returns null and warns on missing grammar file', async () => {
+test('TreeSitterService.isLanguageSupported: identifies supported vs unmapped extensions', () => {
+  const service = TreeSitterService.getInstance()
+  expect(service.isLanguageSupported('.ts')).toBe(true)
+  expect(service.isLanguageSupported('.tsx')).toBe(true)
+  expect(service.isLanguageSupported('.js')).toBe(true)
+  expect(service.isLanguageSupported('.txt')).toBe(false)
+  expect(service.isLanguageSupported('.md')).toBe(false)
+  expect(service.isLanguageSupported('.env')).toBe(false)
+})
+
+test('TreeSitterService.parse: cleanly returns null without warning for unmapped text extensions', async () => {
   const service = TreeSitterService.getInstance()
   const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-  const result = await service.parse(
-    'print("hello")',
-    'nonexistent_lang_grammar_xyz'
-  )
+  const resultTxt = await service.parse('Plain text notes', '.txt')
+  const resultMd = await service.parse('# Markdown header', '.md')
+  const resultEnv = await service.parse('KEY=VALUE', '.env')
+
+  expect(resultTxt).toBeNull()
+  expect(resultMd).toBeNull()
+  expect(resultEnv).toBeNull()
+  expect(warnSpy).not.toHaveBeenCalled()
+})
+
+test('TreeSitterService.parse: gracefully returns null and warns when registered grammar asset fails to load', async () => {
+  const service = TreeSitterService.getInstance()
+  service.registerExtension('.fake', 'nonexistent_lang')
+  const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+  const result = await service.parse('print("hello")', '.fake')
   expect(result).toBeNull()
-  expect(warnSpy).toHaveBeenCalled()
+  expect(warnSpy).not.toHaveBeenCalled()
 })
 
 // ==========================================

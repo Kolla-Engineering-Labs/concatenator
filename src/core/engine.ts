@@ -11,8 +11,8 @@ import {
   type PreMatterLedgerItem,
 } from './builder/BuilderUtils.js'
 import { SessionParser } from './parsers/SessionParser.js'
-import { LegacyParser } from './parsers/LegacyParser.js'
 import { HeaderParser } from './parsers/HeaderParser.js'
+import { TreeSitterService } from './parsers/TreeSitterService.js'
 import { Neutralizer } from './shared/Neutralizer.js'
 import { NeutralizationStream } from './streams/NeutralizationStream.js'
 import {
@@ -116,7 +116,6 @@ export { concatenate } from './builder/builder.js'
  */
 const PARSER_STRATEGIES: IContextParser[] = [
   new SessionParser(),
-  new LegacyParser(),
   new HeaderParser(),
 ]
 
@@ -507,6 +506,132 @@ export interface HydratedStreamFile {
 export { NeutralizationStream }
 
 /**
+ * Core Concatenation Engine orchestrating stream execution, WASM AST parser initialization,
+ * and raw string pass-through bypass for unmapped file formats.
+ */
+export class Engine {
+  private parserReady: Promise<void>
+  private treeSitter: TreeSitterService
+
+  constructor() {
+    this.treeSitter = TreeSitterService.getInstance()
+    this.parserReady = this.treeSitter.initialize()
+  }
+
+  /**
+   * Returns the initialization promise for the Tree-Sitter WASM engine
+   */
+  public getReadyPromise(): Promise<void> {
+    return this.parserReady
+  }
+
+  /**
+   * Process a single file content through Tree-Sitter AST transformation or bypass with raw string content
+   *
+   * @param content File text content
+   * @param filePathOrExtension File path or extension (e.g. '.ts', 'src/App.tsx', '.txt')
+   * @returns Processed content or raw string pass-through
+   */
+  public async processFileContent(
+    content: string,
+    filePathOrExtension: string
+  ): Promise<string> {
+    await this.parserReady
+
+    const ext = filePathOrExtension.includes('.')
+      ? filePathOrExtension.substring(filePathOrExtension.lastIndexOf('.'))
+      : filePathOrExtension
+
+    const ast = await this.treeSitter.parse(content, ext)
+    if (!ast) {
+      // Unmapped / unsupported file type -> elegantly bypass parsing and return raw string content
+      return content
+    }
+
+    return content
+  }
+
+  /**
+   * Creates a zero-RAM ReadableStream generator piping files directly from disk
+   * through the NeutralizationStream transform middleware with Pre-Matter Header,
+   * awaiting the WASM parserReady lock before processing the first file.
+   */
+  public createConcatenationStream(
+    files: HydratedStreamFile[],
+    matrix: ExecutionMatrixPayload
+  ): ReadableStream<Uint8Array> {
+    const encoder = new TextEncoder()
+    const parserReady = this.parserReady
+
+    const sourceStream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        try {
+          // Await WASM parserReady lock before processing the first file
+          await parserReady
+
+          // 1. Yield Pre-Matter Header (KEL Protocol) at Step 0
+          if (matrix.injectManifest) {
+            const ledger: PreMatterLedgerItem[] = files.map((file) => ({
+              path: file.path.replace(/\\/g, '/'),
+              mode: file.mode || '0644',
+              hash: file.hash || 'none',
+            }))
+            controller.enqueue(
+              encoder.encode(formatPreMatterManifest(ledger) + '\n')
+            )
+          }
+
+          // 2. Stream individual files directly from SSD (Zero-RAM execution)
+          for (const file of files) {
+            const header =
+              matrix.outputFormat === 'xml'
+                ? `<file path="${file.path}">\n`
+                : `<<<<< FILE_START: ${file.path} >>>>>\n`
+            controller.enqueue(encoder.encode(header))
+
+            const nodeStream = createReadStream(file.fullPath)
+            const webStream = Readable.toWeb(
+              nodeStream
+            ) as ReadableStream<Uint8Array>
+            const reader = webStream.getReader()
+
+            try {
+              while (true) {
+                const { done, value } = await reader.read()
+                if (done) break
+                if (value) {
+                  controller.enqueue(value)
+                }
+              }
+            } finally {
+              // Strictly enforce lock release to prevent file descriptor leaks
+              reader.releaseLock()
+            }
+
+            const footer =
+              matrix.outputFormat === 'xml'
+                ? `\n</file>\n`
+                : `\n<<<<< FILE_END >>>>>\n`
+            controller.enqueue(encoder.encode(footer))
+          }
+
+          controller.close()
+        } catch (err) {
+          controller.error(err)
+        }
+      },
+    })
+
+    // Pipe the raw bytes through our strict boundary-checking neutralizer
+    return sourceStream.pipeThrough(
+      new NeutralizationStream(matrix.enableNeutralization)
+    )
+  }
+}
+
+export const defaultEngine = new Engine()
+
+/**
  * Creates a zero-RAM ReadableStream generator piping files directly from disk
  * through the NeutralizationStream transform middleware with Pre-Matter Header.
  */
@@ -514,66 +639,5 @@ export function createConcatenationStream(
   files: HydratedStreamFile[],
   matrix: ExecutionMatrixPayload
 ): ReadableStream<Uint8Array> {
-  const encoder = new TextEncoder()
-
-  const sourceStream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      try {
-        // 1. Yield Pre-Matter Header (KEL Protocol) at Step 0
-        if (matrix.injectManifest) {
-          const ledger: PreMatterLedgerItem[] = files.map((file) => ({
-            path: file.path.replace(/\\/g, '/'),
-            mode: file.mode || '0644',
-            hash: file.hash || 'none',
-          }))
-          controller.enqueue(
-            encoder.encode(formatPreMatterManifest(ledger) + '\n')
-          )
-        }
-
-        // 2. Stream individual files directly from SSD (Zero-RAM execution)
-        for (const file of files) {
-          const header =
-            matrix.outputFormat === 'xml'
-              ? `<file path="${file.path}">\n`
-              : `<<<<< FILE_START: ${file.path} >>>>>\n`
-          controller.enqueue(encoder.encode(header))
-
-          const nodeStream = createReadStream(file.fullPath)
-          const webStream = Readable.toWeb(
-            nodeStream
-          ) as ReadableStream<Uint8Array>
-          const reader = webStream.getReader()
-
-          try {
-            while (true) {
-              const { done, value } = await reader.read()
-              if (done) break
-              if (value) {
-                controller.enqueue(value)
-              }
-            }
-          } finally {
-            // Strictly enforce lock release to prevent file descriptor leaks
-            reader.releaseLock()
-          }
-
-          const footer =
-            matrix.outputFormat === 'xml'
-              ? `\n</file>\n`
-              : `\n<<<<< FILE_END >>>>>\n`
-          controller.enqueue(encoder.encode(footer))
-        }
-
-        controller.close()
-      } catch (err) {
-        controller.error(err)
-      }
-    },
-  })
-
-  // Pipe the raw bytes through our strict boundary-checking neutralizer
-  return sourceStream.pipeThrough(
-    new NeutralizationStream(matrix.enableNeutralization)
-  )
+  return defaultEngine.createConcatenationStream(files, matrix)
 }
