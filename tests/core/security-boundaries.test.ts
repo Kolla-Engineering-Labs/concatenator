@@ -118,7 +118,7 @@ describe('VFS Security Boundaries & TokenService Edge-Case Audit Suite', () => {
 
   describe('TokenService Resilience & Overflow Boundaries', () => {
     it('PrecisionStrategy gracefully falls back to Heuristic when encoder throws an error', () => {
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
       const faultyEncoder: ITiktokenEncoder = {
         encode: () => {
           throw new Error('Simulated BPE Encoder Failure')
@@ -130,7 +130,6 @@ describe('VFS Security Boundaries & TokenService Edge-Case Audit Suite', () => {
 
       expect(result.model).toBe('heuristic')
       expect(result.count).toBe(8)
-      warnSpy.mockRestore()
     })
 
     it('hashContent handles empty strings with sentinel key', () => {

@@ -125,7 +125,7 @@ describe('ModeContext (Workbench State)', () => {
   })
 
   it('handles server sync POST failure gracefully', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     global.fetch = vi.fn().mockRejectedValue(new Error('Network error'))
 
@@ -140,7 +140,6 @@ describe('ModeContext (Workbench State)', () => {
         expect.stringContaining('Failed to sync ignore list to server')
       )
     })
-    warnSpy.mockRestore()
     consoleSpy.mockRestore()
   })
 
@@ -261,7 +260,7 @@ describe('ModeContext (Workbench State)', () => {
   })
 
   it('handles non-array server response for ignore list', async () => {
-    const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ error: 'not an array' }),
@@ -277,7 +276,6 @@ describe('ModeContext (Workbench State)', () => {
       // If it's not an array, it doesn't set lastSyncedList.current = sorted
       // But it doesn't necessarily log a warning unless it throws.
     })
-    consoleSpy.mockRestore()
   })
 
   it('sorts ignore list correctly', async () => {

@@ -255,17 +255,15 @@ describe('UnifiedCrawler', () => {
     ] as any)
 
     // Mock realpathSync to simulate a symlink that points outside the root
-    const realpathSpy = vi
-      .spyOn(fs, 'realpathSync')
-      .mockImplementation((p: any) => {
-        if (p.toString().includes('evil.txt')) {
-          return path.join(os.tmpdir(), 'outside-evil.txt')
-        }
-        return path.resolve(p.toString())
-      })
+    vi.spyOn(fs, 'realpathSync').mockImplementation((p: any) => {
+      if (p.toString().includes('evil.txt')) {
+        return path.join(os.tmpdir(), 'outside-evil.txt')
+      }
+      return path.resolve(p.toString())
+    })
 
     // Mock lstatSync to return a symlink for evil.txt
-    const lstatSpy = vi.spyOn(fs, 'lstatSync').mockImplementation((p: any) => {
+    vi.spyOn(fs, 'lstatSync').mockImplementation((p: any) => {
       if (p.toString().includes('evil.txt')) {
         return {
           isSymbolicLink: () => true,
@@ -284,8 +282,6 @@ describe('UnifiedCrawler', () => {
 
     // This should trigger the check inside walk -> assertPathWithinRoot
     expect(() => crawler.collect()).toThrow(SecurityViolation)
-    realpathSpy.mockRestore()
-    lstatSpy.mockRestore()
     vi.mocked(fs.readdirSync).mockRestore()
   })
 

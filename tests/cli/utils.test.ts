@@ -182,12 +182,10 @@ describe('cli-utils', () => {
     })
 
     it.skip('should check quarantine via ls -l@ on darwin', () => {
-      const platformSpy = vi
-        .spyOn(process, 'platform', 'get')
-        .mockReturnValue('darwin')
+      vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
 
       mockChildProcess.execFileSync.mockReturnValue('com.apple.quarantine')
-      const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      vi.spyOn(console, 'log').mockImplementation(() => {})
 
       cliUtils.checkQuarantine()
 
@@ -196,9 +194,6 @@ describe('cli-utils', () => {
         ['-l@', expect.any(String)],
         expect.anything()
       )
-
-      platformSpy.mockRestore()
-      consoleSpy.mockRestore()
     })
   })
 

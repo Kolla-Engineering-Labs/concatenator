@@ -1,7 +1,7 @@
 # Project State: Concatenator
 
 **Current Version:** v0.9.7 (Release Candidate Pipeline)
-**Last Updated:** 2026-09-15
+**Last Updated:** 2026-09-17
 
 ## Active Context & Architecture
 
@@ -20,6 +20,9 @@
 - **Phase E (Final Compilation):** Execute the Node 22 SEA (Single Executable Application) binary generation for portable CLI distribution.
 
 ## Recently Completed Milestones (Stable - Do Not Revisit)
+
+- **Test Suite Hygiene: Mass Excision of Unasserted Spies (`tests/`):**
+  - Swept all test suites across `tests/` and inlined all `vi.spyOn` instances where the return value was not referenced in an `expect()` assertion. Excised accompanying manual `.mockRestore()` calls on dead variables in alignment with global Vitest mock teardown (`clearMocks`, `restoreMocks`). Eliminated `@typescript-eslint/no-unused-vars` risks across 16 mock sites in 9 test suites.
 
 - **Phase D: Tree-Sitter WASM Integration (Core Engine) (`src/core/parsers/TreeSitterService.ts`, `scripts/copy-wasm-assets.ts`, `tests/core/parsers/TreeSitterService.test.ts`, `sea-config.json`, `package.json`, `scripts/build-web-assets.ts`, `scripts/build-sea.js`):**
   - **Environment Detection Inversion & Fail-Closed WASM Initialization (`src/core/parsers/TreeSitterService.ts`, `tests/core/parsers/TreeSitterService.test.ts`):** Inverted runtime detection physics in `TreeSitterService.initialize()` to strictly prioritize Node.js (`typeof process !== 'undefined' && !!process.versions?.node`) over DOM globals (`window`), eliminating HappyDOM/JSDOM false-positives in Vitest. Excised the silent fallback inside the Node loading branch, ensuring missing or corrupted WASM binaries throw loudly and reset service state fail-closed.

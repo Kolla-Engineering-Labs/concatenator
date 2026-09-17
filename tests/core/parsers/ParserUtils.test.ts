@@ -403,7 +403,7 @@ test('extractPreMatterManifest: strictly isolates header boundary without leakin
 // ==========================================
 
 test('extractPostMatterManifest: extracts legacy EOF manifest and logs deprecation warning', () => {
-  const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
   const payload = [
     'Some arbitrary file payload...',
     '<<<<< POST_MATTER_MANIFEST_START (ID: legacySession) >>>>>',
@@ -427,11 +427,10 @@ test('extractPostMatterManifest: extracts legacy EOF manifest and logs deprecati
       hash: 'configHash',
     },
   ])
-  warnSpy.mockRestore()
 })
 
 test('extractPostMatterManifest: retains backward compatibility in null-logger context without throwing TypeError', () => {
-  const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
   const payload = [
     '<<<<< POST_MATTER_MANIFEST_START >>>>>',
     'src/compat.ts|0644|compatHash',
@@ -445,11 +444,10 @@ test('extractPostMatterManifest: retains backward compatibility in null-logger c
     expect(result?.entries).toHaveLength(1)
     expect(result?.entries[0].path).toBe('src/compat.ts')
   }).not.toThrow()
-  warnSpy.mockRestore()
 })
 
 test('extractPostMatterManifest: returns null on missing start or end delimiters', () => {
-  const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
   const missingStart =
     'src/app.ts|0644|h1\n<<<<< POST_MATTER_MANIFEST_END >>>>>'
   expect(extractPostMatterManifest(missingStart)).toBeNull()
@@ -457,11 +455,10 @@ test('extractPostMatterManifest: returns null on missing start or end delimiters
   const missingEnd =
     '<<<<< POST_MATTER_MANIFEST_START >>>>>\nsrc/app.ts|0644|h1'
   expect(extractPostMatterManifest(missingEnd)).toBeNull()
-  warnSpy.mockRestore()
 })
 
 test('extractPostMatterManifest: filters malformed entries with fewer than three tokens', () => {
-  const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  vi.spyOn(console, 'warn').mockImplementation(() => {})
   const payload = [
     '<<<<< POST_MATTER_MANIFEST_START (ID: legacyCorrupt) >>>>>',
     'bad_line_2_tokens.ts|0644',
@@ -477,5 +474,4 @@ test('extractPostMatterManifest: filters malformed entries with fewer than three
       hash: 'hashGood',
     },
   ])
-  warnSpy.mockRestore()
 })

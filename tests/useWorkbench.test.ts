@@ -5,12 +5,10 @@ import { useWorkbench } from '../src/web/hooks/useWorkbench'
 describe('useWorkbench', () => {
   it('throws error when used outside of ModeProvider', () => {
     // Suppress console error for expected error
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
 
     expect(() => renderHook(() => useWorkbench())).toThrow(
       'useWorkbench must be used within a ModeProvider'
     )
-
-    consoleSpy.mockRestore()
   })
 })
