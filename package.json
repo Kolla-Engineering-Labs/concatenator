@@ -120,7 +120,8 @@
     "body-parser": "^1.20.6",
     "@babel/core": "^7.29.6",
     "@opentelemetry/core": "^2.8.0",
-    "esbuild": "^0.28.1"
+    "esbuild": "^0.28.1",
+    "proxy-addr": "^2.0.8"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
@@ -128,5 +129,11 @@
       "eslint --fix",
       "vitest related --run"
     ]
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true,
+    "tree-sitter-typescript@0.23.2": true,
+    "tree-sitter-javascript@0.23.1": true,
+    "core-js@3.50.0": true
   }
 }

@@ -21,6 +21,9 @@
 
 ## Recently Completed Milestones (Stable - Do Not Revisit)
 
+- **Supply-Chain Hardening & Transitive CVE Remediation (`package.json`):**
+  - Enforced `proxy-addr: ^2.0.8` override in `package.json` to resolve critical Snyk vulnerability `SNYK-JS-PROXYADDR-19812342` (CVE-2024-52798) in the Express dependency chain.
+
 - **In-Memory Stream Synthesis, Multi-Format Export & VFS Topology Reconciliation (`src/core/engine.ts`, `src/cli/api/controllers/concatenate.ts`, `src/web/features/concatenator/hooks/useFileProcessing.ts`, `src/web/features/concatenator/components/FileView.tsx`, `src/App.tsx`, `src/main.tsx`, `src/cli/webAssets.ts`, `tests/useFileProcessing.coverage.test.ts`, `e2e/binary-content.spec.ts`, `e2e/concatenate.spec.ts`):**
   - **In-Memory Stream Synthesis & Multiplexing (`src/core/engine.ts`, `src/cli/api/controllers/concatenate.ts`):** Multiplexed `createConcatenationStream` to dynamically branch between physical disk file streaming (`createReadStream`) and in-memory payload strings (`file.content`). Updated `handleConcatenate` and `TargetPayload` interface to ingest in-memory buffers from drag-and-drop sessions without physical filesystem lookups while preserving zero-trust perimeter validations.
   - **Multi-Format Export & Industry-Standard Extension Derivation (`src/web/features/concatenator/hooks/useFileProcessing.ts`, `src/web/features/concatenator/components/FileView.tsx`, `src/App.tsx`):** Refactored `handleExport` with format matrix mapping and normalized output file extensions (`.md`, `.xml`, `.txt`, `.pdf`) across `Content-Disposition` headers and client downloads. Added interactive format selector button pill (`['text', 'markdown', 'xml']`) in `FileView.tsx` toolbar and initialized default output format state to `'text'` persisted in `useLocalStorage`.
