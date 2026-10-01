@@ -48,7 +48,7 @@ export default function App() {
     useLocalStorage<boolean>('concatenator-dropzone-minimized', false)
 
   const [newIgnoreItem, setNewIgnoreItem] = useState('')
-  const [outputFormat] = useLocalStorage<OutputFormat>(
+  const [outputFormat, setOutputFormat] = useLocalStorage<OutputFormat>(
     'concatenate-output-format',
     'text'
   )
@@ -503,6 +503,7 @@ export default function App() {
                   }
                   onRemoveFile={handleRemoveFile}
                   outputFormat={outputFormat}
+                  onOutputFormatChange={setOutputFormat}
                   validationResult={validationResult}
                   tokenBudget={tokenBudget}
                   totalTokens={totalTokens}

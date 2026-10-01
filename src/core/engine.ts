@@ -501,6 +501,7 @@ export interface HydratedStreamFile {
   fullPath: string
   mode?: string
   hash?: string
+  content?: string
 }
 
 export { NeutralizationStream }
@@ -581,7 +582,7 @@ export class Engine {
             )
           }
 
-          // 2. Stream individual files directly from SSD (Zero-RAM execution)
+          // 2. Multiplex stream source (Memory vs SSD)
           for (const file of files) {
             const header =
               matrix.outputFormat === 'xml'
@@ -589,23 +590,29 @@ export class Engine {
                 : `<<<<< FILE_START: ${file.path} >>>>>\n`
             controller.enqueue(encoder.encode(header))
 
-            const nodeStream = createReadStream(file.fullPath)
-            const webStream = Readable.toWeb(
-              nodeStream
-            ) as ReadableStream<Uint8Array>
-            const reader = webStream.getReader()
+            // Memory Payload Injection (Drag-and-Drop)
+            if (file.content !== undefined) {
+              controller.enqueue(encoder.encode(file.content))
+            } else {
+              // SSD Streaming (Zero-RAM execution)
+              const nodeStream = createReadStream(file.fullPath)
+              const webStream = Readable.toWeb(
+                nodeStream
+              ) as ReadableStream<Uint8Array>
+              const reader = webStream.getReader()
 
-            try {
-              while (true) {
-                const { done, value } = await reader.read()
-                if (done) break
-                if (value) {
-                  controller.enqueue(value)
+              try {
+                while (true) {
+                  const { done, value } = await reader.read()
+                  if (done) break
+                  if (value) {
+                    controller.enqueue(value)
+                  }
                 }
+              } finally {
+                // Strictly enforce lock release to prevent file descriptor leaks
+                reader.releaseLock()
               }
-            } finally {
-              // Strictly enforce lock release to prevent file descriptor leaks
-              reader.releaseLock()
             }
 
             const footer =

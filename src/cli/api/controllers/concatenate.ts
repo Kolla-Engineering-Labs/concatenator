@@ -16,15 +16,20 @@ import { SecurityViolation } from '../../../core/errors.js'
 import { IgnoreEngine } from '../../../core/ignore/IgnoreEngine.js'
 import { UnifiedCrawler } from '../../../core/Crawler.js'
 import { DEFAULT_IGNORE_LIST } from '../../../core/constants.js'
+interface TargetPayload {
+  path: string
+  content?: string
+}
 
 interface ClientMatrixPayload {
-  outputFormat?: 'markdown' | 'xml'
+  outputFormat?: 'markdown' | 'xml' | 'text' | 'pdf'
   enableNeutralization?: boolean
   injectManifest?: boolean
+  targets?: (string | TargetPayload)[]
 }
 
 // Circuit breaker stream body parser with 1MB ceiling
-const MAX_PAYLOAD_BYTES = 1024 * 1024 // 1MB
+const MAX_PAYLOAD_BYTES = 50 * 1024 * 1024 // 50MB
 
 const parseJSONBody = <T>(req: IncomingMessage): Promise<T> => {
   return new Promise((resolve, reject) => {
@@ -34,7 +39,7 @@ const parseJSONBody = <T>(req: IncomingMessage): Promise<T> => {
     req.on('data', (chunk) => {
       bytesReceived += chunk.length
       if (bytesReceived > MAX_PAYLOAD_BYTES) {
-        req.destroy() // Terminate connection immediately
+        req.destroy()
         return reject(new Error('Payload Too Large'))
       }
       body += chunk.toString()
@@ -49,9 +54,7 @@ const parseJSONBody = <T>(req: IncomingMessage): Promise<T> => {
       }
     })
 
-    req.on('error', (err) => {
-      reject(err)
-    })
+    req.on('error', (err) => reject(err))
   })
 }
 
@@ -61,7 +64,6 @@ export const handleConcatenate = async (
   expectedToken?: string,
   targetDirectory?: string
 ): Promise<void> => {
-  // 1. Zero-Trust Perimeter Enforcement
   if (expectedToken) {
     const clientToken = req.headers['x-concatenator-token']
     if (!clientToken || clientToken !== expectedToken) {
@@ -73,16 +75,17 @@ export const handleConcatenate = async (
   }
 
   try {
-    // 2. Extract Configuration Matrix
-    const body = await parseJSONBody<{
-      matrix?: ClientMatrixPayload
-      customIgnores?: string[]
-    }>(req)
+    const body = await parseJSONBody<
+      {
+        matrix?: ClientMatrixPayload
+        customIgnores?: string[]
+      } & ClientMatrixPayload
+    >(req)
 
-    const matrixPayload = body.matrix || {}
+    const matrixPayload = body.matrix || body
+    const targets = matrixPayload.targets || body.targets || []
     const targetDir = resolve(targetDirectory || process.cwd())
 
-    // Symlink Boundary Check (Strict KEL Protocol Directive)
     if (fs.lstatSync(targetDir).isSymbolicLink()) {
       throw new SecurityViolation(
         `Security Violation: Root execution directory '${targetDir}' is a symbolic link.`
@@ -90,41 +93,79 @@ export const handleConcatenate = async (
     }
 
     const resolvedRoot = fs.realpathSync(targetDir)
-
-    // 3. Scan & collect files for zero-RAM streaming
-    const customIgnores = body.customIgnores || []
-    const defaultIgnores = [...DEFAULT_IGNORE_LIST, ...customIgnores]
-    const ignoreEngine = new IgnoreEngine(defaultIgnores)
-    const crawler = new UnifiedCrawler({
-      rootPath: resolvedRoot,
-      ignoreEngine,
-    })
-    const entries = crawler.collect(resolvedRoot)
-
     const streamFiles: HydratedStreamFile[] = []
-    for (const entry of entries) {
-      if (entry.kind === 'file' && entry.status === 'included') {
-        const stat = fs.statSync(entry.fullPath)
-        const modeStr = (stat.mode & 0o777).toString(8).padStart(4, '0')
-        streamFiles.push({
-          path: entry.path,
-          fullPath: entry.fullPath,
-          mode: modeStr,
-        })
+
+    if (targets && targets.length > 0) {
+      for (const target of targets) {
+        const targetPath = typeof target === 'string' ? target : target.path
+        const targetContent =
+          typeof target === 'object' ? target.content : undefined
+
+        const safePath = targetPath.replace(/^(\.\.?[/\\])+/, '')
+        const fullPath = resolve(resolvedRoot, safePath)
+
+        if (targetContent !== undefined) {
+          // Drag-and-Drop Mode: Bypass disk and pass memory string to the stream engine
+          streamFiles.push({
+            path: safePath,
+            fullPath,
+            mode: '0666',
+            content: targetContent,
+          })
+        } else {
+          // VFS Mode: Read from the local disk boundary
+          if (!fullPath.startsWith(resolvedRoot)) {
+            console.warn(`[SECURITY] Path traversal blocked: ${targetPath}`)
+            continue
+          }
+
+          if (fs.existsSync(fullPath)) {
+            const stat = fs.statSync(fullPath)
+            if (stat.isFile()) {
+              const modeStr = (stat.mode & 0o777).toString(8).padStart(4, '0')
+              streamFiles.push({ path: safePath, fullPath, mode: modeStr })
+            }
+          }
+        }
+      }
+    } else {
+      // CLI Fallback
+      const customIgnores = body.customIgnores || []
+      const defaultIgnores = [...DEFAULT_IGNORE_LIST, ...customIgnores]
+      const ignoreEngine = new IgnoreEngine(defaultIgnores)
+      const crawler = new UnifiedCrawler({
+        rootPath: resolvedRoot,
+        ignoreEngine,
+      })
+      const entries = crawler.collect(resolvedRoot)
+
+      for (const entry of entries) {
+        if (entry.kind === 'file' && entry.status === 'included') {
+          const stat = fs.statSync(entry.fullPath)
+          const modeStr = (stat.mode & 0o777).toString(8).padStart(4, '0')
+          streamFiles.push({
+            path: entry.path,
+            fullPath: entry.fullPath,
+            mode: modeStr,
+          })
+        }
       }
     }
 
     const matrix: ExecutionMatrixPayload = {
       outputFormat: matrixPayload.outputFormat === 'xml' ? 'xml' : 'markdown',
       enableNeutralization: Boolean(matrixPayload.enableNeutralization),
-      // KEL Protocol: Enforce Pre-Matter Header for O(1) stream interception
       injectManifest: true,
     }
 
-    // 4. Create Web Stream and pipe directly to HTTP response
     const webStream = createConcatenationStream(streamFiles, matrix)
     const outputFormat = matrixPayload.outputFormat || 'markdown'
-    const extension = outputFormat === 'xml' ? 'xml' : 'markdown'
+
+    let extension = 'md'
+    if (outputFormat === 'xml') extension = 'xml'
+    else if (outputFormat === 'text') extension = 'txt'
+    else if (outputFormat === 'pdf') extension = 'pdf'
+
     const filename = `concatenator-export-${Date.now()}.${extension}`
 
     res.statusCode = 200

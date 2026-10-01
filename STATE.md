@@ -1,7 +1,7 @@
 # Project State: Concatenator
 
 **Current Version:** v0.9.7 (Release Candidate Pipeline)
-**Last Updated:** 2026-09-17
+**Last Updated:** 2026-10-01
 
 ## Active Context & Architecture
 
@@ -20,6 +20,13 @@
 - **Phase E (Final Compilation):** Execute the Node 22 SEA (Single Executable Application) binary generation for portable CLI distribution.
 
 ## Recently Completed Milestones (Stable - Do Not Revisit)
+
+- **In-Memory Stream Synthesis, Multi-Format Export & VFS Topology Reconciliation (`src/core/engine.ts`, `src/cli/api/controllers/concatenate.ts`, `src/web/features/concatenator/hooks/useFileProcessing.ts`, `src/web/features/concatenator/components/FileView.tsx`, `src/App.tsx`, `src/main.tsx`, `src/cli/webAssets.ts`, `tests/useFileProcessing.coverage.test.ts`, `e2e/binary-content.spec.ts`, `e2e/concatenate.spec.ts`):**
+  - **In-Memory Stream Synthesis & Multiplexing (`src/core/engine.ts`, `src/cli/api/controllers/concatenate.ts`):** Multiplexed `createConcatenationStream` to dynamically branch between physical disk file streaming (`createReadStream`) and in-memory payload strings (`file.content`). Updated `handleConcatenate` and `TargetPayload` interface to ingest in-memory buffers from drag-and-drop sessions without physical filesystem lookups while preserving zero-trust perimeter validations.
+  - **Multi-Format Export & Industry-Standard Extension Derivation (`src/web/features/concatenator/hooks/useFileProcessing.ts`, `src/web/features/concatenator/components/FileView.tsx`, `src/App.tsx`):** Refactored `handleExport` with format matrix mapping and normalized output file extensions (`.md`, `.xml`, `.txt`, `.pdf`) across `Content-Disposition` headers and client downloads. Added interactive format selector button pill (`['text', 'markdown', 'xml']`) in `FileView.tsx` toolbar and initialized default output format state to `'text'` persisted in `useLocalStorage`.
+  - **VFS Directory Topology & Node Equivalence Reconciliation (`src/web/features/concatenator/hooks/useFileProcessing.ts`):** Overhauled `processUploadedFiles` with `isSameNode` comparison to detect node equivalence across drag-and-drop sandbox boundaries, resolve path collisions by promoting richer directory context, preserve explicit empty directory markers, and reconstruct hierarchical directory topology (`dirMap`).
+  - **PostHog Analytics Integration (`src/main.tsx`):** Initialized PostHog client telemetry with zero-PII masking options (`maskAllInputs`, `maskTextSelector: '.ph-no-capture'`, `person_profiles: 'identified_only'`).
+  - **Test Suite & E2E Verification Sync (`tests/useFileProcessing.coverage.test.ts`, `e2e/binary-content.spec.ts`, `e2e/concatenate.spec.ts`):** Synchronized unit test expectations for `.md` download filenames and updated Playwright E2E specs for default `.txt` downloads.
 
 - **Test Suite Hygiene: Mass Excision of Unasserted Spies (`tests/`):**
   - Swept all test suites across `tests/` and inlined all `vi.spyOn` instances where the return value was not referenced in an `expect()` assertion. Excised accompanying manual `.mockRestore()` calls on dead variables in alignment with global Vitest mock teardown (`clearMocks`, `restoreMocks`). Eliminated `@typescript-eslint/no-unused-vars` risks across 16 mock sites in 9 test suites.

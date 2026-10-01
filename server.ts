@@ -439,11 +439,18 @@ export async function startServer(
     const server = app.listen(PORT, '127.0.0.1', () => {
       const addr = server.address()
       const actualPort = typeof addr === 'object' && addr ? addr.port : PORT
-      logger.info(`Server running on http://localhost:${actualPort}`)
+
+      if (API_TOKEN) {
+        logger.info(
+          `Server running on http://localhost:${actualPort}/?token=${API_TOKEN}`
+        )
+      } else {
+        logger.info(`Server running on http://localhost:${actualPort}`)
+      }
+
       resolve(server)
     })
 
-    // Prevent silent hangs during EADDRINUSE collisions in parallel testing
     server.on('error', (err) => {
       reject(err)
     })
