@@ -303,7 +303,7 @@ export default function App() {
         logger.warn(`Failed to fetch VFS tree: ${err}`)
       }
     }
-    initWorkspace()
+    void initWorkspace()
     return () => {
       mounted = false
     }

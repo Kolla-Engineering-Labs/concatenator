@@ -536,11 +536,25 @@ trailing data`
   })
 
   describe('Engine', () => {
-    it('initializes TreeSitterService parserReady lock eagerly on instantiation', async () => {
+    it('initializes TreeSitterService parserReady lock on getReadyPromise() or initialize()', async () => {
       const engine = new Engine()
       const readyPromise = engine.getReadyPromise()
       expect(readyPromise).toBeInstanceOf(Promise)
       await expect(readyPromise).resolves.toBeUndefined()
+    })
+
+    it('creates an Engine instance via static create() factory', async () => {
+      const engine = await Engine.create()
+      expect(engine).toBeInstanceOf(Engine)
+      const readyPromise = engine.getReadyPromise()
+      await expect(readyPromise).resolves.toBeUndefined()
+    })
+
+    it('dynamically processes code content through AST parsing for mapped file types', async () => {
+      const engine = await Engine.create()
+      const code = 'const x: number = 42;'
+      const processed = await engine.processFileContent(code, 'app.ts')
+      expect(processed).toBe(code)
     })
 
     it('bypasses AST parsing and passes raw string content directly for unmapped text files', async () => {

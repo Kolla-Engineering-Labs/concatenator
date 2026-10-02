@@ -21,6 +21,11 @@
 
 ## Recently Completed Milestones (Stable - Do Not Revisit)
 
+- **Sonar Quality Gate Remediation & Lifecycle Refactoring (`src/core/engine.ts`, `src/core/parsers/TreeSitterService.ts`, `src/App.tsx`, `src/web/features/concatenator/hooks/useFileProcessing.ts`, `src/core/engine.test.ts`, `tests/core/parsers/TreeSitterService.test.ts`):**
+  - **Engine Lifecycle Factory & Dynamic AST Resolution (`src/core/engine.ts`, `src/core/engine.test.ts`):** Eliminated the asynchronous constructor anti-pattern by introducing synchronous member assignment, an explicit `initialize()` step, and a static `Engine.create()` factory method. Fixed the static return value smell in `processFileContent()` by dynamically returning `ast.rootNode.text` upon successful AST generation while cleanly passing through unmapped file formats.
+  - **Async Parser Readiness & Boolean Trap Eradication (`src/core/parsers/TreeSitterService.ts`, `tests/core/parsers/TreeSitterService.test.ts`):** Implemented `checkWasmReady(): Promise<boolean>` ensuring WASM engine readiness promises are explicitly awaited rather than evaluated directly in truthy conditional expressions.
+  - **Floating Promise Grounding (`src/App.tsx`, `src/web/features/concatenator/hooks/useFileProcessing.ts`):** Explicitly grounded floating promises (`initWorkspace()`, `reloadUnignored()`) within React `useEffect` hooks using the `void` operator to satisfy `@typescript-eslint/no-floating-promises` and Sonar static analysis.
+
 - **Supply-Chain Hardening & Transitive CVE Remediation (`package.json`):**
   - Enforced `proxy-addr: ^2.0.8` override in `package.json` to resolve critical Snyk vulnerability `SNYK-JS-PROXYADDR-19812342` (CVE-2024-52798) in the Express dependency chain.
 

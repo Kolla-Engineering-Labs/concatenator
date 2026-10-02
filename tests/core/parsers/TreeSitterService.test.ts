@@ -36,21 +36,24 @@ test('TreeSitterService: resetInstance cleanly disposes and clears singleton ins
   expect(instance1).not.toBe(instance2)
 })
 
-test('TreeSitterService.isInitialized: reports false initially before initialization', () => {
+test('TreeSitterService.isInitialized & checkWasmReady: reports false initially before initialization', async () => {
   const service = TreeSitterService.getInstance()
   expect(service.isInitialized()).toBe(false)
+  expect(await service.checkWasmReady()).toBe(false)
 })
 
-test('TreeSitterService.dispose: resets initialization state and clears grammars', () => {
+test('TreeSitterService.dispose: resets initialization state and clears grammars', async () => {
   const service = TreeSitterService.getInstance()
   service.dispose()
   expect(service.isInitialized()).toBe(false)
+  expect(await service.checkWasmReady()).toBe(false)
 })
 
-test('TreeSitterService.initialize: successfully initializes with isomorphic buffer loader in Node', async () => {
+test('TreeSitterService.initialize & checkWasmReady: successfully initializes and returns ready true', async () => {
   const service = TreeSitterService.getInstance()
   await service.initialize()
   expect(service.isInitialized()).toBe(true)
+  expect(await service.checkWasmReady()).toBe(true)
 })
 
 test('TreeSitterService.initialize: prioritizes Node environment even if window global is present', async () => {

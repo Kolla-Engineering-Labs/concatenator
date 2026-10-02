@@ -511,19 +511,39 @@ export { NeutralizationStream }
  * and raw string pass-through bypass for unmapped file formats.
  */
 export class Engine {
-  private parserReady: Promise<void>
+  private parserReady: Promise<void> | null = null
   private treeSitter: TreeSitterService
 
-  constructor() {
-    this.treeSitter = TreeSitterService.getInstance()
-    this.parserReady = this.treeSitter.initialize()
+  public constructor(
+    treeSitter: TreeSitterService = TreeSitterService.getInstance()
+  ) {
+    this.treeSitter = treeSitter
+  }
+
+  /**
+   * Explicitly initializes asynchronous parser dependencies.
+   */
+  public async initialize(): Promise<void> {
+    if (!this.parserReady) {
+      this.parserReady = this.treeSitter.initialize()
+    }
+    return this.parserReady
+  }
+
+  /**
+   * Static factory for asynchronous Engine instantiation.
+   */
+  public static async create(treeSitter?: TreeSitterService): Promise<Engine> {
+    const instance = new Engine(treeSitter)
+    await instance.initialize()
+    return instance
   }
 
   /**
    * Returns the initialization promise for the Tree-Sitter WASM engine
    */
   public getReadyPromise(): Promise<void> {
-    return this.parserReady
+    return this.initialize()
   }
 
   /**
@@ -537,7 +557,7 @@ export class Engine {
     content: string,
     filePathOrExtension: string
   ): Promise<string> {
-    await this.parserReady
+    await this.initialize()
 
     const ext = filePathOrExtension.includes('.')
       ? filePathOrExtension.substring(filePathOrExtension.lastIndexOf('.'))
@@ -549,7 +569,7 @@ export class Engine {
       return content
     }
 
-    return content
+    return ast.rootNode ? ast.rootNode.text : content
   }
 
   /**
@@ -562,13 +582,12 @@ export class Engine {
     matrix: ExecutionMatrixPayload
   ): ReadableStream<Uint8Array> {
     const encoder = new TextEncoder()
-    const parserReady = this.parserReady
 
     const sourceStream = new ReadableStream<Uint8Array>({
-      async start(controller) {
+      start: async (controller) => {
         try {
           // Await WASM parserReady lock before processing the first file
-          await parserReady
+          await this.initialize()
 
           // 1. Yield Pre-Matter Header (KEL Protocol) at Step 0
           if (matrix.injectManifest) {

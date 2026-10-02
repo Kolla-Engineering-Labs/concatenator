@@ -194,6 +194,22 @@ export class TreeSitterService {
   }
 
   /**
+   * Asynchronously checks whether the WASM parser engine is ready.
+   */
+  public async checkWasmReady(): Promise<boolean> {
+    if (this.initialized) return true
+    if (this.initPromise) {
+      try {
+        await this.initPromise
+        return this.initialized
+      } catch {
+        return false
+      }
+    }
+    return false
+  }
+
+  /**
    * Resolve canonical language name from file extension or language tag
    */
   public resolveLanguageName(languageOrExtension: string): string | null {

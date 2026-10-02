@@ -1096,7 +1096,7 @@ export const useFileProcessing = ({
       }
     }
 
-    reloadUnignored()
+    void reloadUnignored()
     return () => {
       mounted = false
       setIsProcessing(false) // Reset processing state if effect is interrupted
