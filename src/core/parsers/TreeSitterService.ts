@@ -149,7 +149,7 @@ export class TreeSitterService {
   public async initialize(): Promise<void> {
     if (this.initialized) return
 
-    if (this.initPromise) {
+    if (this.initPromise !== null && this.initPromise !== undefined) {
       return this.initPromise
     }
 
@@ -198,7 +198,7 @@ export class TreeSitterService {
    */
   public async checkWasmReady(): Promise<boolean> {
     if (this.initialized) return true
-    if (this.initPromise) {
+    if (this.initPromise !== null && this.initPromise !== undefined) {
       try {
         await this.initPromise
         return this.initialized
