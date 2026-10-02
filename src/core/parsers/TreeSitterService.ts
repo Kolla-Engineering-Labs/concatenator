@@ -20,7 +20,9 @@ export async function loadWasmBuffer(assetPath: string): Promise<Uint8Array> {
     // 1. Node.js SEA (Single Executable Application) or Node.js environment
     if (typeof process !== 'undefined' && process.versions?.node) {
       try {
-        const sea = await import('node:sea')
+        // Obscure the literal from Vite's static analyzer to prevent bundling panics
+        const seaModule = 'node:sea'
+        const sea = await import(/* @vite-ignore */ seaModule)
         if (typeof sea.isSea === 'function' && sea.isSea()) {
           const rawAsset = sea.getRawAsset(normalizedKey)
           return new Uint8Array(rawAsset)
