@@ -46,7 +46,7 @@ describe('Health Endpoint Integration', () => {
     })
   })
 
-  describe('server.ts (Express)', () => {
+  describe('server.ts (Native node:http)', () => {
     let server: http.Server
     let port: number
 

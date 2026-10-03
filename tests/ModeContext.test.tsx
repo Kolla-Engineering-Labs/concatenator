@@ -54,7 +54,7 @@ describe('ModeContext (Workbench State)', () => {
         '/api/ignore-list',
         expect.objectContaining({
           method: 'POST',
-          body: JSON.stringify(['new-item']),
+          body: JSON.stringify({ patterns: ['new-item'] }),
         })
       )
     })

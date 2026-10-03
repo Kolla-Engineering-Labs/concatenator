@@ -83,7 +83,7 @@ export class ApiClient {
     const res = await fetch('/api/ignore-list', {
       method: 'POST',
       headers: this.getHeaders({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify(list),
+      body: JSON.stringify({ patterns: list }),
     })
     if (!res.ok) {
       throw new Error('Failed to update ignore list')

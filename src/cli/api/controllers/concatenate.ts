@@ -28,34 +28,39 @@ interface ClientMatrixPayload {
   targets?: (string | TargetPayload)[]
 }
 
-// Circuit breaker stream body parser with 1MB ceiling
-const MAX_PAYLOAD_BYTES = 50 * 1024 * 1024 // 50MB
+// Circuit breaker stream body parser with 50MB ceiling
+export const MAX_PAYLOAD_BYTES = 50 * 1024 * 1024 // 50MB
 
-const parseJSONBody = <T>(req: IncomingMessage): Promise<T> => {
-  return new Promise((resolve, reject) => {
-    let body = ''
-    let bytesReceived = 0
+export const parseJSONBody = async <T>(
+  req: IncomingMessage,
+  maxBytes: number = MAX_PAYLOAD_BYTES
+): Promise<T> => {
+  let body = ''
+  let bytesReceived = 0
 
-    req.on('data', (chunk) => {
-      bytesReceived += chunk.length
-      if (bytesReceived > MAX_PAYLOAD_BYTES) {
-        req.destroy()
-        return reject(new Error('Payload Too Large'))
-      }
-      body += chunk.toString()
-    })
+  for await (const chunk of req) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    bytesReceived += buffer.length
+    if (bytesReceived > maxBytes) {
+      req.destroy()
+      const err = new Error('Payload Too Large')
+      ;(err as unknown as { statusCode: number }).statusCode = 413
+      throw err
+    }
+    body += buffer.toString('utf-8')
+  }
 
-    req.on('end', () => {
-      try {
-        const parsed = JSON.parse(body || '{}') as T
-        resolve(parsed)
-      } catch {
-        reject(new Error('Invalid JSON Payload'))
-      }
-    })
+  if (!body.trim()) {
+    return {} as T
+  }
 
-    req.on('error', (err) => reject(err))
-  })
+  try {
+    return JSON.parse(body) as T
+  } catch {
+    const err = new Error('Invalid JSON Payload')
+    ;(err as unknown as { statusCode: number }).statusCode = 400
+    throw err
+  }
 }
 
 export const handleConcatenate = async (
@@ -184,12 +189,40 @@ export const handleConcatenate = async (
     const nodeReadable = Readable.fromWeb(
       webStream as unknown as import('node:stream/web').ReadableStream
     )
+
+    // Handle client abortion and resource cleanup
+    res.on('close', () => {
+      if (!res.writableEnded) {
+        nodeReadable.destroy()
+      }
+    })
+
+    nodeReadable.on('error', (streamErr) => {
+      console.error('[KEL Protocol] Stream error:', streamErr)
+      if (!res.headersSent) {
+        res.writeHead(500, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ error: streamErr.message }))
+      } else {
+        res.destroy(streamErr)
+      }
+    })
+
     nodeReadable.pipe(res)
   } catch (error) {
-    const err = error as Error
-    const statusCode = err.message === 'Payload Too Large' ? 413 : 500
+    const err = error as Error & { statusCode?: number }
+    const statusCode =
+      err.statusCode ||
+      (err.message === 'Payload Too Large'
+        ? 413
+        : err.message === 'Invalid JSON Payload'
+          ? 400
+          : 500)
     console.error('[KEL Protocol] Synthesis failure:', err)
-    res.writeHead(statusCode, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify({ error: err.message }))
+    if (!res.headersSent) {
+      res.writeHead(statusCode, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ error: err.message }))
+    } else {
+      res.destroy(err)
+    }
   }
 }

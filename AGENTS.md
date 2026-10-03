@@ -17,6 +17,6 @@
 
 ## Security & Architectural Non-Negotiables
 
-- **API Binding:** The Express API wrapper must bind strictly to `127.0.0.1` under token-protected authentication[cite: 1].
+- **API Binding:** The native `node:http` API wrapper must bind strictly to `127.0.0.1` under token-protected authentication[cite: 1].
 - **Traversal Security:** Always use `fs.realpathSync` to assert paths remain within the root boundary[cite: 1].
 - **Sovereign Execution:** The application must function 100% offline with absolute data sovereignty[cite: 1].
