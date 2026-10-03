@@ -958,7 +958,7 @@ test.describe('Concatenate Mode', () => {
         ])
 
         // Verify download - filename format is concatenator-YYYYMMDD_HHMMSS.markdown
-        expect(download.suggestedFilename()).toMatch(/concatenator.*\.markdown/)
+        expect(download.suggestedFilename()).toMatch(/concatenator.*\.txt/)
 
         const downloadPath = await download.path()
         expect(downloadPath).toBeTruthy()

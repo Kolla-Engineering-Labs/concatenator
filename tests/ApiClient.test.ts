@@ -42,7 +42,7 @@ describe('ApiClient', () => {
       expect(fetch).toHaveBeenCalledWith('/api/ignore-list', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newList),
+        body: JSON.stringify({ patterns: newList }),
       })
     })
 

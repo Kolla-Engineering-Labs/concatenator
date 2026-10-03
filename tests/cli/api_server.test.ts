@@ -35,7 +35,7 @@ describe('Node 22 Execution Boundary API Server', () => {
     )
     fs.writeFileSync(path.join(tmpDir, 'test2.json'), '{"key": "value"}\n')
 
-    // Bind to port 0 for dynamic ephemeral port allocation, preventing Hyper-V / EACCES collisions
+    // Bind to port 0 for dynamic ephemeral port allocation
     server = await startServer(0, testToken, tmpDir, uiOrigin)
     port = (server.address() as AddressInfo).port
   })
@@ -181,6 +181,197 @@ describe('Node 22 Execution Boundary API Server', () => {
     expect(bodyText).toContain('KEL_MANIFEST_START')
   })
 
+  it('returns health payload on /api/health and /health without token', async () => {
+    const res1 = await fetch(`http://127.0.0.1:${port}/api/health`)
+    expect(res1.status).toBe(200)
+    const data1 = await res1.json()
+    expect(data1.status).toBe('ready')
+    expect(typeof data1.version).toBe('string')
+    expect(typeof data1.uptime).toBe('number')
+
+    const res2 = await fetch(`http://127.0.0.1:${port}/health`)
+    expect(res2.status).toBe(200)
+    const data2 = await res2.json()
+    expect(data2.status).toBe('ready')
+  })
+
+  it('returns configuration from /api/config', async () => {
+    const res = await fetch(`http://127.0.0.1:${port}/api/config`, {
+      headers: { 'x-concatenator-token': testToken },
+    })
+    expect(res.status).toBe(200)
+    const config = await res.json()
+    expect(config).toHaveProperty('autoSaveIgnore', false)
+  })
+
+  it('handles /api/ignore-list GET, POST, and DELETE flows', async () => {
+    // 1. GET initial ignore list
+    const getRes = await fetch(`http://127.0.0.1:${port}/api/ignore-list`, {
+      headers: {
+        'x-concatenator-token': testToken,
+        'x-worker-id': '999',
+      },
+    })
+    expect(getRes.status).toBe(200)
+    const initialList = await getRes.json()
+    expect(Array.isArray(initialList)).toBe(true)
+
+    // 2. POST update ignore list
+    const postRes = await fetch(`http://127.0.0.1:${port}/api/ignore-list`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-concatenator-token': testToken,
+        'x-worker-id': '999',
+      },
+      body: JSON.stringify({ patterns: ['*.custom-ignore', 'build/'] }),
+    })
+    expect(postRes.status).toBe(200)
+    const postJson = await postRes.json()
+    expect(postJson.success).toBe(true)
+
+    // 3. GET verify update
+    const getUpdatedRes = await fetch(
+      `http://127.0.0.1:${port}/api/ignore-list`,
+      {
+        headers: {
+          'x-concatenator-token': testToken,
+          'x-worker-id': '999',
+        },
+      }
+    )
+    expect(getUpdatedRes.status).toBe(200)
+    const updatedList = await getUpdatedRes.json()
+    expect(updatedList).toContain('*.custom-ignore')
+
+    // 4. POST with invalid body (missing patterns array)
+    const invalidPost = await fetch(
+      `http://127.0.0.1:${port}/api/ignore-list`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-concatenator-token': testToken,
+          'x-worker-id': '999',
+        },
+        body: JSON.stringify({ not: 'an array' }),
+      }
+    )
+    expect(invalidPost.status).toBe(400)
+
+    // 5. POST with raw array (strictly rejected under single-schema rule)
+    const rawArrayPost = await fetch(
+      `http://127.0.0.1:${port}/api/ignore-list`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-concatenator-token': testToken,
+          'x-worker-id': '999',
+        },
+        body: JSON.stringify(['*.raw-array-disallowed']),
+      }
+    )
+    expect(rawArrayPost.status).toBe(400)
+
+    // 6. Invalid workerId rejection in header
+    const invalidWorkerRes = await fetch(
+      `http://127.0.0.1:${port}/api/ignore-list`,
+      {
+        headers: {
+          'x-concatenator-token': testToken,
+          'x-worker-id': 'invalid-path-../evil',
+        },
+      }
+    )
+    expect(invalidWorkerRes.status).toBe(400)
+
+    // 7. Invalid workerId rejection in query string
+    const invalidQueryWorkerRes = await fetch(
+      `http://127.0.0.1:${port}/api/ignore-list?workerId=../evil`,
+      {
+        headers: {
+          'x-concatenator-token': testToken,
+        },
+      }
+    )
+    expect(invalidQueryWorkerRes.status).toBe(400)
+
+    // 8. DELETE worker ignore list
+    const delRes = await fetch(`http://127.0.0.1:${port}/api/ignore-list`, {
+      method: 'DELETE',
+      headers: {
+        'x-concatenator-token': testToken,
+        'x-worker-id': '999',
+      },
+    })
+    expect(delRes.status).toBe(200)
+  })
+
+  it('handles /api/vfs and /api/vfs/file with path traversal protection', async () => {
+    // 1. GET /api/vfs when VFS_PATH not set
+    const originalVfsPath = process.env.VFS_PATH
+    delete process.env.VFS_PATH
+
+    const vfsNullRes = await fetch(`http://127.0.0.1:${port}/api/vfs`, {
+      headers: { 'x-concatenator-token': testToken },
+    })
+    expect(vfsNullRes.status).toBe(200)
+    const nullTree = await vfsNullRes.json()
+    expect(nullTree.tree).toBeNull()
+
+    // 2. GET /api/vfs with valid VFS_PATH
+    process.env.VFS_PATH = tmpDir
+    const vfsRes = await fetch(`http://127.0.0.1:${port}/api/vfs`, {
+      headers: { 'x-concatenator-token': testToken },
+    })
+    expect(vfsRes.status).toBe(200)
+    const tree = await vfsRes.json()
+    expect(tree).toHaveProperty('tree')
+
+    // 3. GET /api/vfs/file missing path param
+    const missingParamRes = await fetch(
+      `http://127.0.0.1:${port}/api/vfs/file`,
+      {
+        headers: { 'x-concatenator-token': testToken },
+      }
+    )
+    expect(missingParamRes.status).toBe(400)
+
+    // 4. GET /api/vfs/file valid file
+    const validFileRes = await fetch(
+      `http://127.0.0.1:${port}/api/vfs/file?path=test1.ts`,
+      {
+        headers: { 'x-concatenator-token': testToken },
+      }
+    )
+    expect(validFileRes.status).toBe(200)
+    const content = await validFileRes.text()
+    expect(content).toContain('console.log("hello");')
+
+    // 5. GET /api/vfs/file path traversal attempt
+    const traversalRes = await fetch(
+      `http://127.0.0.1:${port}/api/vfs/file?path=../../../../etc/passwd`,
+      {
+        headers: { 'x-concatenator-token': testToken },
+      }
+    )
+    expect(traversalRes.status).toBe(403)
+
+    // 6. GET /api/vfs/file non-existent file
+    const missingFileRes = await fetch(
+      `http://127.0.0.1:${port}/api/vfs/file?path=does-not-exist.ts`,
+      {
+        headers: { 'x-concatenator-token': testToken },
+      }
+    )
+    expect(missingFileRes.status).toBe(404)
+
+    // Restore env
+    if (originalVfsPath) process.env.VFS_PATH = originalVfsPath
+    else delete process.env.VFS_PATH
+  })
+
   it('returns 404 for unrecognized routes', async () => {
     const res = await fetch(`http://127.0.0.1:${port}/api/unknown`, {
       method: 'GET',
@@ -190,5 +381,7 @@ describe('Node 22 Execution Boundary API Server', () => {
     })
 
     expect(res.status).toBe(404)
+    const json = await res.json()
+    expect(json.error).toContain('API endpoint not found')
   })
 })
