@@ -1,7 +1,7 @@
 # Project State: Concatenator
 
 **Current Version:** v0.9.7 (Release Candidate Pipeline)
-**Last Updated:** 2026-10-01
+**Last Updated:** 2026-10-03
 
 ## Active Context & Architecture
 
@@ -20,6 +20,17 @@
 - **Phase E (Final Compilation):** Execute the Node 22 SEA (Single Executable Application) binary generation for portable CLI distribution.
 
 ## Recently Completed Milestones (Stable - Do Not Revisit)
+
+- **Test Suite Collapse Remediation & Security Hardening (`tests/useFileProcessing.topology.test.ts`, `src/cli/api/server.ts`, `tests/cli/api_server.test.ts`):**
+  - **Hook Cascade & Fake-Timer Deadlock Resolution:** Eliminated the 60,000ms timeout in [tests/useFileProcessing.topology.test.ts](file:///c:/Projects/Kolla-Engineering-Labs/concatenator/tests/useFileProcessing.topology.test.ts) by implementing an in-memory `MockFileReader` DOM stub and non-blocking `vi.advanceTimersByTimeAsync()` execution, ensuring all async file reads and queue yields complete immediately. Added comprehensive `afterEach` teardown (`cleanup()`, `vi.clearAllTimers()`, `vi.useRealTimers()`) to prevent state and listener leakage.
+  - **CRLF Log Injection Hardening:** Aligned [tests/cli/api_server.test.ts](file:///c:/Projects/Kolla-Engineering-Labs/concatenator/tests/cli/api_server.test.ts) with Node 22 native `fetch` header constraints by routing CRLF injection test payloads through URL query parameters with `encodeURIComponent()`, logging probe inputs with `sanitizeLog()` in [src/cli/api/server.ts](file:///c:/Projects/Kolla-Engineering-Labs/concatenator/src/cli/api/server.ts), and asserting zero carriage return/newline leakage into server logs.
+  - **Encoded Path Traversal & SPA Defense:** Fortified [src/cli/api/server.ts](file:///c:/Projects/Kolla-Engineering-Labs/concatenator/src/cli/api/server.ts) static frontend routing by decoding candidate pathnames and asserting strict validation against `%2e%2e`, `%2E%2E`, and decoded `..` traversal sequences, returning `403 Forbidden: Path Traversal Detected` prior to SPA `dist/index.html` fallback. Updated [tests/cli/api_server.test.ts](file:///c:/Projects/Kolla-Engineering-Labs/concatenator/tests/cli/api_server.test.ts) to verify encoded directory escape blocking.
+
+- **SonarCloud Security Vulnerability Eradication & Test Coverage Elevation (>80%) (`src/cli/api/server.ts`, `tests/cli/api_server.test.ts`, `tests/useFileProcessing.topology.test.ts`):**
+  - **Strict Path Jailing & Traversal Defense:** Enforced `path.resolve` and `startsWith(baseDir + path.sep)` directory boundary checks in [src/cli/api/server.ts](file:///c:/Projects/Kolla-Engineering-Labs/concatenator/src/cli/api/server.ts) across `/api/vfs/file` and static frontend `dist` asset serving, returning `403 Forbidden: Path Traversal Detected` on escape attempts.
+  - **CORS Whitelist Guard:** Eliminated arbitrary reflection of `req.headers.origin` in [src/cli/api/server.ts](file:///c:/Projects/Kolla-Engineering-Labs/concatenator/src/cli/api/server.ts) by validating against a strict local whitelist (`http://127.0.0.1:5173`, `http://localhost:5173`, `http://127.0.0.1:3000`, `http://localhost:3000`, `uiOriginOverride`), falling back safely to `http://127.0.0.1:5173`.
+  - **Log Injection Immunity (CRLF Sanitization):** Added `sanitizeLog` to [src/cli/api/server.ts](file:///c:/Projects/Kolla-Engineering-Labs/concatenator/src/cli/api/server.ts) to strip carriage returns and newlines (`[\r\n]`) from auth failure logging and header output.
+  - **Test Suite Coverage Elevation (>80%):** Hydrated [tests/cli/api_server.test.ts](file:///c:/Projects/Kolla-Engineering-Labs/concatenator/tests/cli/api_server.test.ts) with Path Traversal, CORS spoofing, CRLF log injection, and invalid worker ID security test cases. Scaffolded [tests/useFileProcessing.topology.test.ts](file:///c:/Projects/Kolla-Engineering-Labs/concatenator/tests/useFileProcessing.topology.test.ts) covering drag-and-drop memory payloads, nested SSD directory topology synthesis, reserved Windows device name filtering, and archive ZIP generation.
 
 - **Native `/api/ignore-list` Strict Payload & Query Validation (`src/cli/api/server.ts`, `src/web/services/ApiClient.ts`, `tests/cli/api_server.test.ts`, `tests/ApiClient.test.ts`, `tests/ModeContext.test.tsx`, `e2e/fixtures.ts`):**
   - **Strict Schema Enforcement:** Enforced single-schema constraint `{ workerId?: string; patterns: string[] }` on `POST /api/ignore-list`, strictly rejecting raw arrays (`string[]`) and arbitrary payload shapes with `400 Bad Request: Invalid payload structure`.

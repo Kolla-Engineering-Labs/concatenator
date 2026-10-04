@@ -108,6 +108,14 @@ function sendError(
 }
 
 /**
+ * Sanitize strings for logging to prevent Log Injection (CRLF / CWE-117)
+ */
+function sanitizeLog(str: unknown): string {
+  if (str === null || str === undefined) return ''
+  return String(str).replace(/[\r\n]/g, '')
+}
+
+/**
  * Read an ignore list from `primaryPath`.
  * Falls back to `.gitignore` if the primary file is absent, then to DEFAULT_IGNORE_LIST.
  */
@@ -220,8 +228,29 @@ export async function startServer(
   const server = http.createServer(
     async (req: IncomingMessage, res: ServerResponse) => {
       const clientIp = req.socket.remoteAddress || '127.0.0.1'
+      const rawUrl = req.url || '/'
+
+      // ── Zero-Trust Raw Socket Interception ─────────────────────────────────────
+      if (rawUrl.includes('..') || rawUrl.toLowerCase().includes('%2e%2e')) {
+        sendError(res, 403, 'Forbidden: Path Traversal Detected')
+        return
+      }
+
+      const ALLOWED_ORIGINS = new Set([
+        'http://127.0.0.1:5173',
+        'http://localhost:5173',
+        'http://127.0.0.1:3000',
+        'http://localhost:3000',
+      ])
+      if (uiOriginOverride) {
+        ALLOWED_ORIGINS.add(uiOriginOverride)
+      }
+
+      const incomingOrigin = req.headers.origin
       const origin =
-        uiOriginOverride || req.headers.origin || 'http://127.0.0.1:5173'
+        incomingOrigin && ALLOWED_ORIGINS.has(incomingOrigin)
+          ? incomingOrigin
+          : uiOriginOverride || 'http://127.0.0.1:5173'
 
       res.setHeader('Access-Control-Allow-Origin', origin)
       res.setHeader(
@@ -244,7 +273,8 @@ export async function startServer(
       }
 
       const host = req.headers.host || `127.0.0.1:${PORT}`
-      const url = new URL(req.url || '/', `http://${host}`)
+      // Parse the intercepted rawUrl instead of req.url
+      const url = new URL(rawUrl, `http://${host}`)
       const pathname = url.pathname
 
       // ── API Token Guard ────────────────────────────────────────────────────────
@@ -258,10 +288,10 @@ export async function startServer(
           const providedToken = req.headers['x-concatenator-token']
           if (providedToken !== API_TOKEN) {
             console.error(
-              '[AUTH FAILURE] Expected: %s | Received: %s | Headers:',
-              API_TOKEN,
-              providedToken,
-              req.headers
+              '[AUTH FAILURE] Expected: %s | Received: %s | Headers: %s',
+              sanitizeLog(API_TOKEN),
+              sanitizeLog(providedToken),
+              sanitizeLog(JSON.stringify(req.headers))
             )
             sendError(res, 403, 'Zero-Trust Perimeter Violation')
             return
@@ -302,6 +332,9 @@ export async function startServer(
         (pathname === '/api/health' || pathname === '/health') &&
         req.method === 'GET'
       ) {
+        if (url.search) {
+          logger.info(`Health check probe: ${sanitizeLog(url.search)}`)
+        }
         sendJson(res, 200, {
           status: 'ready',
           version,
@@ -513,16 +546,19 @@ export async function startServer(
         const vfsRoot = process.env.VFS_PATH
           ? path.resolve(process.cwd(), process.env.VFS_PATH)
           : process.cwd()
-        const fullPath = path.join(vfsRoot, filePath)
+        const resolvedPath = path.resolve(vfsRoot, filePath)
 
-        if (!fullPath.startsWith(vfsRoot)) {
-          sendError(res, 403, 'Access denied')
+        if (
+          !resolvedPath.startsWith(vfsRoot + path.sep) &&
+          resolvedPath !== vfsRoot
+        ) {
+          sendError(res, 403, 'Forbidden: Path Traversal Detected')
           return
         }
 
         try {
-          await fs.access(fullPath)
-          const buffer = await fs.readFile(fullPath)
+          await fs.access(resolvedPath)
+          const buffer = await fs.readFile(resolvedPath)
           res.writeHead(200, {
             'Content-Type': 'application/octet-stream',
           })
@@ -541,16 +577,44 @@ export async function startServer(
 
       // ── Static Frontend & SPA Fallback ─────────────────────────────────────────
       if (existsSync(distPath)) {
-        const safeRelativePath = path
-          .normalize(pathname)
-          .replace(/^(\.\.[/\\])+/, '')
-        const candidateFile = path.join(distPath, safeRelativePath)
+        let decodedPathname = pathname
+        try {
+          decodedPathname = decodeURIComponent(pathname)
+        } catch {
+          sendError(res, 400, 'Bad Request: Malformed URI')
+          return
+        }
 
-        if (existsSync(candidateFile) && statSync(candidateFile).isFile()) {
-          const ext = path.extname(candidateFile).toLowerCase()
+        // Enforce strict traversal check before resolving static assets or SPA fallback
+        if (
+          pathname.includes('%2e%2e') ||
+          pathname.includes('%2E%2E') ||
+          decodedPathname.includes('..') ||
+          decodedPathname.includes('/../') ||
+          decodedPathname.startsWith('../')
+        ) {
+          sendError(res, 403, 'Forbidden: Path Traversal Detected')
+          return
+        }
+
+        const resolvedCandidate = path.resolve(distPath, '.' + decodedPathname)
+
+        if (
+          !resolvedCandidate.startsWith(distPath + path.sep) &&
+          resolvedCandidate !== distPath
+        ) {
+          sendError(res, 403, 'Forbidden: Path Traversal Detected')
+          return
+        }
+
+        if (
+          existsSync(resolvedCandidate) &&
+          statSync(resolvedCandidate).isFile()
+        ) {
+          const ext = path.extname(resolvedCandidate).toLowerCase()
           const contentType = MIME_TYPES[ext] || 'application/octet-stream'
           res.writeHead(200, { 'Content-Type': contentType })
-          createReadStream(candidateFile).pipe(res)
+          createReadStream(resolvedCandidate).pipe(res)
           return
         }
 

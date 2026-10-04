@@ -295,7 +295,7 @@ describe('Node 22 Execution Boundary API Server', () => {
         },
       }
     )
-    expect(invalidQueryWorkerRes.status).toBe(400)
+    expect(invalidQueryWorkerRes.status).toBe(403)
 
     // 8. DELETE worker ignore list
     const delRes = await fetch(`http://127.0.0.1:${port}/api/ignore-list`, {
@@ -383,5 +383,137 @@ describe('Node 22 Execution Boundary API Server', () => {
     expect(res.status).toBe(404)
     const json = await res.json()
     expect(json.error).toContain('API endpoint not found')
+  })
+
+  it('enforces strict CORS origin whitelist and blocks arbitrary origin reflection', async () => {
+    // 1. Spoofed origin against server with uiOriginOverride (falls back to uiOrigin)
+    const spoofedRes = await fetch(`http://127.0.0.1:${port}/api/health`, {
+      headers: {
+        Origin: 'http://malicious-attacker.site',
+      },
+    })
+    expect(spoofedRes.headers.get('Access-Control-Allow-Origin')).toBe(uiOrigin)
+
+    // 2. Whitelisted origin: http://localhost:5173
+    const localhostRes = await fetch(`http://127.0.0.1:${port}/api/health`, {
+      headers: {
+        Origin: 'http://localhost:5173',
+      },
+    })
+    expect(localhostRes.headers.get('Access-Control-Allow-Origin')).toBe(
+      'http://localhost:5173'
+    )
+
+    // 3. Whitelisted origin: http://127.0.0.1:5173
+    const loopbackRes = await fetch(`http://127.0.0.1:${port}/api/health`, {
+      headers: {
+        Origin: 'http://127.0.0.1:5173',
+      },
+    })
+    expect(loopbackRes.headers.get('Access-Control-Allow-Origin')).toBe(
+      'http://127.0.0.1:5173'
+    )
+
+    // 4. Default server without uiOriginOverride blocks arbitrary origins
+    const plainServer = await startServer(0, testToken, tmpDir)
+    const plainPort = (plainServer.address() as AddressInfo).port
+    try {
+      const plainSpoofedRes = await fetch(
+        `http://127.0.0.1:${plainPort}/api/health`,
+        {
+          headers: {
+            Origin: 'http://malicious-attacker.site',
+          },
+        }
+      )
+      expect(plainSpoofedRes.headers.get('Access-Control-Allow-Origin')).toBe(
+        'http://127.0.0.1:5173'
+      )
+    } finally {
+      plainServer.close()
+    }
+  })
+
+  it('sanitizes CRLF characters from user requests to prevent Log Injection', async () => {
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const maliciousPayload =
+      'probe-test\r\n[CRITICAL] Admin privilege escalated'
+    const res = await fetch(
+      `http://127.0.0.1:${port}/api/health?probe=${encodeURIComponent(maliciousPayload)}`
+    )
+    expect(res.status).toBe(200)
+
+    // Verify all logged arguments were sanitized of CRLF characters
+    const allCalls = [...infoSpy.mock.calls, ...errorSpy.mock.calls]
+    expect(allCalls.length).toBeGreaterThan(0)
+    for (const call of allCalls) {
+      for (const arg of call) {
+        if (typeof arg === 'string') {
+          expect(arg).not.toContain('\r')
+          expect(arg).not.toContain('\n')
+        }
+      }
+    }
+  })
+
+  it('enforces path jailing on static frontend dist assets to prevent traversal escape', async () => {
+    // Create a mock dist folder in tmpDir
+    const mockDist = path.join(tmpDir, 'dist')
+    fs.mkdirSync(mockDist, { recursive: true })
+    fs.writeFileSync(path.join(mockDist, 'index.html'), '<html>UI</html>')
+
+    const distServer = await startServer(0, testToken, tmpDir, uiOrigin)
+    const distPort = (distServer.address() as AddressInfo).port
+
+    try {
+      const escapeRes = await new Promise<{
+        status: number
+        json: () => Promise<any>
+      }>((resolve, reject) => {
+        http
+          .get(
+            {
+              hostname: '127.0.0.1',
+              port: distPort,
+              path: '/%2e%2e/%2e%2e/%2e%2e/%2e%2e/package.json',
+            },
+            (res) => {
+              let data = ''
+              res.on('data', (chunk) => (data += chunk))
+              res.on('end', () => {
+                resolve({
+                  status: res.statusCode || 500,
+                  json: async () => JSON.parse(data),
+                })
+              })
+            }
+          )
+          .on('error', reject)
+      })
+      expect(escapeRes.status).toBe(403)
+      const json = await escapeRes.json()
+      expect(json.error).toContain('Forbidden: Path Traversal Detected')
+    } finally {
+      distServer.close()
+    }
+  })
+
+  it('rejects invalid workerId traversal in /api/vfs endpoint', async () => {
+    process.env.VFS_PATH = tmpDir
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:${port}/api/vfs?workerId=../escape`,
+        {
+          headers: { 'x-concatenator-token': testToken },
+        }
+      )
+      const json = await res.json()
+      expect(res.status).toBe(403)
+      expect(json.error).toContain('Forbidden: Path Traversal Detected')
+    } finally {
+      delete process.env.VFS_PATH
+    }
   })
 })
