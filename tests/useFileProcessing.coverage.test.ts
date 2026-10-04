@@ -274,6 +274,6 @@ describe('useFileProcessing Coverage Booster', () => {
       await result.current.handleConcatenate(mockFiles, 'markdown')
     })
 
-    expect(clickedDownloadName).toMatch(/^concatenator-export-\d+\.markdown$/)
+    expect(clickedDownloadName).toMatch(/^concatenator-export-\d+\.md$/)
   })
 })

@@ -36,21 +36,24 @@ test('TreeSitterService: resetInstance cleanly disposes and clears singleton ins
   expect(instance1).not.toBe(instance2)
 })
 
-test('TreeSitterService.isInitialized: reports false initially before initialization', () => {
+test('TreeSitterService.isInitialized & checkWasmReady: reports false initially before initialization', async () => {
   const service = TreeSitterService.getInstance()
   expect(service.isInitialized()).toBe(false)
+  expect(await service.checkWasmReady()).toBe(false)
 })
 
-test('TreeSitterService.dispose: resets initialization state and clears grammars', () => {
+test('TreeSitterService.dispose: resets initialization state and clears grammars', async () => {
   const service = TreeSitterService.getInstance()
   service.dispose()
   expect(service.isInitialized()).toBe(false)
+  expect(await service.checkWasmReady()).toBe(false)
 })
 
-test('TreeSitterService.initialize: successfully initializes with isomorphic buffer loader in Node', async () => {
+test('TreeSitterService.initialize & checkWasmReady: successfully initializes and returns ready true', async () => {
   const service = TreeSitterService.getInstance()
   await service.initialize()
   expect(service.isInitialized()).toBe(true)
+  expect(await service.checkWasmReady()).toBe(true)
 })
 
 test('TreeSitterService.initialize: prioritizes Node environment even if window global is present', async () => {
@@ -183,4 +186,33 @@ test('loadWasmBuffer: intercepts raw TypeError or fetch rejections and normalize
   } finally {
     globalThis.fetch = originalFetch
   }
+})
+
+test('loadWasmBuffer: throws clear error when fetch returns non-ok response', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = vi.fn().mockResolvedValue({
+    ok: false,
+    status: 404,
+    statusText: 'Not Found',
+  })
+
+  try {
+    await expect(
+      loadWasmBuffer('wasm/missing-binary-404.wasm')
+    ).rejects.toThrow(
+      /Failed to fetch WASM binary at '\/wasm\/missing-binary-404\.wasm': HTTP 404 Not Found/
+    )
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('TreeSitterService.checkWasmReady: returns false when initPromise rejects', async () => {
+  vi.spyOn(Parser, 'init').mockRejectedValueOnce(
+    new Error('Engine startup failed')
+  )
+  const service = TreeSitterService.getInstance()
+  const initPromise = service.initialize()
+  await expect(initPromise).rejects.toThrow('Engine startup failed')
+  expect(await service.checkWasmReady()).toBe(false)
 })

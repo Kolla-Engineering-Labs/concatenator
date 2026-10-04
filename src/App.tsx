@@ -48,7 +48,7 @@ export default function App() {
     useLocalStorage<boolean>('concatenator-dropzone-minimized', false)
 
   const [newIgnoreItem, setNewIgnoreItem] = useState('')
-  const [outputFormat] = useLocalStorage<OutputFormat>(
+  const [outputFormat, setOutputFormat] = useLocalStorage<OutputFormat>(
     'concatenate-output-format',
     'text'
   )
@@ -303,7 +303,7 @@ export default function App() {
         logger.warn(`Failed to fetch VFS tree: ${err}`)
       }
     }
-    initWorkspace()
+    void initWorkspace()
     return () => {
       mounted = false
     }
@@ -503,6 +503,7 @@ export default function App() {
                   }
                   onRemoveFile={handleRemoveFile}
                   outputFormat={outputFormat}
+                  onOutputFormatChange={setOutputFormat}
                   validationResult={validationResult}
                   tokenBudget={tokenBudget}
                   totalTokens={totalTokens}

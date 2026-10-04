@@ -43,6 +43,7 @@ interface FileViewProps {
   onRemoveFile: (file: FileItem) => void
   onDownloadAsZip?: () => void
   outputFormat: OutputFormat
+  onOutputFormatChange: (format: OutputFormat) => void
   validationResult?: ValidationResult | null
   tokenBudget?: number
   totalTokens?: number
@@ -66,6 +67,7 @@ export const FileView: React.FC<FileViewProps> = ({
   onRemoveFile,
   onDownloadAsZip,
   outputFormat,
+  onOutputFormatChange,
   validationResult,
   tokenBudget,
   totalTokens = 0,
@@ -193,6 +195,11 @@ export const FileView: React.FC<FileViewProps> = ({
             <button
               type="button"
               onClick={() => setViewMode(ViewPreference.LIST)}
+              className="px-2 py-1 rounded-md text-[10px] font-bold uppercase transition-all"
+            ></button>
+            <button
+              type="button"
+              onClick={() => setViewMode(ViewPreference.LIST)}
               aria-label="List view"
               className={cn(
                 'p-1.5 rounded-md transition-all',
@@ -259,7 +266,27 @@ export const FileView: React.FC<FileViewProps> = ({
           <div className="space-y-6">
             <div className="flex items-center justify-between gap-4">
               {/* Left spacer */}
-              <div className="flex items-center gap-4 min-w-[140px]" />
+              <div className="flex items-center gap-4 min-w-[140px]">
+                <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg border border-slate-200 dark:border-slate-800 shadow-inner">
+                  {(['text', 'markdown', 'xml'] as OutputFormat[]).map(
+                    (fmt) => (
+                      <button
+                        key={fmt}
+                        type="button"
+                        onClick={() => onOutputFormatChange(fmt)}
+                        className={cn(
+                          'px-3 py-1.5 rounded-md text-[10px] font-bold uppercase transition-all',
+                          outputFormat === fmt
+                            ? 'bg-white dark:bg-slate-800 shadow-sm text-brand-600 ring-1 ring-black/5 dark:ring-white/10'
+                            : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300'
+                        )}
+                      >
+                        {fmt}
+                      </button>
+                    )
+                  )}
+                </div>
+              </div>
 
               {/* Center: Budget warning or info pill */}
               <div className="flex-1 flex justify-center">

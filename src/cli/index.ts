@@ -82,7 +82,9 @@ const program = new Command()
 program
   .command('ui [path]')
   .description('Launch the web-based Workbench UI')
-  .option('-m, --max-files <number>', 'Preset the maximum file limit', parseInt)
+  .option('-m, --max-files <number>', 'Preset the maximum file limit', (val) =>
+    Number.parseInt(val, 10)
+  )
   .option('-i, --ignore-file <file>', 'Specify a custom ignore file')
   .action((path, options) => {
     launchUI(path, { ...options, version: CLI_VERSION })
@@ -92,7 +94,9 @@ program
 program
   .command('start [path]')
   .description('Launch the Workbench UI (checked for macOS security)')
-  .option('-m, --max-files <number>', 'Preset the maximum file limit', parseInt)
+  .option('-m, --max-files <number>', 'Preset the maximum file limit', (val) =>
+    Number.parseInt(val, 10)
+  )
   .option('-i, --ignore-file <file>', 'Specify a custom ignore file')
   .action(async (path, options) => {
     if (IS_UNSIGNED) {
@@ -277,7 +281,7 @@ program
     0
   )
   .option('--max-tokens <number>', 'Budget guard: warn if exceeded', (val) =>
-    parseInt(val, 10)
+    Number.parseInt(val, 10)
   )
   .option(
     '-f, --force',

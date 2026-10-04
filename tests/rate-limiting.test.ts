@@ -22,7 +22,7 @@ describe('Rate Limiting Integration', () => {
       headers: { 'x-concatenator-token': API_TOKEN },
     })
     expect(response.status).toBe(200)
-    // express-rate-limit headers should NOT be present
+    // Rate limit headers should NOT be present in test mode
     expect(response.headers.get('x-ratelimit-limit')).toBeNull()
     expect(response.headers.get('ratelimit-limit')).toBeNull()
   }, 30000)

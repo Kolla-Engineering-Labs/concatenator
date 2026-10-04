@@ -20,7 +20,9 @@ export async function loadWasmBuffer(assetPath: string): Promise<Uint8Array> {
     // 1. Node.js SEA (Single Executable Application) or Node.js environment
     if (typeof process !== 'undefined' && process.versions?.node) {
       try {
-        const sea = await import('node:sea')
+        // Obscure the literal from Vite's static analyzer to prevent bundling panics
+        const seaModule = 'node:sea'
+        const sea = await import(/* @vite-ignore */ seaModule)
         if (typeof sea.isSea === 'function' && sea.isSea()) {
           const rawAsset = sea.getRawAsset(normalizedKey)
           return new Uint8Array(rawAsset)
@@ -147,7 +149,7 @@ export class TreeSitterService {
   public async initialize(): Promise<void> {
     if (this.initialized) return
 
-    if (this.initPromise) {
+    if (this.initPromise !== null && this.initPromise !== undefined) {
       return this.initPromise
     }
 
@@ -189,6 +191,22 @@ export class TreeSitterService {
    */
   public isInitialized(): boolean {
     return this.initialized
+  }
+
+  /**
+   * Asynchronously checks whether the WASM parser engine is ready.
+   */
+  public async checkWasmReady(): Promise<boolean> {
+    if (this.initialized) return true
+    if (this.initPromise !== null && this.initPromise !== undefined) {
+      try {
+        await this.initPromise
+        return this.initialized
+      } catch {
+        return false
+      }
+    }
+    return false
   }
 
   /**

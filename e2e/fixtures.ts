@@ -165,7 +165,7 @@ export async function resetIgnoreList(
   for (let attempt = 0; attempt < maxRetries; attempt++) {
     try {
       const response = await apiContext.post('/api/ignore-list', {
-        data: DEFAULT_IGNORE_LIST,
+        data: { patterns: DEFAULT_IGNORE_LIST },
         timeout: 10000,
       })
 

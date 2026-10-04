@@ -10,6 +10,7 @@ import * as path from 'node:path'
 import * as os from 'node:os'
 import type { AddressInfo } from 'node:net'
 import { startServer } from '@/server'
+import { VFSManager } from '../../src/core/VFSManager.js'
 
 beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -35,7 +36,7 @@ describe('Node 22 Execution Boundary API Server', () => {
     )
     fs.writeFileSync(path.join(tmpDir, 'test2.json'), '{"key": "value"}\n')
 
-    // Bind to port 0 for dynamic ephemeral port allocation, preventing Hyper-V / EACCES collisions
+    // Bind to port 0 for dynamic ephemeral port allocation
     server = await startServer(0, testToken, tmpDir, uiOrigin)
     port = (server.address() as AddressInfo).port
   })
@@ -181,6 +182,197 @@ describe('Node 22 Execution Boundary API Server', () => {
     expect(bodyText).toContain('KEL_MANIFEST_START')
   })
 
+  it('returns health payload on /api/health and /health without token', async () => {
+    const res1 = await fetch(`http://127.0.0.1:${port}/api/health`)
+    expect(res1.status).toBe(200)
+    const data1 = await res1.json()
+    expect(data1.status).toBe('ready')
+    expect(typeof data1.version).toBe('string')
+    expect(typeof data1.uptime).toBe('number')
+
+    const res2 = await fetch(`http://127.0.0.1:${port}/health`)
+    expect(res2.status).toBe(200)
+    const data2 = await res2.json()
+    expect(data2.status).toBe('ready')
+  })
+
+  it('returns configuration from /api/config', async () => {
+    const res = await fetch(`http://127.0.0.1:${port}/api/config`, {
+      headers: { 'x-concatenator-token': testToken },
+    })
+    expect(res.status).toBe(200)
+    const config = await res.json()
+    expect(config).toHaveProperty('autoSaveIgnore', false)
+  })
+
+  it('handles /api/ignore-list GET, POST, and DELETE flows', async () => {
+    // 1. GET initial ignore list
+    const getRes = await fetch(`http://127.0.0.1:${port}/api/ignore-list`, {
+      headers: {
+        'x-concatenator-token': testToken,
+        'x-worker-id': '999',
+      },
+    })
+    expect(getRes.status).toBe(200)
+    const initialList = await getRes.json()
+    expect(Array.isArray(initialList)).toBe(true)
+
+    // 2. POST update ignore list
+    const postRes = await fetch(`http://127.0.0.1:${port}/api/ignore-list`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-concatenator-token': testToken,
+        'x-worker-id': '999',
+      },
+      body: JSON.stringify({ patterns: ['*.custom-ignore', 'build/'] }),
+    })
+    expect(postRes.status).toBe(200)
+    const postJson = await postRes.json()
+    expect(postJson.success).toBe(true)
+
+    // 3. GET verify update
+    const getUpdatedRes = await fetch(
+      `http://127.0.0.1:${port}/api/ignore-list`,
+      {
+        headers: {
+          'x-concatenator-token': testToken,
+          'x-worker-id': '999',
+        },
+      }
+    )
+    expect(getUpdatedRes.status).toBe(200)
+    const updatedList = await getUpdatedRes.json()
+    expect(updatedList).toContain('*.custom-ignore')
+
+    // 4. POST with invalid body (missing patterns array)
+    const invalidPost = await fetch(
+      `http://127.0.0.1:${port}/api/ignore-list`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-concatenator-token': testToken,
+          'x-worker-id': '999',
+        },
+        body: JSON.stringify({ not: 'an array' }),
+      }
+    )
+    expect(invalidPost.status).toBe(400)
+
+    // 5. POST with raw array (strictly rejected under single-schema rule)
+    const rawArrayPost = await fetch(
+      `http://127.0.0.1:${port}/api/ignore-list`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-concatenator-token': testToken,
+          'x-worker-id': '999',
+        },
+        body: JSON.stringify(['*.raw-array-disallowed']),
+      }
+    )
+    expect(rawArrayPost.status).toBe(400)
+
+    // 6. Invalid workerId rejection in header
+    const invalidWorkerRes = await fetch(
+      `http://127.0.0.1:${port}/api/ignore-list`,
+      {
+        headers: {
+          'x-concatenator-token': testToken,
+          'x-worker-id': 'invalid-path-../evil',
+        },
+      }
+    )
+    expect(invalidWorkerRes.status).toBe(400)
+
+    // 7. Invalid workerId rejection in query string
+    const invalidQueryWorkerRes = await fetch(
+      `http://127.0.0.1:${port}/api/ignore-list?workerId=../evil`,
+      {
+        headers: {
+          'x-concatenator-token': testToken,
+        },
+      }
+    )
+    expect(invalidQueryWorkerRes.status).toBe(403)
+
+    // 8. DELETE worker ignore list
+    const delRes = await fetch(`http://127.0.0.1:${port}/api/ignore-list`, {
+      method: 'DELETE',
+      headers: {
+        'x-concatenator-token': testToken,
+        'x-worker-id': '999',
+      },
+    })
+    expect(delRes.status).toBe(200)
+  })
+
+  it('handles /api/vfs and /api/vfs/file with path traversal protection', async () => {
+    // 1. GET /api/vfs when VFS_PATH not set
+    const originalVfsPath = process.env.VFS_PATH
+    delete process.env.VFS_PATH
+
+    const vfsNullRes = await fetch(`http://127.0.0.1:${port}/api/vfs`, {
+      headers: { 'x-concatenator-token': testToken },
+    })
+    expect(vfsNullRes.status).toBe(200)
+    const nullTree = await vfsNullRes.json()
+    expect(nullTree.tree).toBeNull()
+
+    // 2. GET /api/vfs with valid VFS_PATH
+    process.env.VFS_PATH = tmpDir
+    const vfsRes = await fetch(`http://127.0.0.1:${port}/api/vfs`, {
+      headers: { 'x-concatenator-token': testToken },
+    })
+    expect(vfsRes.status).toBe(200)
+    const tree = await vfsRes.json()
+    expect(tree).toHaveProperty('tree')
+
+    // 3. GET /api/vfs/file missing path param
+    const missingParamRes = await fetch(
+      `http://127.0.0.1:${port}/api/vfs/file`,
+      {
+        headers: { 'x-concatenator-token': testToken },
+      }
+    )
+    expect(missingParamRes.status).toBe(400)
+
+    // 4. GET /api/vfs/file valid file
+    const validFileRes = await fetch(
+      `http://127.0.0.1:${port}/api/vfs/file?path=test1.ts`,
+      {
+        headers: { 'x-concatenator-token': testToken },
+      }
+    )
+    expect(validFileRes.status).toBe(200)
+    const content = await validFileRes.text()
+    expect(content).toContain('console.log("hello");')
+
+    // 5. GET /api/vfs/file path traversal attempt
+    const traversalRes = await fetch(
+      `http://127.0.0.1:${port}/api/vfs/file?path=../../../../etc/passwd`,
+      {
+        headers: { 'x-concatenator-token': testToken },
+      }
+    )
+    expect(traversalRes.status).toBe(403)
+
+    // 6. GET /api/vfs/file non-existent file
+    const missingFileRes = await fetch(
+      `http://127.0.0.1:${port}/api/vfs/file?path=does-not-exist.ts`,
+      {
+        headers: { 'x-concatenator-token': testToken },
+      }
+    )
+    expect(missingFileRes.status).toBe(404)
+
+    // Restore env
+    if (originalVfsPath) process.env.VFS_PATH = originalVfsPath
+    else delete process.env.VFS_PATH
+  })
+
   it('returns 404 for unrecognized routes', async () => {
     const res = await fetch(`http://127.0.0.1:${port}/api/unknown`, {
       method: 'GET',
@@ -190,5 +382,277 @@ describe('Node 22 Execution Boundary API Server', () => {
     })
 
     expect(res.status).toBe(404)
+    const json = await res.json()
+    expect(json.error).toContain('API endpoint not found')
+  })
+
+  it('enforces strict CORS origin whitelist and blocks arbitrary origin reflection', async () => {
+    // 1. Spoofed origin against server with uiOriginOverride (falls back to uiOrigin)
+    const spoofedRes = await fetch(`http://127.0.0.1:${port}/api/health`, {
+      headers: {
+        Origin: 'http://malicious-attacker.site',
+      },
+    })
+    expect(spoofedRes.headers.get('Access-Control-Allow-Origin')).toBe(uiOrigin)
+
+    // 2. Whitelisted origin: http://localhost:5173
+    const localhostRes = await fetch(`http://127.0.0.1:${port}/api/health`, {
+      headers: {
+        Origin: 'http://localhost:5173',
+      },
+    })
+    expect(localhostRes.headers.get('Access-Control-Allow-Origin')).toBe(
+      'http://localhost:5173'
+    )
+
+    // 3. Whitelisted origin: http://127.0.0.1:5173
+    const loopbackRes = await fetch(`http://127.0.0.1:${port}/api/health`, {
+      headers: {
+        Origin: 'http://127.0.0.1:5173',
+      },
+    })
+    expect(loopbackRes.headers.get('Access-Control-Allow-Origin')).toBe(
+      'http://127.0.0.1:5173'
+    )
+
+    // 4. Default server without uiOriginOverride blocks arbitrary origins
+    const plainServer = await startServer(0, testToken, tmpDir)
+    const plainPort = (plainServer.address() as AddressInfo).port
+    try {
+      const plainSpoofedRes = await fetch(
+        `http://127.0.0.1:${plainPort}/api/health`,
+        {
+          headers: {
+            Origin: 'http://malicious-attacker.site',
+          },
+        }
+      )
+      expect(plainSpoofedRes.headers.get('Access-Control-Allow-Origin')).toBe(
+        'http://127.0.0.1:5173'
+      )
+    } finally {
+      plainServer.close()
+    }
+  })
+
+  it('sanitizes CRLF characters from user requests to prevent Log Injection', async () => {
+    const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {})
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const maliciousPayload =
+      'probe-test\r\n[CRITICAL] Admin privilege escalated'
+    const res = await fetch(
+      `http://127.0.0.1:${port}/api/health?probe=${encodeURIComponent(maliciousPayload)}`
+    )
+    expect(res.status).toBe(200)
+
+    // Verify all logged arguments were sanitized of CRLF characters
+    const allCalls = [...infoSpy.mock.calls, ...errorSpy.mock.calls]
+    expect(allCalls.length).toBeGreaterThan(0)
+    for (const call of allCalls) {
+      for (const arg of call) {
+        if (typeof arg === 'string') {
+          expect(arg).not.toContain('\r')
+          expect(arg).not.toContain('\n')
+        }
+      }
+    }
+  })
+
+  it('enforces path jailing on static frontend dist assets to prevent traversal escape', async () => {
+    // Create a mock dist folder in tmpDir
+    const mockDist = path.join(tmpDir, 'dist')
+    fs.mkdirSync(mockDist, { recursive: true })
+    fs.writeFileSync(path.join(mockDist, 'index.html'), '<html>UI</html>')
+
+    const distServer = await startServer(0, testToken, tmpDir, uiOrigin)
+    const distPort = (distServer.address() as AddressInfo).port
+
+    try {
+      const escapeRes = await new Promise<{
+        status: number
+        json: () => Promise<any>
+      }>((resolve, reject) => {
+        http
+          .get(
+            {
+              hostname: '127.0.0.1',
+              port: distPort,
+              path: '/%2e%2e/%2e%2e/%2e%2e/%2e%2e/package.json',
+            },
+            (res) => {
+              let data = ''
+              res.on('data', (chunk) => (data += chunk))
+              res.on('end', () => {
+                resolve({
+                  status: res.statusCode || 500,
+                  json: async () => JSON.parse(data),
+                })
+              })
+            }
+          )
+          .on('error', reject)
+      })
+      expect(escapeRes.status).toBe(403)
+      const json = await escapeRes.json()
+      expect(json.error).toContain('Forbidden: Path Traversal Detected')
+    } finally {
+      distServer.close()
+    }
+  })
+
+  it('rejects invalid workerId traversal in /api/vfs endpoint', async () => {
+    process.env.VFS_PATH = tmpDir
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:${port}/api/vfs?workerId=../escape`,
+        {
+          headers: { 'x-concatenator-token': testToken },
+        }
+      )
+      const json = await res.json()
+      expect(res.status).toBe(403)
+      expect(json.error).toContain('Forbidden: Path Traversal Detected')
+    } finally {
+      delete process.env.VFS_PATH
+    }
+  })
+
+  it('triggers 429 rate limit response on 3rd request when RATE_LIMIT_MAX_OVERRIDE is 2 in production', async () => {
+    const prevNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
+    process.env.RATE_LIMIT_MAX_OVERRIDE = '2'
+    process.env.VFS_PATH = tmpDir
+
+    const prodServer = await startServer(0, testToken, tmpDir, uiOrigin)
+    const prodPort = (prodServer.address() as AddressInfo).port
+
+    try {
+      const headers = { 'x-concatenator-token': testToken }
+      const res1 = await fetch(`http://127.0.0.1:${prodPort}/api/vfs`, {
+        headers,
+      })
+      const res2 = await fetch(`http://127.0.0.1:${prodPort}/api/vfs`, {
+        headers,
+      })
+      const res3 = await fetch(`http://127.0.0.1:${prodPort}/api/vfs`, {
+        headers,
+      })
+
+      expect(res1.status).toBe(200)
+      expect(res2.status).toBe(200)
+      expect(res3.status).toBe(429)
+      expect(res3.headers.get('ratelimit-limit')).toBe('2')
+
+      const json3 = await res3.json()
+      expect(json3.error).toBe('Rate limit exceeded.')
+    } finally {
+      prodServer.close()
+      delete process.env.RATE_LIMIT_MAX_OVERRIDE
+      delete process.env.VFS_PATH
+      if (prevNodeEnv !== undefined) {
+        process.env.NODE_ENV = prevNodeEnv
+      } else {
+        delete process.env.NODE_ENV
+      }
+    }
+  })
+
+  it('returns 500 when resolveIgnoreList encounters unexpected filesystem error', async () => {
+    const workerId = '991'
+    const faultPath = path.resolve(
+      process.cwd(),
+      'temp_ignore_files',
+      `.concatenate-ignore-worker-${workerId}`
+    )
+    fs.mkdirSync(faultPath, { recursive: true })
+
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:${port}/api/ignore-list?workerId=${workerId}`,
+        {
+          headers: { 'x-concatenator-token': testToken },
+        }
+      )
+      expect(res.status).toBe(500)
+      const json = await res.json()
+      expect(json.error).toBe('Failed to read ignore list')
+    } finally {
+      fs.rmSync(faultPath, { recursive: true, force: true })
+    }
+  })
+
+  it('returns 500 when POST /api/ignore-list fails to write ignore file', async () => {
+    const workerId = '992'
+    const faultPath = path.resolve(
+      process.cwd(),
+      'temp_ignore_files',
+      `.concatenate-ignore-worker-${workerId}`
+    )
+    fs.mkdirSync(faultPath, { recursive: true })
+
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/api/ignore-list`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-concatenator-token': testToken,
+        },
+        body: JSON.stringify({ workerId, patterns: ['temp-pattern'] }),
+      })
+      expect(res.status).toBe(500)
+      const json = await res.json()
+      expect(json.error).toBe('Failed to update ignore list')
+    } finally {
+      fs.rmSync(faultPath, { recursive: true, force: true })
+    }
+  })
+
+  it('returns 500 when DELETE /api/ignore-list fails during reset', async () => {
+    const workerId = '993'
+    const faultPath = path.resolve(
+      process.cwd(),
+      'temp_ignore_files',
+      `.concatenate-ignore-worker-${workerId}`
+    )
+    fs.mkdirSync(faultPath, { recursive: true })
+
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:${port}/api/ignore-list?workerId=${workerId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'x-concatenator-token': testToken,
+          },
+        }
+      )
+      expect(res.status).toBe(500)
+      const json = await res.json()
+      expect(json.error).toBe('Failed to reset ignore list')
+    } finally {
+      fs.rmSync(faultPath, { recursive: true, force: true })
+    }
+  })
+
+  it('returns 500 when GET /api/vfs encounters error generating tree', async () => {
+    process.env.VFS_PATH = tmpDir
+    const treeSpy = vi
+      .spyOn(VFSManager.prototype, 'getTree')
+      .mockImplementationOnce(() => {
+        throw new Error('VFS Tree Generation Error')
+      })
+
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/api/vfs`, {
+        headers: { 'x-concatenator-token': testToken },
+      })
+      expect(res.status).toBe(500)
+      const json = await res.json()
+      expect(json.error).toBe('Failed to generate VFS tree')
+    } finally {
+      treeSpy.mockRestore()
+      delete process.env.VFS_PATH
+    }
   })
 })

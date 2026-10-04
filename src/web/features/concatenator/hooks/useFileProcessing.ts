@@ -25,6 +25,7 @@ export interface ExecutionMatrix {
   stripComments?: boolean
   enableNeutralization?: boolean
   injectManifest?: boolean
+  targets?: string[]
 }
 
 const RESERVED_WINDOWS_NAMES = new Set([
@@ -657,13 +658,83 @@ export const useFileProcessing = ({
               return // Exit early to avoid the final setIsProcessing(false) call
             }
           } else {
-            // Compute reconciliation using filesRef (always current, no stale
-            // closure) before any setState so absorptions are available
-            // synchronously — avoids React 18 batching timing issues.
-            const reconciledFiles = [...filesRef.current, ...newFiles]
+            // 1. Safely identify node equivalence across drag-and-drop sandbox boundaries
+            const isSameNode = (p1: string, p2: string) => {
+              return p1 === p2 || p1.endsWith('/' + p2) || p2.endsWith('/' + p1)
+            }
+
+            const existingFiles = filesRef.current.filter(
+              (f) => f.kind === 'file'
+            )
+            const incomingFiles = newFiles.filter((f) => f.kind === 'file')
+            const finalFiles = [...existingFiles]
+
+            for (const newFile of incomingFiles) {
+              const existingIdx = finalFiles.findIndex(
+                (f) =>
+                  f.size === newFile.size && isSameNode(f.path, newFile.path)
+              )
+
+              if (existingIdx !== -1) {
+                // Collision: promote the string path with richer directory context
+                if (newFile.path.length > finalFiles[existingIdx].path.length) {
+                  finalFiles[existingIdx] = newFile
+                }
+              } else {
+                finalFiles.push(newFile)
+              }
+            }
+
+            // 2. Isolate explicit directories to preserve empty folders
+            const existingDirs = filesRef.current.filter(
+              (f) => f.kind === 'directory'
+            )
+            const incomingDirs = newFiles.filter((f) => f.kind === 'directory')
+            const finalDirs = [...existingDirs]
+
+            for (const newDir of incomingDirs) {
+              const existingIdx = finalDirs.findIndex((d) =>
+                isSameNode(d.path, newDir.path)
+              )
+
+              if (existingIdx !== -1) {
+                if (newDir.path.length > finalDirs[existingIdx].path.length) {
+                  finalDirs[existingIdx] = newDir
+                }
+              } else {
+                finalDirs.push(newDir)
+              }
+            }
+
+            // 3. Reconstruct directory topology to ensure no orphaned files
+            const dirMap = new Map<string, FileItem>()
+
+            for (const d of finalDirs) {
+              dirMap.set(d.path, d)
+            }
+
+            for (const f of finalFiles) {
+              const parts = f.path.split(/[/\\]/).filter(Boolean)
+              for (let j = 1; j < parts.length; j++) {
+                const dirPath = parts.slice(0, j).join('/')
+                if (!dirMap.has(dirPath)) {
+                  dirMap.set(dirPath, {
+                    name: parts[j - 1],
+                    path: dirPath,
+                    kind: 'directory',
+                    isIgnored: false,
+                    isNegated: false,
+                  })
+                }
+              }
+            }
+
+            const reconciledFiles = [
+              ...finalFiles,
+              ...Array.from(dirMap.values()),
+            ]
 
             // Final safety sweep: apply the absolutely latest ignore rules to all files
-            // just in case the user added a pattern mid-import.
             const finalPaths = reconciledFiles.map((f) => f.path)
             const finalHydration = hydrateFilesRef.current(finalPaths)
             for (let k = 0; k < reconciledFiles.length; k++) {
@@ -1025,7 +1096,7 @@ export const useFileProcessing = ({
       }
     }
 
-    reloadUnignored()
+    void reloadUnignored()
     return () => {
       mounted = false
       setIsProcessing(false) // Reset processing state if effect is interrupted
@@ -1406,7 +1477,7 @@ export const useFileProcessing = ({
   const handleExport = useCallback(
     async (
       configMatrixOrFiles?: ExecutionMatrix | FileItem[],
-      formatOverride?: 'markdown' | 'xml'
+      formatOverride?: 'markdown' | 'xml' | 'text' | 'pdf'
     ) => {
       setIsProcessing(true)
       try {
@@ -1415,14 +1486,18 @@ export const useFileProcessing = ({
           ? ({ outputFormat: formatOverride } as ExecutionMatrix)
           : (configMatrixOrFiles as ExecutionMatrix)
 
-        const outputFormat: 'markdown' | 'xml' =
-          formatOverride === 'xml' ||
-          configMatrix?.outputFormat === 'xml' ||
-          configMatrix?.format === 'xml'
-            ? 'xml'
-            : 'markdown'
+        const outputFormat =
+          configMatrix?.outputFormat || configMatrix?.format || 'markdown'
 
-        const response = await ApiClient.triggerConcatenate({
+        // Extract the physical file paths from the UI state
+        const targets = isArray
+          ? (configMatrixOrFiles as FileItem[]).map((f) => ({
+              path: f.path,
+              content: typeof f.content === 'string' ? f.content : undefined,
+            }))
+          : configMatrix?.targets?.map((path) => ({ path }))
+
+        const payload: Record<string, unknown> = {
           outputFormat,
           enableNeutralization:
             configMatrix?.enableNeutralization ??
@@ -1430,7 +1505,13 @@ export const useFileProcessing = ({
             true,
           injectManifest:
             configMatrix?.injectManifest ?? configMatrix?.manifest ?? false,
-        })
+        }
+
+        if (targets && targets.length > 0) {
+          payload.targets = targets
+        }
+
+        const response = await ApiClient.triggerConcatenate(payload)
 
         // Route backend validation errors to the UI overlay
         if (!response.ok) {
@@ -1440,13 +1521,23 @@ export const useFileProcessing = ({
           throw new Error(errorData.error || `HTTP ${response.status}`)
         }
 
-        // Dynamically extract the target filename (PDF, ZIP, TXT/MD/XML)
+        // Dynamically extract the target filename and apply proper industry extensions
         const disposition = response.headers.get('Content-Disposition')
-        const extension = outputFormat === 'xml' ? 'xml' : 'markdown'
+
+        let extension = 'md'
+        if (outputFormat === 'xml') extension = 'xml'
+        else if (outputFormat === 'text') extension = 'txt'
+        else if (outputFormat === 'pdf') extension = 'pdf'
+
         let filename = `concatenator-export-${Date.now()}.${extension}`
+
         if (disposition && disposition.includes('filename=')) {
           const match = disposition.match(/filename="?([^"]+)"?/)
-          if (match) filename = match[1]
+          if (match) {
+            // Strip the backend's hardcoded extension and enforce the UI state
+            const baseName = match[1].replace(/\.[^/.]+$/, '')
+            filename = `${baseName}.${extension}`
+          }
         }
 
         // Bridge the O(1) stream into a Blob
