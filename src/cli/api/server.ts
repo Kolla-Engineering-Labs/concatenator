@@ -159,7 +159,7 @@ export async function startServer(
   cwdOverride?: string,
   uiOriginOverride?: string
 ): Promise<http.Server> {
-  const PORT = portOverride ?? parseInt(process.env.PORT || '3000')
+  const PORT = portOverride ?? Number.parseInt(process.env.PORT || '3000', 10)
 
   // Load version from package.json
   let version = '0.0.0'
@@ -182,10 +182,23 @@ export async function startServer(
     )
   }
 
+  const rateLimitOverride = process.env.RATE_LIMIT_MAX_OVERRIDE
+    ? Number.parseInt(process.env.RATE_LIMIT_MAX_OVERRIDE, 10)
+    : undefined
+
   // Rate limiters for production mode
-  const vfsRateLimiter = new MicroRateLimiter(60 * 1000, 120) // 120 per min
-  const ignoreListRateLimiter = new MicroRateLimiter(15 * 60 * 1000, 100) // 100 per 15 min
-  const concatenateRateLimiter = new MicroRateLimiter(60 * 1000, 100) // 100 per min
+  const vfsRateLimiter = new MicroRateLimiter(
+    60 * 1000,
+    rateLimitOverride ?? 120
+  ) // 120 per min
+  const ignoreListRateLimiter = new MicroRateLimiter(
+    15 * 60 * 1000,
+    rateLimitOverride ?? 100
+  ) // 100 per 15 min
+  const concatenateRateLimiter = new MicroRateLimiter(
+    60 * 1000,
+    rateLimitOverride ?? 100
+  ) // 100 per min
 
   const DEFAULT_IGNORE_FILE_PATH = path.join(
     process.cwd(),
@@ -246,11 +259,11 @@ export async function startServer(
         ALLOWED_ORIGINS.add(uiOriginOverride)
       }
 
-      const incomingOrigin = req.headers.origin
-      const origin =
-        incomingOrigin && ALLOWED_ORIGINS.has(incomingOrigin)
-          ? incomingOrigin
-          : uiOriginOverride || 'http://127.0.0.1:5173'
+      const incomingOrigin = req.headers.origin || ''
+      const defaultOrigin = uiOriginOverride || 'http://127.0.0.1:5173'
+      const origin = ALLOWED_ORIGINS.has(incomingOrigin)
+        ? incomingOrigin
+        : defaultOrigin
 
       res.setHeader('Access-Control-Allow-Origin', origin)
       res.setHeader(
@@ -365,7 +378,7 @@ export async function startServer(
         sendJson(res, 200, {
           path: process.env.VFS_PATH,
           maxFiles: process.env.MAX_FILES
-            ? parseInt(process.env.MAX_FILES)
+            ? Number.parseInt(process.env.MAX_FILES, 10)
             : undefined,
           autoSaveIgnore: false,
         })
@@ -389,7 +402,7 @@ export async function startServer(
 
         if (isProduction) {
           const limitCheck = ignoreListRateLimiter.check(clientIp)
-          res.setHeader('ratelimit-limit', '100')
+          res.setHeader('ratelimit-limit', String(rateLimitOverride ?? 100))
           if (!limitCheck.allowed) {
             sendError(res, 429, 'Rate limit exceeded.')
             return
@@ -475,7 +488,20 @@ export async function startServer(
               return
             }
             try {
-              await fs.unlink(ignoreFilePath).catch(() => {})
+              try {
+                await fs.unlink(ignoreFilePath)
+              } catch (err: unknown) {
+                if (
+                  typeof err === 'object' &&
+                  err !== null &&
+                  'code' in err &&
+                  (err as { code?: string }).code === 'ENOENT'
+                ) {
+                  // Ignore missing file on reset
+                } else {
+                  throw err
+                }
+              }
               sendJson(res, 200, { success: true })
             } catch (error) {
               logger.error('Error resetting ignore file:', error)
@@ -491,7 +517,7 @@ export async function startServer(
         const extraHeaders: Record<string, string> = {}
         if (isProduction) {
           const limitCheck = vfsRateLimiter.check(clientIp)
-          extraHeaders['ratelimit-limit'] = '120'
+          extraHeaders['ratelimit-limit'] = String(rateLimitOverride ?? 120)
           if (!limitCheck.allowed) {
             sendError(res, 429, 'Rate limit exceeded.', extraHeaders)
             return
@@ -523,7 +549,7 @@ export async function startServer(
 
           const vfsRoot = path.resolve(process.cwd(), process.env.VFS_PATH)
           const maxFiles = process.env.MAX_FILES
-            ? parseInt(process.env.MAX_FILES)
+            ? Number.parseInt(process.env.MAX_FILES, 10)
             : 10000
           const vfs = new VFSManager(vfsRoot, ignoreList, maxFiles)
           const result = vfs.getTree()
@@ -577,27 +603,7 @@ export async function startServer(
 
       // ── Static Frontend & SPA Fallback ─────────────────────────────────────────
       if (existsSync(distPath)) {
-        let decodedPathname = pathname
-        try {
-          decodedPathname = decodeURIComponent(pathname)
-        } catch {
-          sendError(res, 400, 'Bad Request: Malformed URI')
-          return
-        }
-
-        // Enforce strict traversal check before resolving static assets or SPA fallback
-        if (
-          pathname.includes('%2e%2e') ||
-          pathname.includes('%2E%2E') ||
-          decodedPathname.includes('..') ||
-          decodedPathname.includes('/../') ||
-          decodedPathname.startsWith('../')
-        ) {
-          sendError(res, 403, 'Forbidden: Path Traversal Detected')
-          return
-        }
-
-        const resolvedCandidate = path.resolve(distPath, '.' + decodedPathname)
+        const resolvedCandidate = path.resolve(distPath, '.' + pathname)
 
         if (
           !resolvedCandidate.startsWith(distPath + path.sep) &&
@@ -659,5 +665,7 @@ export async function startServer(
 }
 
 if (!process.env.VITEST) {
-  startServer()
+  void startServer().catch((err: unknown) => {
+    logger.error('Failed to start server:', err)
+  })
 }

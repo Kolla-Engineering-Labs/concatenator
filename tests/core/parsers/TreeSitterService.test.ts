@@ -187,3 +187,32 @@ test('loadWasmBuffer: intercepts raw TypeError or fetch rejections and normalize
     globalThis.fetch = originalFetch
   }
 })
+
+test('loadWasmBuffer: throws clear error when fetch returns non-ok response', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = vi.fn().mockResolvedValue({
+    ok: false,
+    status: 404,
+    statusText: 'Not Found',
+  })
+
+  try {
+    await expect(
+      loadWasmBuffer('wasm/missing-binary-404.wasm')
+    ).rejects.toThrow(
+      /Failed to fetch WASM binary at '\/wasm\/missing-binary-404\.wasm': HTTP 404 Not Found/
+    )
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('TreeSitterService.checkWasmReady: returns false when initPromise rejects', async () => {
+  vi.spyOn(Parser, 'init').mockRejectedValueOnce(
+    new Error('Engine startup failed')
+  )
+  const service = TreeSitterService.getInstance()
+  const initPromise = service.initialize()
+  await expect(initPromise).rejects.toThrow('Engine startup failed')
+  expect(await service.checkWasmReady()).toBe(false)
+})

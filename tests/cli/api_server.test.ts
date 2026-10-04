@@ -10,6 +10,7 @@ import * as path from 'node:path'
 import * as os from 'node:os'
 import type { AddressInfo } from 'node:net'
 import { startServer } from '@/server'
+import { VFSManager } from '../../src/core/VFSManager.js'
 
 beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -513,6 +514,144 @@ describe('Node 22 Execution Boundary API Server', () => {
       expect(res.status).toBe(403)
       expect(json.error).toContain('Forbidden: Path Traversal Detected')
     } finally {
+      delete process.env.VFS_PATH
+    }
+  })
+
+  it('triggers 429 rate limit response on 3rd request when RATE_LIMIT_MAX_OVERRIDE is 2 in production', async () => {
+    const prevNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
+    process.env.RATE_LIMIT_MAX_OVERRIDE = '2'
+    process.env.VFS_PATH = tmpDir
+
+    const prodServer = await startServer(0, testToken, tmpDir, uiOrigin)
+    const prodPort = (prodServer.address() as AddressInfo).port
+
+    try {
+      const headers = { 'x-concatenator-token': testToken }
+      const res1 = await fetch(`http://127.0.0.1:${prodPort}/api/vfs`, {
+        headers,
+      })
+      const res2 = await fetch(`http://127.0.0.1:${prodPort}/api/vfs`, {
+        headers,
+      })
+      const res3 = await fetch(`http://127.0.0.1:${prodPort}/api/vfs`, {
+        headers,
+      })
+
+      expect(res1.status).toBe(200)
+      expect(res2.status).toBe(200)
+      expect(res3.status).toBe(429)
+      expect(res3.headers.get('ratelimit-limit')).toBe('2')
+
+      const json3 = await res3.json()
+      expect(json3.error).toBe('Rate limit exceeded.')
+    } finally {
+      prodServer.close()
+      delete process.env.RATE_LIMIT_MAX_OVERRIDE
+      delete process.env.VFS_PATH
+      if (prevNodeEnv !== undefined) {
+        process.env.NODE_ENV = prevNodeEnv
+      } else {
+        delete process.env.NODE_ENV
+      }
+    }
+  })
+
+  it('returns 500 when resolveIgnoreList encounters unexpected filesystem error', async () => {
+    const workerId = '991'
+    const faultPath = path.resolve(
+      process.cwd(),
+      'temp_ignore_files',
+      `.concatenate-ignore-worker-${workerId}`
+    )
+    fs.mkdirSync(faultPath, { recursive: true })
+
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:${port}/api/ignore-list?workerId=${workerId}`,
+        {
+          headers: { 'x-concatenator-token': testToken },
+        }
+      )
+      expect(res.status).toBe(500)
+      const json = await res.json()
+      expect(json.error).toBe('Failed to read ignore list')
+    } finally {
+      fs.rmSync(faultPath, { recursive: true, force: true })
+    }
+  })
+
+  it('returns 500 when POST /api/ignore-list fails to write ignore file', async () => {
+    const workerId = '992'
+    const faultPath = path.resolve(
+      process.cwd(),
+      'temp_ignore_files',
+      `.concatenate-ignore-worker-${workerId}`
+    )
+    fs.mkdirSync(faultPath, { recursive: true })
+
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/api/ignore-list`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-concatenator-token': testToken,
+        },
+        body: JSON.stringify({ workerId, patterns: ['temp-pattern'] }),
+      })
+      expect(res.status).toBe(500)
+      const json = await res.json()
+      expect(json.error).toBe('Failed to update ignore list')
+    } finally {
+      fs.rmSync(faultPath, { recursive: true, force: true })
+    }
+  })
+
+  it('returns 500 when DELETE /api/ignore-list fails during reset', async () => {
+    const workerId = '993'
+    const faultPath = path.resolve(
+      process.cwd(),
+      'temp_ignore_files',
+      `.concatenate-ignore-worker-${workerId}`
+    )
+    fs.mkdirSync(faultPath, { recursive: true })
+
+    try {
+      const res = await fetch(
+        `http://127.0.0.1:${port}/api/ignore-list?workerId=${workerId}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'x-concatenator-token': testToken,
+          },
+        }
+      )
+      expect(res.status).toBe(500)
+      const json = await res.json()
+      expect(json.error).toBe('Failed to reset ignore list')
+    } finally {
+      fs.rmSync(faultPath, { recursive: true, force: true })
+    }
+  })
+
+  it('returns 500 when GET /api/vfs encounters error generating tree', async () => {
+    process.env.VFS_PATH = tmpDir
+    const treeSpy = vi
+      .spyOn(VFSManager.prototype, 'getTree')
+      .mockImplementationOnce(() => {
+        throw new Error('VFS Tree Generation Error')
+      })
+
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/api/vfs`, {
+        headers: { 'x-concatenator-token': testToken },
+      })
+      expect(res.status).toBe(500)
+      const json = await res.json()
+      expect(json.error).toBe('Failed to generate VFS tree')
+    } finally {
+      treeSpy.mockRestore()
       delete process.env.VFS_PATH
     }
   })

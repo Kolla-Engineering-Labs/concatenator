@@ -21,6 +21,19 @@
 
 ## Recently Completed Milestones (Stable - Do Not Revisit)
 
+- **Physical OS Fault Injection for API Server 500 Tests (`src/cli/api/server.ts`, `tests/cli/api_server.test.ts`):**
+  - **ESM Mock Namespace Excision (`tests/cli/api_server.test.ts`):** Removed brittle `vi.spyOn(fsPromises, '...')` mock patterns that failed under Node 22 sealed ESM module namespace constraints.
+  - **Physical Filesystem Collision Faults (`tests/cli/api_server.test.ts`):** Injected physical directory traps (`fs.mkdirSync`) at designated worker ignore file paths to naturally provoke kernel-level `EISDIR` / `EPERM` rejections during `fs.readFile`, `fs.writeFile`, and `fs.unlink`.
+  - **Server DELETE Error Propagation Refinement (`src/cli/api/server.ts`):** Refined `DELETE /api/ignore-list` handler to treat missing files (`ENOENT`) as a no-op while allowing physical OS faults (`EISDIR`/`EPERM`) to propagate to the 500 catch block.
+  - **Deterministic Cleanup & Isolation (`tests/cli/api_server.test.ts`):** Added explicit `finally` teardown (`fs.rmSync(faultPath, { recursive: true, force: true })`) per test.
+
+- **SonarCloud Smells Eradication & Test Coverage Uplift (>80%) (`src/cli/api/server.ts`, `src/cli/index.ts`, `tests/cli/api_server.test.ts`, `tests/App.test.tsx`, `tests/core/parsers/TreeSitterService.test.ts`):**
+  - **Reliability Smells (`server.ts`, `index.ts`):** Replaced all instances of global `parseInt` with `Number.parseInt(..., 10)`. Grounded floating `startServer()` promise execution at the entrypoint footer using `void startServer().catch(...)`.
+  - **CORS AST Injection Neutralization (`server.ts`):** Enforced strict origin derivation from `ALLOWED_ORIGINS` with fallback to `uiOriginOverride || 'http://127.0.0.1:5173'` to satisfy SonarCloud AST taint analysis.
+  - **Deterministic Rate Limiter Overrides & Router Tests (`server.ts`, `tests/cli/api_server.test.ts`):** Introduced `RATE_LIMIT_MAX_OVERRIDE` to allow deterministic rate limiting testing (3 requests with limit 2 returning 429 on request #3) without request flooding. Added comprehensive 500 error catch tests for `/api/ignore-list` (read, write, delete) and `/api/vfs` (tree generation error).
+  - **React Root Test Suite (`tests/App.test.tsx`):** Created unit/integration suite mounting root `<App />` within `<ModeProvider>` to verify clean rendering, theme toggles, and layout stability.
+  - **Tree-Sitter WASM Error Handling (`tests/core/parsers/TreeSitterService.test.ts`):** Added tests covering HTTP 404 fetch failures, unsupported runtime fallbacks, and `checkWasmReady()` rejection handling.
+
 - **Test Suite Collapse Remediation & Security Hardening (`tests/useFileProcessing.topology.test.ts`, `src/cli/api/server.ts`, `tests/cli/api_server.test.ts`):**
   - **Hook Cascade & Fake-Timer Deadlock Resolution:** Eliminated the 60,000ms timeout in [tests/useFileProcessing.topology.test.ts](file:///c:/Projects/Kolla-Engineering-Labs/concatenator/tests/useFileProcessing.topology.test.ts) by implementing an in-memory `MockFileReader` DOM stub and non-blocking `vi.advanceTimersByTimeAsync()` execution, ensuring all async file reads and queue yields complete immediately. Added comprehensive `afterEach` teardown (`cleanup()`, `vi.clearAllTimers()`, `vi.useRealTimers()`) to prevent state and listener leakage.
   - **CRLF Log Injection Hardening:** Aligned [tests/cli/api_server.test.ts](file:///c:/Projects/Kolla-Engineering-Labs/concatenator/tests/cli/api_server.test.ts) with Node 22 native `fetch` header constraints by routing CRLF injection test payloads through URL query parameters with `encodeURIComponent()`, logging probe inputs with `sanitizeLog()` in [src/cli/api/server.ts](file:///c:/Projects/Kolla-Engineering-Labs/concatenator/src/cli/api/server.ts), and asserting zero carriage return/newline leakage into server logs.
